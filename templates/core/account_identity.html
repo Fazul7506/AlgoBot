@@ -13,86 +13,6 @@ document.addEventListener("submit", event => {
  if (button) { button.disabled = true; button.textContent = "Unlinking…"; }
 });
 </script>
-<script>
-(() => {
-  const panel = document.querySelector('[data-session-panel]');
-  if (!panel) return;
-  const list = panel.querySelector('[data-session-list]');
-  const status = panel.querySelector('[data-session-status]');
-  const revokeOthers = panel.querySelector('[data-revoke-other-sessions]');
-  const csrf = () => {
-    const field = document.querySelector('input[name="csrfmiddlewaretoken"]');
-    if (field?.value) return field.value;
-    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-  };
-  const request = async (url, method = 'GET') => {
-    const token = csrf();
-    const response = await fetch(url, {method, credentials:'same-origin', headers:{Accept:'application/json', ...(method !== 'GET' && token ? {'X-CSRFToken':token} : {})}});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || 'The session request failed. Please retry.');
-    return data;
-  };
-  let sessions = [];
-  const makeText = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
-  const revoke = async session => {
-    if (!session || session.current) return;
-    const button = list.querySelector(`[data-revoke-session="${session.id}"]`);
-    if (button) { button.disabled = true; button.textContent = 'Signing out…'; }
-    try {
-      await request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST');
-      status.textContent = 'Session signed out successfully.';
-      await load();
-    } catch (error) {
-      status.textContent = error.message || 'Could not sign out that session.';
-      if (button) { button.disabled = false; button.textContent = 'Sign out'; }
-    }
-  };
-  async function load() {
-    status.textContent = 'Refreshing session inventory…';
-    try {
-      const data = await request('/api/security/sessions/');
-      sessions = Array.isArray(data.sessions) ? data.sessions : [];
-      list.replaceChildren();
-      if (!sessions.length) list.append(makeText('p','account-help','No active browser sessions were returned for this account.'));
-      sessions.forEach(session => {
-        const row = makeText('article','identity-session-row','');
-        const detail = makeText('div','identity-session-row__detail','');
-        detail.append(makeText('strong','',session.current ? 'Current session' : (session.device || 'Other signed-in browser')));
-        const expiry = session.expires_at ? new Date(session.expires_at) : null;
-        detail.append(makeText('small','',expiry && !Number.isNaN(expiry.getTime()) ? `Session expires ${expiry.toLocaleString()}` : 'Expiry time unavailable'));
-        const badge = makeText('span',session.current ? 'account-state account-state--good' : 'account-state',session.current ? 'Current' : 'Active');
-        row.append(detail,badge);
-        if (!session.current && data.revocation_supported) {
-          const button = makeText('button','account-btn identity-session-revoke','Sign out');
-          button.type = 'button'; button.dataset.revokeSession = session.id;
-          button.addEventListener('click', () => revoke(session));
-          row.append(button);
-        }
-        list.append(row);
-      });
-      const otherCount = sessions.filter(session => !session.current).length;
-      revokeOthers.disabled = !data.revocation_supported || otherCount === 0;
-      status.textContent = `${sessions.length} active session${sessions.length === 1 ? '' : 's'} found.`;
-    } catch (error) {
-      list.replaceChildren(makeText('p','account-help','Session inventory is currently unavailable. No session status has been assumed.'));
-      revokeOthers.disabled = true;
-      status.textContent = error.message || 'Could not load active sessions. Retry by refreshing this page.';
-    }
-  }
-  revokeOthers.addEventListener('click', async () => {
-    const others = sessions.filter(session => !session.current);
-    if (!others.length) return;
-    revokeOthers.disabled = true;
-    status.textContent = `Signing out ${others.length} other session${others.length === 1 ? '' : 's'}…`;
-    const results = await Promise.allSettled(others.map(session => request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST')));
-    const failed = results.filter(result => result.status === 'rejected').length;
-    status.textContent = failed ? `${others.length - failed} session(s) signed out; ${failed} could not be signed out.` : 'All other sessions have been signed out.';
-    await load();
-  });
-  load();
-})();
-</script>
 {% endblock %}
 {% block title %}Account Identity | AlgoBot{% endblock %}
 {% block content %}
@@ -187,5 +107,85 @@ document.addEventListener('input',function(event){
  if(bar)bar.style.width=(score*20)+'%';
  if(label)label.textContent=!value?'Use 12 or more characters':score<=2?'Weak — add length and character variety':score<=3?'Fair — improve character variety':score===4?'Strong':'Very strong';
 });
+</script>
+<script>
+(() => {
+  const panel = document.querySelector('[data-session-panel]');
+  if (!panel) return;
+  const list = panel.querySelector('[data-session-list]');
+  const status = panel.querySelector('[data-session-status]');
+  const revokeOthers = panel.querySelector('[data-revoke-other-sessions]');
+  const csrf = () => {
+    const field = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (field?.value) return field.value;
+    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+  const request = async (url, method = 'GET') => {
+    const token = csrf();
+    const response = await fetch(url, {method, credentials:'same-origin', headers:{Accept:'application/json', ...(method !== 'GET' && token ? {'X-CSRFToken':token} : {})}});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'The session request failed. Please retry.');
+    return data;
+  };
+  let sessions = [];
+  const makeText = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
+  const revoke = async session => {
+    if (!session || session.current) return;
+    const button = list.querySelector(`[data-revoke-session="${session.id}"]`);
+    if (button) { button.disabled = true; button.textContent = 'Signing out…'; }
+    try {
+      await request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST');
+      status.textContent = 'Session signed out successfully.';
+      await load();
+    } catch (error) {
+      status.textContent = error.message || 'Could not sign out that session.';
+      if (button) { button.disabled = false; button.textContent = 'Sign out'; }
+    }
+  };
+  async function load() {
+    status.textContent = 'Refreshing session inventory…';
+    try {
+      const data = await request('/api/security/sessions/');
+      sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      list.replaceChildren();
+      if (!sessions.length) list.append(makeText('p','account-help','No active browser sessions were returned for this account.'));
+      sessions.forEach(session => {
+        const row = makeText('article','identity-session-row','');
+        const detail = makeText('div','identity-session-row__detail','');
+        detail.append(makeText('strong','',session.current ? 'Current session' : (session.device || 'Other signed-in browser')));
+        const expiry = session.expires_at ? new Date(session.expires_at) : null;
+        detail.append(makeText('small','',expiry && !Number.isNaN(expiry.getTime()) ? `Session expires ${expiry.toLocaleString()}` : 'Expiry time unavailable'));
+        const badge = makeText('span',session.current ? 'account-state account-state--good' : 'account-state',session.current ? 'Current' : 'Active');
+        row.append(detail,badge);
+        if (!session.current && data.revocation_supported) {
+          const button = makeText('button','account-btn identity-session-revoke','Sign out');
+          button.type = 'button'; button.dataset.revokeSession = session.id;
+          button.addEventListener('click', () => revoke(session));
+          row.append(button);
+        }
+        list.append(row);
+      });
+      const otherCount = sessions.filter(session => !session.current).length;
+      revokeOthers.disabled = !data.revocation_supported || otherCount === 0;
+      status.textContent = `${sessions.length} active session${sessions.length === 1 ? '' : 's'} found.`;
+    } catch (error) {
+      list.replaceChildren(makeText('p','account-help','Session inventory is currently unavailable. No session status has been assumed.'));
+      revokeOthers.disabled = true;
+      status.textContent = error.message || 'Could not load active sessions. Retry by refreshing this page.';
+    }
+  }
+  revokeOthers.addEventListener('click', async () => {
+    const others = sessions.filter(session => !session.current);
+    if (!others.length) return;
+    revokeOthers.disabled = true;
+    status.textContent = `Signing out ${others.length} other session${others.length === 1 ? '' : 's'}…`;
+    const results = await Promise.allSettled(others.map(session => request(`/api/security/sessions/${encodeURIComponent(session.id)}/revoke/`, 'POST')));
+    const failed = results.filter(result => result.status === 'rejected').length;
+    status.textContent = failed ? `${others.length - failed} session(s) signed out; ${failed} could not be signed out.` : 'All other sessions have been signed out.';
+    await load();
+  });
+  load();
+})();
 </script>
 {% endblock %}
