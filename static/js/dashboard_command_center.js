@@ -19,6 +19,13 @@
   const REFRESH_MS = 45000;
   const ACCOUNT_TIMEOUT_MS = 15000;
   const SNAPSHOT_KEY = 'algobot:dashboard:last-verified-account:v2';
+  const automaticRefreshEnabled = () => window.AlgoBotPreferences?.autoRefreshEnabled?.() !== false;
+  const refreshDelay = () => window.AlgoBotPreferences?.intervalMs?.(REFRESH_MS) || REFRESH_MS;
+  function scheduleRefresh(delay = refreshDelay()) {
+    clearTimeout(timer);
+    if (!automaticRefreshEnabled() || document.visibilityState !== 'visible') return;
+    timer = setTimeout(load, Math.max(1000, delay));
+  }
 
   function withDeadline(promise, timeout, label) {
     return new Promise((resolve, reject) => {
@@ -249,15 +256,19 @@
       if (seq === loadSeq) {
         busy = false;
         document.documentElement.dataset.dashboardLoading = 'false';
-        clearTimeout(timer);
-        timer = setTimeout(load, REFRESH_MS);
+        scheduleRefresh();
       }
     }
   }
 
   function boot() {
     $('[data-dashboard-refresh]')?.addEventListener('click', load);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else { clearTimeout(timer); timer = setTimeout(load, 250); } });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) clearTimeout(timer);
+      else if (automaticRefreshEnabled()) scheduleRefresh(250);
+    });
+    document.addEventListener('algobot:preferences-loaded', () => { if (!busy) scheduleRefresh(); });
+    window.addEventListener('algobot:preferences-updated', () => { if (!busy) scheduleRefresh(); });
     const accountChanged = (event) => {
       const nextId = event.detail?.id != null ? String(event.detail.id) : null;
       selectedAccountId = nextId;
