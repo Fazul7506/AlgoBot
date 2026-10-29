@@ -214,3 +214,8 @@ html[data-theme="light"] .account-page .security-summary-card .security-icon--gr
 
 html[data-theme="light"] .account-page[data-profile-page] .profile-quick-actions a{color:#075985!important}
 html[data-theme="light"] .account-page .security-summary-card>a{background:var(--panel2)!important;border-color:var(--line)!important;color:#075985!important}
+
+html[data-theme="light"] [data-security-page] .security-reassurance-banner{background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;opacity:1!important}
+html[data-theme="light"] [data-security-page] .security-reassurance-banner>.material-symbols-rounded{background:var(--panel2)!important;color:var(--accent)!important}
+html[data-theme="light"] [data-security-page] .security-reassurance-banner strong{color:var(--text)!important}
+html[data-theme="light"] [data-security-page] .security-reassurance-banner p{color:var(--muted)!important}
