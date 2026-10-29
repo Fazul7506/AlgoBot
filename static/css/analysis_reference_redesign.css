@@ -265,3 +265,37 @@ body:has(.analysis-hero){background:#041326}
 .analysis-dashboard .reference-table{width:100%;min-width:420px}
 @media(max-width:760px){.analysis-market-picker{width:100%}.analysis-market-icon{width:28px;height:28px;flex-basis:28px}.reference-chart-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%}.reference-chart-controls label{width:100%}.reference-chart-controls select{width:100%}.analysis-dashboard .analysis-main-grid,.analysis-dashboard .analysis-secondary-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:380px){.reference-chart-controls{grid-template-columns:minmax(0,1fr)}.analysis-dashboard .reference-table{min-width:390px}}
+
+
+/* Analysis layout guard: keep grid children shrinkable and all page content inside the
+   available app-content width after the responsive sidebar has been accounted for. */
+.analysis-dashboard { width: 100%; max-width: 1600px; min-width: 0; margin-inline: auto; box-sizing: border-box; }
+.analysis-dashboard > *, .analysis-dashboard .reference-main-grid,
+.analysis-dashboard .reference-main-grid > *, .analysis-dashboard .reference-right-column,
+.analysis-dashboard .analysis-secondary-grid, .analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-kpis, .analysis-dashboard .analysis-kpi,
+.analysis-dashboard .panel, .analysis-dashboard .section-head,
+.analysis-dashboard .reference-heading-copy, .analysis-dashboard .reference-live-card { min-width: 0; }
+.analysis-dashboard .reference-page-heading { flex-wrap: wrap; }
+.analysis-dashboard .reference-heading-copy { overflow-wrap: anywhere; }
+.analysis-dashboard .reference-live-card { max-width: 100%; box-sizing: border-box; }
+.analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1.62fr) minmax(0, .98fr); }
+.analysis-dashboard .reference-main-grid > *, .analysis-dashboard .reference-right-column > * { min-width: 0; }
+.analysis-dashboard .reference-chart-controls { min-width: 0; max-width: 100%; }
+.analysis-dashboard .reference-chart-controls select { max-width: 100%; }
+.analysis-dashboard .table-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+@media (max-width: 900px) {
+  .analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1fr); }
+  .analysis-dashboard .reference-right-column { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .analysis-dashboard { padding-inline: 12px; }
+  .analysis-dashboard .reference-page-heading { display: flex; align-items: flex-start; }
+  .analysis-dashboard .reference-live-card { flex: 1 1 100%; }
+  .analysis-dashboard .reference-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 390px) {
+  .analysis-dashboard { padding-inline: 8px; }
+  .analysis-dashboard .reference-kpis { grid-template-columns: minmax(0, 1fr); }
+}
