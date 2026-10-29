@@ -26,10 +26,10 @@ assert.equal(preferences.autoRefreshEnabled(), true);
 // assertions complement (but do not replace) browser-rendered contrast and visual tests.
 const themeCss = fs.readFileSync('static/css/account_preferences_global.css', 'utf8');
 for (const accent of ['cyan', 'blue', 'teal', 'violet', 'amber']) {
-  assert.match(themeCss, new RegExp('html\\\\[data-theme="dark"\\\\]\\\\[data-accent="' + accent + '"\\\\] \\{ --accent-foreground:'));
+  assert.ok(themeCss.includes('html[data-theme="dark"][data-accent="' + accent + '"] { --accent-foreground:'), 'missing dark foreground token for ' + accent);
 }
-assert.match(themeCss, /html\\[data-theme="light"\\]\\[data-accent\\] \\{ --accent-foreground:#ffffff; \\}/);
-assert.match(themeCss, /background-color:var\\(--accent\\);/);
-assert.match(themeCss, /color:var\\(--accent-foreground,#fff\\) !important;/);
+assert.ok(themeCss.includes('html[data-theme="light"][data-accent] { --accent-foreground:#ffffff; }'));
+assert.ok(themeCss.includes('background-color:var(--accent);'));
+assert.ok(themeCss.includes('color:var(--accent-foreground,#fff) !important;'));
 
 console.log('Preferences runtime tests passed');
