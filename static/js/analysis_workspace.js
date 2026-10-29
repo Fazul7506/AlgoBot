@@ -233,10 +233,12 @@
   }
   async function markets(options={}){
     const select=$("symbol");
-    const status=$("loadState");
+    const status=$("loadState"), visibleStatus=$("marketCatalogueStatus");
+    const showCatalogueStatus=message=>{if(status)status.textContent=message;if(visibleStatus){visibleStatus.textContent=message;visibleStatus.hidden=!message;}};
     if(!select)return;
     select.disabled=true;
     select.innerHTML='<option value="">Loading market catalogue…</option>';
+    showCatalogueStatus("");
     if(status)status.textContent="Loading the live market catalogue…";
     let detail="";
     try{
@@ -258,7 +260,7 @@
     if(!A.markets.length){
       select.innerHTML='<option value="">Markets unavailable — retry refresh</option>';
       select.disabled=false;
-      if(status)status.textContent=detail||"No tradable markets were returned. Check your broker connection, then use Refresh to retry.";
+      showCatalogueStatus((detail||"No tradable markets were returned. Check your broker connection, then use Refresh to retry.")+" Use the refresh button above to try again.");
       setHealth(false,"UNAVAILABLE");
       set("heroFeedState","Market catalogue unavailable");
       return;
@@ -267,7 +269,7 @@
     if(!A.markets.length){
       select.innerHTML='<option value="">Catalogue contained no valid symbols</option>';
       select.disabled=false;
-      if(status)status.textContent="The broker returned no valid market symbols. Refresh the catalogue to try again.";
+      showCatalogueStatus("The broker returned no valid market symbols. Use the refresh button above to try again.");
       setHealth(false,"UNAVAILABLE");
       return;
     }
