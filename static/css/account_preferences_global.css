@@ -182,7 +182,7 @@ html[data-theme="light"] .account-page .account-nav{background:var(--panel)!impo
 html[data-theme="light"] .account-page .account-nav a{color:var(--muted)!important}
 html[data-theme="light"] .account-page .account-nav a[aria-current="page"]{background:color-mix(in srgb,var(--accent) 12%,var(--panel2))!important;color:var(--text)!important}
 html[data-theme="light"] .account-page .account-card :where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea){background:var(--bg)!important;color:var(--text)!important;border-color:var(--line)!important;color-scheme:light!important}
-html[data-theme="light"] .account-page .account-card :where(label,strong,legend,h1,h2,h3,p,small,span,dt,dd){color:inherit}
-html[data-theme="light"] .account-page .account-card :where(.account-card__hint,.account-help,.profile-activity-table th,.preferences-choice small,.preferences-notification-row small){color:var(--muted)!important}
+html[data-theme="light"] .account-page .account-card :where(label,strong,legend,h1,h2,h3){color:var(--text)}
+html[data-theme="light"] .account-page .account-card :where(p,small,dt,.account-card__hint,.account-help,.profile-activity-table th,.preferences-choice small,.preferences-notification-row small,.profile-personal-field>span:first-child){color:var(--muted)}
 html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel){background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
 html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel) :where(p,small,.muted,.text-muted,th){color:var(--muted)}
