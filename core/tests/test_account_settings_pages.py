@@ -426,3 +426,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(response.status_code, 400)
         profile = UserProfile.objects.get(user=self.user)
         self.assertTrue(profile.account_preferences == {})
+
+
+    def test_security_reference_layout_has_dedicated_password_and_reassurance_panels(self):
+        response = self.client.get(reverse("security_center"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "security-password-management")
+        self.assertContains(response, "security-reassurance-banner")
+        security_css = (Path(__file__).resolve().parents[2] / "static/css/security_center.css").read_text()
+        self.assertIn("Security reference layout: overview and MFA on the left", security_css)
