@@ -145,16 +145,26 @@
         select.addEventListener('change',()=>{const selected=select.selectedOptions?.[0];const symbol=selected?.value||'';const label=selected?.textContent||symbol;icon.innerHTML=symbol?marketAssetIcon(symbol, label, label):'';});
       }
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
-      const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Instrument catalogue request timed out')),12000));
+      const boundedJSON = async path => {
+        let timer;
+        try {
+          return await Promise.race([
+            getJSON(path),
+            new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Instrument catalogue request timed out')), 12000); })
+          ]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      };
       try {
         let d;
         try {
-          d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
+          d=await boundedJSON('/api/market/broker-catalogue/?limit=500');
         } catch (primaryError) {
-          // Keep the connected-broker endpoint authoritative; the public symbol
-          // endpoint is a bounded fallback for deployments where broker catalogue
-          // routing is temporarily unavailable.
-          d=await Promise.race([getJSON('/api/market/symbols/?limit=500'),timeout]);
+          // Give the fallback its own timeout window. Reusing an already-rejected
+          // Promise.race timeout here made the fallback fail immediately after the
+          // primary request timed out, leaving no chance to recover the selector.
+          d=await boundedJSON('/api/market/symbols/?limit=500');
           if (!d || (!Array.isArray(d.symbols) && !Array.isArray(d.results) && !Array.isArray(d.data))) throw primaryError;
         }
         const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
