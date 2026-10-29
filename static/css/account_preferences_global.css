@@ -114,3 +114,31 @@ html[data-chart-position="left"] :where([data-chart-layout="side-by-side"]) > * 
 html[data-chart-position="bottom"] :where([data-chart-layout="side-by-side"]) { grid-template-columns:minmax(0,1fr); }
 html[data-chart-position="bottom"] :where([data-chart-layout="side-by-side"]) > [data-chart-panel] { grid-column:1/-1; }
 html[data-density] :where(.app-content .account-content,.app-content .panel-grid,.app-content .dashboard-grid) { gap:var(--ds-density-gap,14px); }
+
+
+/* Contrast guard for legacy pages that still use literal dark surfaces or utility colours.
+   Keep semantic success/warning/error badges untouched; these rules target general surfaces. */
+html[data-theme="light"] :where(.bg-dark,.bg-black,.bg-slate-900,.bg-gray-900,.surface-dark,.dark-panel,.glass-panel,.glass-card,.terminal-card,.terminal-widget,.chart-toolbar,.chart-tooltip,.table-responsive,.data-grid,.empty-state,.loading-state,.form-section,.filter-panel,.search-panel,.tab-panel,.tab-content,.popover-content,.command-palette,.notification-item,.list-group-item,.accordion-item) {
+  background-color:var(--panel) !important;
+  color:var(--text) !important;
+  border-color:var(--line) !important;
+}
+html[data-theme="light"] :where(.bg-dark,.bg-black,.bg-slate-900,.bg-gray-900,.surface-dark,.dark-panel,.glass-panel,.glass-card,.terminal-card,.terminal-widget,.chart-toolbar,.chart-tooltip,.table-responsive,.data-grid,.empty-state,.loading-state,.form-section,.filter-panel,.search-panel,.tab-panel,.tab-content,.popover-content,.command-palette,.notification-item,.list-group-item,.accordion-item) :where(h1,h2,h3,h4,h5,h6,p,span,label,strong,small,li,td,th,a,summary) {
+  color:inherit;
+}
+html[data-theme="light"] :where(.text-white,.text-light,.text-gray-100,.text-gray-200,.text-slate-100,.text-slate-200,.heading-light,.metric-value,.stat-value,.workspace-title,.section-title) { color:var(--text) !important; }
+html[data-theme="light"] :where(.text-gray-300,.text-gray-400,.text-slate-300,.text-slate-400,.text-muted,.muted,.secondary-text,.helper-text) { color:var(--muted) !important; }
+html[data-theme="light"] :where(.table,.data-table,.enterprise-table,.table-container table,.table-wrap table) { color:var(--text); border-color:var(--line); }
+html[data-theme="light"] :where(.table,.data-table,.enterprise-table,.table-container table,.table-wrap table) :where(th,td) { border-color:var(--line); }
+html[data-theme="light"] :where(.table,.data-table,.enterprise-table,.table-container table,.table-wrap table) tbody tr:nth-child(even) { background-color:#f0f5fb; }
+html[data-theme="light"] :where(pre,code,.code-block,.terminal-output,.log-output,.console-output) { background-color:#edf2f8; color:#17283e; border-color:var(--line); }
+html[data-theme="light"] :where(button,a,input,select,textarea,[role="button"],[role="tab"],[role="switch"]) { text-shadow:none; filter:none; }
+html[data-theme="light"] :where(.app-content,.app-content *) { text-decoration-color:currentColor; }
+html[data-theme="light"] :where(.app-content img,.app-content svg,.app-content canvas,.app-content video) { opacity:1; filter:none; }
+html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-btn--primary,.app-content .ds-btn--primary,.app-content .primary-button) { color:#fff !important; background-color:var(--accent); }
+html[data-theme="light"] :where(.app-content .badge,.app-content .status-badge,.app-content .status-pill,.app-content .tag) { text-shadow:none; }
+html[data-theme="light"] :where(.app-content [style*="color: white"],.app-content [style*="color:#fff"],.app-content [style*="color: #fff"],.app-content [style*="color:#ffffff"],.app-content [style*="color: #ffffff"]) { color:var(--text) !important; }
+html[data-theme="light"] :where(.app-content [style*="background:#0"],.app-content [style*="background: #0"],.app-content [style*="background-color:#0"],.app-content [style*="background-color: #0"],.app-content [style*="background:#1"],.app-content [style*="background: #1"],.app-content [style*="background-color:#1"],.app-content [style*="background-color: #1"]) { background-color:var(--panel) !important; background-image:none !important; color:var(--text) !important; }
+html[data-theme="light"] :where(.app-content [style*="border-color:#2"],.app-content [style*="border-color: #2"],.app-content [style*="border-color:#3"],.app-content [style*="border-color: #3"]) { border-color:var(--line) !important; }
+html[data-theme="light"] :where(.app-content .gradient,.app-content .gradient-card,.app-content .hero-gradient,.app-content .glass,.app-content .glassmorphism) { background-image:none !important; }
+html[data-theme="light"] :where(.app-content .card,.app-content .panel,.app-content .workspace-card,.app-content .dashboard-card,.app-content .data-panel,.app-content .metric-card,.app-content .stat-card,.app-content .market-card,.app-content .chart-card,.app-content .terminal-panel,.app-content .modal-content,.app-content .dropdown-menu) { box-shadow:0 1px 3px rgb(15 35 60 / 8%); }
