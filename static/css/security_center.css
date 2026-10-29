@@ -123,3 +123,24 @@
  [data-security-page] .account-nav a{min-width:0;min-height:44px;flex:none;white-space:normal;line-height:1.25;padding:9px 7px;font-size:11px;border-right:1px solid var(--security-border);border-bottom:1px solid var(--security-border)}
  [data-security-page] .account-nav a:nth-last-child(-n+2){border-bottom:0}
 }
+
+/* Security reference layout: overview and MFA on the left; password, trusted devices and alerts on the right. */
+[data-security-page] .account-content.security-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+[data-security-page] .security-dashboard>.security-status-banner{grid-column:1;grid-row:1}
+[data-security-page] .security-dashboard>.security-summary-grid{grid-column:1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+[data-security-page] .security-dashboard>.security-password-management{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column;gap:12px}
+[data-security-page] .security-dashboard>.security-two-column{grid-column:1/-1;grid-row:3;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+[data-security-page] .security-two-column>.security-two-factor{grid-column:1}
+[data-security-page] .security-two-column>.trusted-devices-card{grid-column:2}
+[data-security-page] .security-dashboard>.security-reassurance-banner{grid-column:1;grid-row:4;display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:10px;padding:16px;border:1px solid var(--security-border);border-radius:14px;background:var(--security-panel);color:var(--security-text)}
+[data-security-page] .security-reassurance-banner>.material-symbols-rounded{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--security-panel-2);color:var(--security-accent);font-size:24px}
+[data-security-page] .security-reassurance-banner strong{display:block}
+[data-security-page] .security-reassurance-banner p{margin:4px 0 0;color:var(--security-muted);font-size:12px}
+[data-security-page] .security-dashboard>.security-alerts-card{grid-column:2;grid-row:4}
+@media(max-width:900px){
+ [data-security-page] .account-content.security-dashboard{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-dashboard>.security-status-banner,[data-security-page] .security-dashboard>.security-summary-grid,[data-security-page] .security-dashboard>.security-password-management,[data-security-page] .security-dashboard>.security-two-column,[data-security-page] .security-dashboard>.security-reassurance-banner,[data-security-page] .security-dashboard>.security-alerts-card{grid-column:1;grid-row:auto}
+ [data-security-page] .security-dashboard>.security-summary-grid{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-dashboard>.security-two-column{grid-template-columns:minmax(0,1fr)}
+ [data-security-page] .security-two-column>.security-two-factor,[data-security-page] .security-two-column>.trusted-devices-card{grid-column:1}
+}
