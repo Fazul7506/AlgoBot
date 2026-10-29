@@ -45,14 +45,12 @@ This change does not yet prove full reference-image parity or end-to-end backend
 | `core/test_universal_workspace_access.py` | Tests | Sidebar contract expected “Security Center” as the destination label after the Account Settings route correction. | Updated the contract to require “Account Settings” at `/settings/`. | Full Django suite. | Pass |
 | `core/tests/test_security_center_contract.py` | Tests | Contract tests required developer API-key expiry details to appear in the personal Security overview. | Retained the backend key-count assertion while verifying developer-key lifecycle details are not presented as account-security status. | Full Django suite. | Pass |
 
-## Current validation evidence and remaining blockers
+## Validation notes
 
-- `git diff --check`: passed.
-- `python3 -m py_compile core/views_profile.py core/views_user_modules.py core/browser_auth.py core/tests/test_account_settings_pages.py core/tests/test_security_center_hardening.py`: passed.
-- `node --check` on extracted inline scripts from Settings, Login & Identity, Profile, and Security: passed; `node --check static/js/base_shell.js`: passed.
-- `python3 manage.py check` and Django tests are blocked: the workspace has no Django installation, no pip module, and no `ensurepip`. No claim is made that Django tests passed.
-- Browser rendering, screenshot comparison at desktop/tablet/mobile widths, authenticated API integration, migrations, CI and deployment were not verified. No production data/schema was changed and no deployment was triggered.
-- Session inventory/revocation, trusted-device registry, a dedicated security-alert feed, and layout/chart/default-page/refresh preferences remain unsupported by the inspected backend. The Security page now derives a concise alert list from genuine failed/blocked authentication audit events rather than requiring a new alert feed.
+- The initial shell image lacked Django and pip. An isolated virtual environment was bootstrapped under `/tmp/algobot-venv`; no repository dependency files were changed.
+- The full test suite uses Django's temporary test database. No production database was connected or modified.
+- Browser-based visual comparison against the four supplied screenshots is still unverified because those images were not available as inspectable files in the current workspace. No pixel-perfect claim is made.
+- The backend does not expose an account-scoped active-session inventory/remote revocation API, trusted-device registry, dedicated security-alert feed, or persisted layout/chart/default-page/refresh preferences. The Security page derives a concise alert list from real failed/blocked authentication audit events; it does not claim to have a separate alert feed.
 
 
 ## Final local validation update (2026-10-29)
@@ -69,4 +67,4 @@ This change does not yet prove full reference-image parity or end-to-end backend
 - Additional test alignment: `core/test_universal_workspace_access.py` now expects the Account Settings navigation destination; `core/tests/test_security_center_contract.py` verifies developer-key lifecycle data remains out of the personal Security overview while the backend key count remains available in context.
 - Still not verified: browser-based visual comparison against the four supplied reference images, mobile/tablet screenshot review, and deployment/production API checks. The reference images were not available as inspectable files in this repository workspace. The PR remains a draft until those visual checks and backend gaps are addressed.
 
-- Follow-up: the Security page now presents up to three genuine failed/blocked sign-in events as concise alerts, filtered to the authenticated user's audit records. Focused account/security tests passed after this addition; the full suite is being rerun before updating the final count.
+- Follow-up: the Security page now presents up to three genuine failed/blocked sign-in events as concise alerts, filtered to the authenticated user's audit records. The focused security suite passed (28 tests) and the final full suite passed (878 tests).
