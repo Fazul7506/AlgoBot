@@ -441,3 +441,10 @@ html[data-theme="light"] .account-page[data-settings-page]{--palette-cyan:#087e9
 .account-page[data-account-identity] .account-password-toggle{flex:0 0 58px;min-width:58px;white-space:nowrap;word-break:normal}
 @media(max-width:1000px){.account-page[data-account-identity] .account-content{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .account-content>form[data-password-change],.account-page[data-account-identity] .account-content>form:not([data-password-change]),.account-page[data-account-identity] .identity-verification-card,.account-page[data-account-identity] .account-content>aside,.account-page[data-account-identity] .identity-mfa-card,.account-page[data-account-identity] .identity-sessions-card,.account-page[data-account-identity] .identity-activity-card,.account-page[data-account-identity] .identity-security-banner{grid-column:1;grid-row:auto}}
 @media(max-width:600px){.account-page[data-account-identity] .identity-verification-grid{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .identity-security-banner{grid-template-columns:34px minmax(0,1fr)}.account-page[data-account-identity] .identity-security-banner .account-btn{grid-column:1/-1;justify-self:start}}
+
+@media(max-width:600px){
+  .account-page .account-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;scroll-snap-type:none}
+  .account-page .account-nav a{min-width:0;min-height:44px;flex:none;white-space:normal;line-height:1.25;padding:9px 7px;font-size:11px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .account-page .account-nav a:nth-child(odd){border-right:1px solid var(--line)}
+  .account-page .account-nav a:nth-last-child(-n+2){border-bottom:0}
+}
