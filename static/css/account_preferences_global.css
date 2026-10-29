@@ -211,3 +211,6 @@ html[data-theme="light"] .account-page .security-banner-status :where(strong,spa
 html[data-theme="light"] .account-page .security-banner-status small{color:var(--muted)!important}
 html[data-theme="light"] .account-page .security-summary-card .security-icon{background:var(--panel2)!important;color:var(--accent)!important}
 html[data-theme="light"] .account-page .security-summary-card .security-icon--green{color:var(--success,#047857)!important}
+
+html[data-theme="light"] .account-page[data-profile-page] .profile-quick-actions a{color:#075985!important}
+html[data-theme="light"] .account-page .security-summary-card>a{background:var(--panel2)!important;border-color:var(--line)!important;color:#075985!important}
