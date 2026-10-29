@@ -299,3 +299,19 @@ body:has(.analysis-hero){background:#041326}
   .analysis-dashboard { padding-inline: 8px; }
   .analysis-dashboard .reference-kpis { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Visible, accessible recovery message for the Analysis market catalogue. */
+.analysis-market-status {
+  margin: 0 18px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, rgba(148, 163, 184, .24));
+  border-radius: 12px;
+  color: var(--text-secondary, #aab8cc);
+  background: var(--surface-muted, rgba(15, 31, 51, .78));
+  font-size: .875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.analysis-market-status[hidden] { display: none !important; }
+@media (max-width: 760px) { .analysis-market-status { margin: 0 12px 12px; } }
