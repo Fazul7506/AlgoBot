@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Profile | AlgoBot{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-profile-reference-layout1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-profile-reference-layout2"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-profile-page>
   <header class="account-hero">
@@ -122,6 +122,23 @@
     profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
     const avatarInput = document.querySelector('#profile-picture');
+    const pictureUpload = document.querySelector('[data-profile-picture-upload]');
+    if (pictureUpload && avatarInput) {
+      pictureUpload.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); avatarInput.click(); }
+      });
+      pictureUpload.addEventListener('dragover', event => { event.preventDefault(); pictureUpload.classList.add('is-dragging'); });
+      pictureUpload.addEventListener('dragleave', () => pictureUpload.classList.remove('is-dragging'));
+      pictureUpload.addEventListener('drop', event => {
+        event.preventDefault();
+        pictureUpload.classList.remove('is-dragging');
+        const file = event.dataTransfer?.files?.[0];
+        if (!file || typeof DataTransfer !== 'function') return;
+        const transfer = new DataTransfer(); transfer.items.add(file);
+        avatarInput.files = transfer.files;
+        avatarInput.dispatchEvent(new Event('change', {bubbles:true}));
+      });
+    }
     const avatar = document.querySelector('[data-avatar-preview]');
     if (avatarInput && avatar) {
       const editor = document.querySelector('[data-avatar-editor]');
