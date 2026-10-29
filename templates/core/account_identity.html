@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-identity-reference-layout1"><script>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-identity-reference-layout2"><script>
 document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
 
 document.addEventListener("submit", event => {
