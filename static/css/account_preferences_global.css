@@ -96,7 +96,7 @@ html[data-theme="dark"][data-accent="violet"] { --accent:#c0a5ff; }
 html[data-theme="dark"][data-accent="amber"] { --accent:#ffd166; }
 html[data-theme="dark"][data-accent] { --ds-accent:var(--accent); --ds-info:var(--accent); }
 html[data-theme="dark"][data-accent="cyan"] { --accent-foreground:#06111f; }
-html[data-theme="dark"][data-accent="blue"] { --accent-foreground:#ffffff; }
+html[data-theme="dark"][data-accent="blue"] { --accent-foreground:#06111f; }
 html[data-theme="dark"][data-accent="teal"] { --accent-foreground:#06111f; }
 html[data-theme="dark"][data-accent="violet"] { --accent-foreground:#160b2b; }
 html[data-theme="dark"][data-accent="amber"] { --accent-foreground:#211600; }
@@ -149,3 +149,14 @@ html[data-theme="light"] :where(.app-content [style*="background:#0"],.app-conte
 html[data-theme="light"] :where(.app-content [style*="border-color:#2"],.app-content [style*="border-color: #2"],.app-content [style*="border-color:#3"],.app-content [style*="border-color: #3"]) { border-color:var(--line) !important; }
 html[data-theme="light"] :where(.app-content .gradient,.app-content .gradient-card,.app-content .hero-gradient,.app-content .glass,.app-content .glassmorphism) { background-image:none !important; }
 html[data-theme="light"] :where(.app-content .card,.app-content .panel,.app-content .workspace-card,.app-content .dashboard-card,.app-content .data-panel,.app-content .metric-card,.app-content .stat-card,.app-content .market-card,.app-content .chart-card,.app-content .terminal-panel,.app-content .modal-content,.app-content .dropdown-menu) { box-shadow:0 1px 3px rgb(15 35 60 / 8%); }
+
+
+/* Apply the contrast-tested foreground token to every shared primary-action component. */
+:where(.account-btn--primary,.ds-btn--primary,.btn-primary,.primary-button,[data-primary-action]) {
+  color:var(--accent-foreground,#06111f);
+  background-color:var(--accent);
+  border-color:var(--accent);
+}
+html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-btn--primary,.app-content .ds-btn--primary,.app-content .primary-button) {
+  color:var(--accent-foreground,#ffffff) !important;
+}
