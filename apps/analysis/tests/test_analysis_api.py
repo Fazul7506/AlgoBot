@@ -192,10 +192,49 @@ class AnalysisSmokeTests(TestCase):
         self.assertEqual(response.json()["account"]["credential_status"], "ready")
         self.assertEqual(response.json()["capabilities"]["market_types"], ["synthetic_index"])
 
-    def test_analysis_market_endpoint_is_user_authenticated(self):
+    @patch.object(views, "sync_active_symbols", return_value=0)
+    def test_analysis_market_endpoint_retries_sync_when_catalogue_is_empty(self, sync_markets):
         response = self.client.get(reverse("analysis-markets"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["markets"], [])
+        self.assertEqual(response.json()["code"], "MARKET_CATALOGUE_UNAVAILABLE")
+        self.assertIn("retry", response.json()["detail"].lower())
+        sync_markets.assert_called_once_with()
+
+    @patch.object(views, "sync_active_symbols")
+    def test_analysis_market_endpoint_returns_symbols_after_successful_sync(self, sync_markets):
+        def populate_catalogue():
+            MarketSymbol.objects.create(
+                symbol="R_100",
+                display_name="Volatility 100 Index",
+                market="Volatility Indices",
+                broker="deriv",
+                is_active=True,
+                is_tradable=True,
+            )
+            return 1
+        sync_markets.side_effect = populate_catalogue
+        response = self.client.get(reverse("analysis-markets"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["markets"][0]["symbol"], "R_100")
+        sync_markets.assert_called_once_with()
+
+    @patch.object(views, "sync_active_symbols")
+    def test_analysis_market_endpoint_can_force_refresh_existing_catalogue(self, sync_markets):
+        MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100 Index",
+            market="Volatility Indices",
+            broker="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
+        response = self.client.get(reverse("analysis-markets"), {"refresh": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["markets"][0]["symbol"], "R_100")
+        sync_markets.assert_called_once_with()
 
 
 class AnalysisArchitectureReconciliationTests(TestCase):
