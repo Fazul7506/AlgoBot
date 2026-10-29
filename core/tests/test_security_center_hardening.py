@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.developer.models import APIKey
+from apps.observability.models import AuditEvent
 
 
 class SecurityCenterHardeningTests(TestCase):
@@ -35,6 +36,19 @@ class SecurityCenterHardeningTests(TestCase):
         self.assertNotIn("Broker connection", checks)
         self.assertIn("Email verification", checks)
         self.assertIn("Two-factor authentication", checks)
+
+    def test_security_alerts_are_derived_only_from_real_user_scoped_failed_auth_events(self):
+        user = get_user_model().objects.create_user(username="security-alert-owner", password="test-password")
+        other_user = get_user_model().objects.create_user(username="security-alert-other", password="test-password")
+        AuditEvent.objects.create(actor_id=user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        AuditEvent.objects.create(actor_id=other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        self.client.force_login(user)
+        response = self.client.get("/operations/security/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Security alerts")
+        self.assertContains(response, "login_failed")
+        self.assertEqual(len(response.context["security_alerts"]), 1)
+        self.assertEqual(response.context["security_alerts"][0].action, "login_failed")
 
     def test_security_center_renders_responsive_dashboard_and_real_activity_context(self):
         user = get_user_model().objects.create_user(username="security-dashboard-test", password="test-password")

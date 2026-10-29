@@ -309,3 +309,12 @@
 .account-page[data-settings-page] .preferences-quick-links a:hover{background:#0c2c43}
 .account-page[data-settings-page] .preferences-save-row{grid-row:5}
 @media(max-width:1000px){.account-page[data-settings-page] .preferences-experience-panel{grid-column:1;grid-row:auto}.account-page[data-settings-page] .preferences-save-row{grid-row:auto}}
+
+.account-page[data-security-page] .security-alerts-card{min-width:0}
+.account-page[data-security-page] .security-alerts-list{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.account-page[data-security-page] .security-alerts-list li{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-top:1px solid var(--account-border,#23364d)}
+.account-page[data-security-page] .security-alerts-list li:first-child{border-top:0;padding-top:0}
+.account-page[data-security-page] .security-alerts-list li>.material-symbols-rounded{color:#f4c66e;font-size:20px;flex:0 0 auto}
+.account-page[data-security-page] .security-alerts-list li>div{display:grid;gap:4px;min-width:0}
+.account-page[data-security-page] .security-alerts-list strong{font-size:12px;overflow-wrap:anywhere}
+.account-page[data-security-page] .security-alerts-list small{font-size:11px;color:var(--account-muted,#94a3b8)}

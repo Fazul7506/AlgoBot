@@ -320,6 +320,12 @@ def security_workspace(request):
         term in (str(item.action) + " " + str(item.module)).lower()
         for term in ("login", "sign-in", "signin", "auth", "session", "password")
     )][:6]
+    # A concise alert list can only be derived from recorded failed/blocked auth
+    # events. The underlying audit trail is preserved and remains user-scoped.
+    security_alerts = [item for item in login_events if any(
+        term in (str(item.action) + " " + str(item.outcome)).lower()
+        for term in ("fail", "denied", "blocked", "rejected", "suspicious")
+    )][:3]
     user_agent = (request.META.get("HTTP_USER_AGENT") or "Current browser")[:180]
     current_device = "Mobile browser" if any(term in user_agent.lower() for term in ("android", "iphone", "mobile")) else "Desktop or tablet browser"
     secure_session = bool(
@@ -352,6 +358,7 @@ def security_workspace(request):
             "password_required": request.user.has_usable_password(),
             "security_events": security_events,
             "login_events": login_events,
+            "security_alerts": security_alerts,
             "current_device": current_device,
         },
     )

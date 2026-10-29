@@ -68,6 +68,10 @@
           <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="setup_2fa">{% if password_required %}<div class="account-field"><label for="mfa-setup-password">Current password</label><input id="mfa-setup-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Set up two-factor authentication</button></div></form>
         {% endif %}
       </section>
+      <section class="account-card security-alerts-card" aria-labelledby="security-alerts-title">
+        <div class="account-card__header"><div><h2 id="security-alerts-title">Security alerts</h2><p class="account-card__hint">Recent failed or blocked sign-in events from the account's recorded audit trail.</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">View login activity</a></div>
+        {% if security_alerts %}<ul class="security-alerts-list">{% for event in security_alerts %}<li><span class="material-symbols-rounded" aria-hidden="true">warning</span><div><strong>{{ event.action }}</strong><small>{{ event.outcome|title }} · {{ event.timestamp|date:"M j, Y H:i" }}</small></div></li>{% endfor %}</ul>{% else %}<p class="account-help profile-activity-empty">No recent failed or blocked sign-in events are recorded.</p>{% endif %}
+      </section>
 
       </div>
     </div>
