@@ -318,3 +318,5 @@
 .account-page[data-security-page] .security-alerts-list li>div{display:grid;gap:4px;min-width:0}
 .account-page[data-security-page] .security-alerts-list strong{font-size:12px;overflow-wrap:anywhere}
 .account-page[data-security-page] .security-alerts-list small{font-size:11px;color:var(--account-muted,#94a3b8)}
+
+.identity-session-list{display:grid;gap:8px;min-width:0}.identity-session-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.identity-session-row__detail{display:grid;gap:5px;min-width:0}.identity-session-row__detail strong,.identity-session-row__detail small{overflow-wrap:anywhere}.identity-session-row__detail small{color:var(--muted)}.identity-session-revoke{min-height:34px;padding:7px 10px}@media(max-width:600px){.identity-session-row{grid-template-columns:minmax(0,1fr) auto}.identity-session-row .identity-session-revoke{grid-column:1/-1;width:100%}.identity-sessions-card .account-card__header{align-items:flex-start;flex-direction:column}.identity-sessions-card .account-card__header button{width:100%}}
