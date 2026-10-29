@@ -363,3 +363,25 @@
 
 .topbar-profile-unverified{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:3px 7px;border:1px solid #795b2b;border-radius:6px;background:#3b2b16;color:#ffd27a;font-size:9px;font-weight:800}
 .topbar-profile-unverified .material-symbols-rounded{font-size:12px;color:inherit}
+
+
+/* Viewport-anchored mobile menus avoid clipping by the header's flex/overflow context. */
+@media (max-width: 700px) {
+  .topbar-notification-menu, .topbar-account-menu, .topbar-profile-menu {
+    position: fixed !important;
+    left: auto !important;
+    right: max(10px, env(safe-area-inset-right)) !important;
+    width: min(410px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 90px) !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+    z-index: 1200;
+  }
+  .topbar-notification-item { min-width: 0; }
+  .topbar-notification-copy { min-width: 0; overflow-wrap: anywhere; }
+  .topbar-notification-copy p { overflow-wrap: anywhere; word-break: normal; }
+}
