@@ -144,3 +144,87 @@
  [data-security-page] .security-dashboard>.security-two-column{grid-template-columns:minmax(0,1fr)}
  [data-security-page] .security-two-column>.security-two-factor,[data-security-page] .security-two-column>.trusted-devices-card{grid-column:1}
 }
+
+
+/* Mobile hardening: base the dashboard layout on the actual content width, not only the device viewport.
+   This also handles browsers that reserve a persistent desktop sidebar or use desktop-site mode. */
+[data-security-page].account-page{container-type:inline-size;container-name:security-page}
+@container security-page (max-width: 760px){
+  [data-security-page] .account-content.security-dashboard{grid-template-columns:minmax(0,1fr)!important}
+  [data-security-page] .security-dashboard>.security-status-banner,
+  [data-security-page] .security-dashboard>.security-summary-grid,
+  [data-security-page] .security-dashboard>.security-password-management,
+  [data-security-page] .security-dashboard>.security-two-column,
+  [data-security-page] .security-dashboard>.security-reassurance-banner,
+  [data-security-page] .security-dashboard>.security-alerts-card{grid-column:1!important;grid-row:auto!important}
+  [data-security-page] .security-dashboard>.security-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  [data-security-page] .security-dashboard>.security-two-column{grid-template-columns:minmax(0,1fr)!important}
+  [data-security-page] .security-two-column>.security-two-factor,
+  [data-security-page] .security-two-column>.trusted-devices-card{grid-column:1!important}
+}
+@container security-page (max-width: 520px){
+  [data-security-page] .security-dashboard>.security-summary-grid{grid-template-columns:minmax(0,1fr)!important}
+  [data-security-page] .security-status-banner{
+    display:grid!important;
+    grid-template-columns:48px minmax(0,1fr);
+    align-items:start;
+    gap:12px;
+    width:100%;
+  }
+  [data-security-page] .security-banner-icon{grid-column:1;grid-row:1;min-width:0}
+  [data-security-page] .security-banner-copy{
+    grid-column:2;
+    min-width:0;
+    width:auto;
+    max-width:100%;
+    flex:initial;
+    overflow-wrap:normal;
+    word-break:normal;
+  }
+  [data-security-page] .security-banner-copy h2,
+  [data-security-page] .security-banner-copy p{
+    max-width:100%;
+    writing-mode:horizontal-tb;
+    word-break:normal;
+    overflow-wrap:break-word;
+  }
+  [data-security-page] .security-banner-status{grid-column:1/-1;width:100%;min-width:0}
+  [data-security-page] .security-banner-status strong,
+  [data-security-page] .security-banner-status small{min-width:0;overflow-wrap:anywhere}
+  [data-security-page] .account-card__header{flex-wrap:wrap}
+  [data-security-page] .account-state{white-space:normal}
+}
+/* Keep the Security page legible when the global appearance setting is Light. */
+html[data-theme="light"] [data-security-page] .security-status-banner,
+html[data-theme="light"] [data-security-page] .security-summary-card,
+html[data-theme="light"] [data-security-page] .security-panel,
+html[data-theme="light"] [data-security-page] .security-session-row,
+html[data-theme="light"] [data-security-page] .security-tips-grid article,
+html[data-theme="light"] [data-security-page] .security-dashboard>.account-card,
+html[data-theme="light"] [data-security-page] .security-reassurance-banner{
+  background:var(--panel);
+  color:var(--text);
+  border-color:var(--line);
+}
+html[data-theme="light"] [data-security-page] .security-banner-copy h2,
+html[data-theme="light"] [data-security-page] .security-summary-card h3,
+html[data-theme="light"] [data-security-page] .security-activity-main strong,
+html[data-theme="light"] [data-security-page] .security-session-row strong,
+html[data-theme="light"] [data-security-page] .security-tips-grid strong,
+html[data-theme="light"] [data-security-page] .security-reassurance-banner strong,
+html[data-theme="light"] [data-security-page] .account-card h2{color:var(--text)}
+html[data-theme="light"] [data-security-page] .security-banner-copy p,
+html[data-theme="light"] [data-security-page] .security-banner-status small,
+html[data-theme="light"] [data-security-page] .security-summary-card p,
+html[data-theme="light"] [data-security-page] .security-activity-main small,
+html[data-theme="light"] [data-security-page] .security-session-row p,
+html[data-theme="light"] [data-security-page] .security-session-row small,
+html[data-theme="light"] [data-security-page] .security-tips-grid p,
+html[data-theme="light"] [data-security-page] .security-reassurance-banner p,
+html[data-theme="light"] [data-security-page] .account-card__hint{color:var(--muted)}
+html[data-theme="light"] [data-security-page] .security-summary-card>a,
+html[data-theme="light"] [data-security-page] .security-panel-heading>a{color:var(--accent);border-color:var(--line)}
+html[data-theme="light"] [data-security-page] .security-banner-status{background:var(--panel2);border-color:var(--line)}
+html[data-theme="light"] [data-security-page] .security-events-table th{color:var(--muted)}
+html[data-theme="light"] [data-security-page] .security-events-table td{color:var(--text)}
+html[data-theme="light"] [data-security-page] .security-empty{color:var(--muted);border-color:var(--line)}
