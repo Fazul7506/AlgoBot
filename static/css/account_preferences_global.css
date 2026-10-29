@@ -116,7 +116,8 @@ html[data-theme="light"][data-accent] { --ds-accent:var(--accent); --ds-info:var
 html[data-layout="wide"] .app-content { max-width:none; }
 html[data-layout="focus"] .app-content { --workspace-focus-width:1480px; }
 html[data-layout="focus"] .app-content > main, html[data-layout="focus"] .app-content > .page-container { max-width:var(--workspace-focus-width); margin-inline:auto; }
-html[data-chart-position="left"] :where([data-chart-layout="side-by-side"]) { direction:rtl; }
+html[data-chart-position="left"] :where([data-chart-layout="side-by-side"]) { direction:ltr; }
+html[data-chart-position="right"] :where([data-chart-layout="side-by-side"]) { direction:rtl; }
 html[data-chart-position="left"] :where([data-chart-layout="side-by-side"]) > * { direction:ltr; }
 html[data-chart-position="bottom"] :where([data-chart-layout="side-by-side"]) { grid-template-columns:minmax(0,1fr); }
 html[data-chart-position="bottom"] :where([data-chart-layout="side-by-side"]) > [data-chart-panel] { grid-column:1/-1; }
