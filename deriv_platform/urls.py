@@ -117,6 +117,7 @@ urlpatterns = [
     path("operations/mission-control/", staff_member_required(monitoring_views.mission_control), name="mission-control-page"),
     path("api/monitoring/", include("apps.monitoring.urls")),
     path("api/security/sessions/", include("core.security_sessions_urls")),
+    path("api/security/", include("core.security_settings_urls")),
     path("observability/", login_required(lambda request: render(request, "observability/control_center.html")), name="observability_control_center"),
     path("api/observability/", include("apps.observability.urls")),
     path("risk/", login_required(risk_page), name="risk_page"),
