@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Account Settings | AlgoBot
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1"><link rel="stylesheet" href="{% static 'css/security_center.css' %}?v=20261020-security1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-global-controls2"><link rel="stylesheet" href="{% static 'css/security_center.css' %}?v=20261020-security1">{% endblock %}
 {% block content %}
 <main class="account-page" data-account-settings data-security-page>
   <header class="account-hero">
@@ -68,9 +68,14 @@
           <form method="post" class="account-security-form">{% csrf_token %}<input type="hidden" name="security_action" value="setup_2fa">{% if password_required %}<div class="account-field"><label for="mfa-setup-password">Current password</label><input id="mfa-setup-password" type="password" name="current_password" autocomplete="current-password" required></div>{% endif %}<div class="account-actions"><button class="account-btn account-btn--primary" type="submit">Set up two-factor authentication</button></div></form>
         {% endif %}
       </section>
-      <section class="account-card security-alerts-card" aria-labelledby="security-alerts-title">
+      <section class="account-card trusted-devices-card" aria-labelledby="trusted-devices-title" data-trusted-devices>
+        <div class="account-card__header"><div><h2 id="trusted-devices-title">Trusted devices</h2><p class="account-card__hint">Browsers you explicitly trust after confirming your current password. This is separate from active login sessions.</p></div></div>
+        <form data-trust-device-form class="trusted-device-form">{% csrf_token %}<div class="account-fields"><div class="account-field"><label for="trusted-device-name">Device name</label><input id="trusted-device-name" name="name" maxlength="100" value="My browser" required></div><div class="account-field"><label for="trusted-device-password">Current password</label><input id="trusted-device-password" name="current_password" type="password" autocomplete="current-password" required></div></div><div class="account-actions"><button type="submit" class="account-btn account-btn--primary">Trust this browser</button><span data-trusted-device-status role="status" aria-live="polite" class="account-help">Loading trusted devices…</span></div></form>
+        <div data-trusted-device-list class="trusted-device-list"><p class="account-help">Loading…</p></div>
+      </section>
+      <section class="account-card security-alerts-card" aria-labelledby="security-alerts-title" data-security-alerts-card>
         <div class="account-card__header"><div><h2 id="security-alerts-title">Security alerts</h2><p class="account-card__hint">Recent failed or blocked sign-in events from the account's recorded audit trail.</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">View login activity</a></div>
-        {% if security_alerts %}<ul class="security-alerts-list">{% for event in security_alerts %}<li><span class="material-symbols-rounded" aria-hidden="true">warning</span><div><strong>{{ event.action }}</strong><small>{{ event.outcome|title }} · {{ event.timestamp|date:"M j, Y H:i" }}</small></div></li>{% endfor %}</ul>{% else %}<p class="account-help profile-activity-empty">No recent failed or blocked sign-in events are recorded.</p>{% endif %}
+        {% if security_alerts %}<ul class="security-alerts-list" data-security-alerts-list>{% for event in security_alerts %}<li><span class="material-symbols-rounded" aria-hidden="true">warning</span><div><strong>{{ event.action }}</strong><small>{{ event.outcome|title }} · {{ event.timestamp|date:"M j, Y H:i" }}</small></div></li>{% endfor %}</ul>{% else %}<ul class="security-alerts-list" data-security-alerts-list><li><div><p class="account-help profile-activity-empty">No recent failed or blocked sign-in events are recorded.</p></div></li></ul>{% endif %}
       </section>
 
       </div>
@@ -78,6 +83,7 @@
   </div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
+<script src="{% static 'js/trusted_devices.js' %}?v=20261029-trusted-devices1" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var qr = document.getElementById('two-factor-qr');
