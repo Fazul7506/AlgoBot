@@ -192,7 +192,7 @@ class AccountSettingsPagesTests(TestCase):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract7", html)
+        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract8", html)
         self.assertIn("localStorage.getItem('algobot-theme')", html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
@@ -274,7 +274,7 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
                 html = response.content.decode("utf-8")
-                self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract7", html)
+                self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract8", html)
                 nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
