@@ -212,6 +212,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("MutationObserver", client)
         self.assertIn("data-ai-market-symbol", client)
         self.assertIn("Instrument catalogue request timed out", client)
+        self.assertIn("const boundedJSON = async path", client, "Each instrument catalogue endpoint needs its own bounded timeout.")
+        self.assertIn("/api/market/symbols/?limit=500", client, "A primary timeout must still allow the fallback request its full timeout window.")
         self.assertIn("Retry instrument list", client)
         self.assertIn("data-ai-selected-icon", client, "Selected prediction must show its verified instrument SVG beside its name.")
         self.assertIn("ai-insight-market-icon", client, "Every insight instrument label must carry its resolved market SVG or an explicit unmapped fallback.")
