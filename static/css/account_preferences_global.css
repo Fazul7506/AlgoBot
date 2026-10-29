@@ -186,3 +186,16 @@ html[data-theme="light"] .account-page .account-card :where(label,strong,legend,
 html[data-theme="light"] .account-page .account-card :where(p,small,dt,.account-card__hint,.account-help,.profile-activity-table th,.preferences-choice small,.preferences-notification-row small,.profile-personal-field>span:first-child){color:var(--muted)}
 html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel){background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
 html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel) :where(p,small,.muted,.text-muted,th){color:var(--muted)}
+
+/* Correct legacy hard-coded foregrounds on the Light-theme hero, topbar toggle and sidebar footer. */
+html[data-theme="light"] .account-page .account-hero h1{color:var(--text)!important}
+html[data-theme="light"] .account-page .account-hero .account-subtitle{color:var(--muted)!important}
+html[data-theme="light"] .account-page .account-hero .account-kicker{color:var(--accent)!important}
+html[data-theme="light"] .topbar button[data-theme-toggle]{background:var(--panel2)!important;color:var(--text)!important;border-color:var(--line)!important}
+html[data-theme="light"] :where(.sidebar-user,.algobot-sidebar-account,.sidebar-user-actions){background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
+html[data-theme="light"] .sidebar-user :where(p,span,small,strong,.algobot-account-error){color:var(--text)!important}
+html[data-theme="light"] .sidebar-user button{background:var(--panel2)!important;color:var(--text)!important;border-color:var(--line)!important}
+html[data-theme="light"] .account-page[data-settings-page] .preferences-profile-summary :where(h2,p,.account-help){color:var(--text)!important}
+html[data-theme="light"] .account-page[data-settings-page] .preferences-profile-summary .account-help{color:var(--muted)!important}
+html[data-theme="light"] .account-page[data-settings-page] .preferences-quick-preferences .account-card__hint{color:var(--muted)!important}
+html[data-theme="light"] .account-page[data-settings-page] .preferences-quick-preferences .preferences-quick-list small{color:var(--muted)!important}
