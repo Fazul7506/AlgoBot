@@ -58,7 +58,7 @@ class SecurityCenterHardeningTests(TestCase):
         self.assertTemplateUsed(response, "core/security_center.html")
         self.assertContains(response, "security_center.css")
         self.assertContains(response, "Two-factor authentication")
-        self.assertContains(response, "Password management")
+        self.assertContains(response, "Password Management")
         self.assertContains(response, "Email verification")
         self.assertNotContains(response, "Login activity")
         self.assertNotContains(response, "security-events-table")
