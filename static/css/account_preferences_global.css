@@ -168,3 +168,21 @@ html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-
 .account-page[data-settings-page] .preferences-choice::after{content:"";display:none;position:absolute;top:11px;right:11px;width:19px;height:19px;place-items:center;border:1px solid var(--accent);border-radius:50%;background:var(--accent);color:var(--accent-foreground,#06111f);font-size:12px;font-weight:900;pointer-events:none}
 .account-page[data-settings-page] .preferences-choice:has(input:checked)::after{content:"✓";display:grid}
 .account-page[data-settings-page] .preferences-choice:focus-within{outline:2px solid var(--accent);outline-offset:3px}
+
+/* Light mode must override legacy !important dark-shell and account-card declarations. */
+html[data-theme="light"] body,html[data-theme="light"] .app-shell,html[data-theme="light"] .app-content{background:var(--bg)!important;background-image:none!important;color:var(--text)!important}
+html[data-theme="light"] .app-sidebar{background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-right:1px solid var(--line)!important;box-shadow:none!important}
+html[data-theme="light"] .app-sidebar nav a{color:var(--muted)!important}
+html[data-theme="light"] .app-sidebar nav a.active,html[data-theme="light"] .app-sidebar nav a[aria-current="page"]{background:color-mix(in srgb,var(--accent) 12%,var(--panel))!important;border-color:var(--line)!important;color:var(--text)!important;box-shadow:inset 3px 0 0 var(--accent)!important}
+html[data-theme="light"] .topbar{background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-bottom:1px solid var(--line)!important;box-shadow:none!important}
+html[data-theme="light"] .topbar :where(a,button,.topbar-brand-name,.topbar-profile-name,.topbar-account-label strong,.topbar-account-label small){color:var(--text)!important}
+html[data-theme="light"] :where(.topbar-account-trigger,.topbar-icon-button,.topbar-profile-trigger,.topbar-account-menu,.topbar-profile-menu,.topbar-notification-menu){background:var(--panel2)!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none}
+html[data-theme="light"] :where(.account-page .account-hero,.account-page .account-card,.account-page .security-panel,.account-page .security-status-banner,.account-page .security-summary-card,.account-page .preferences-quick-preferences,.account-page .preferences-experience-panel){background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
+html[data-theme="light"] .account-page .account-nav{background:var(--panel)!important;border-color:var(--line)!important}
+html[data-theme="light"] .account-page .account-nav a{color:var(--muted)!important}
+html[data-theme="light"] .account-page .account-nav a[aria-current="page"]{background:color-mix(in srgb,var(--accent) 12%,var(--panel2))!important;color:var(--text)!important}
+html[data-theme="light"] .account-page .account-card :where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea){background:var(--bg)!important;color:var(--text)!important;border-color:var(--line)!important;color-scheme:light!important}
+html[data-theme="light"] .account-page .account-card :where(label,strong,legend,h1,h2,h3,p,small,span,dt,dd){color:inherit}
+html[data-theme="light"] .account-page .account-card :where(.account-card__hint,.account-help,.profile-activity-table th,.preferences-choice small,.preferences-notification-row small){color:var(--muted)!important}
+html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel){background:var(--panel)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
+html[data-theme="light"] :where(.panel,.kpi-card,.ds-card,.chart-shell,.terminal-chart,.workspace-panel) :where(p,small,.muted,.text-muted,th){color:var(--muted)}
