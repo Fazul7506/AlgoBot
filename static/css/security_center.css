@@ -144,3 +144,47 @@
  [data-security-page] .security-dashboard>.security-two-column{grid-template-columns:minmax(0,1fr)}
  [data-security-page] .security-two-column>.security-two-factor,[data-security-page] .security-two-column>.trusted-devices-card{grid-column:1}
 }
+
+
+/* Keep the overview banner full-width and content-sized. A tall adjacent card must
+   never stretch its flex children into one-character vertical columns. */
+[data-security-page] .account-content.security-dashboard {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+}
+[data-security-page] .security-dashboard > .security-status-banner {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: start;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+[data-security-page] .security-banner-copy { min-width: 0; overflow-wrap: anywhere; }
+[data-security-page] .security-banner-copy h2,
+[data-security-page] .security-banner-copy p { writing-mode: horizontal-tb; word-break: normal; overflow-wrap: anywhere; }
+[data-security-page] .security-dashboard > .security-summary-grid { grid-column: 1; grid-row: 2; }
+[data-security-page] .security-dashboard > .security-password-management { grid-column: 2; grid-row: 2; }
+[data-security-page] .security-dashboard > .security-two-column { grid-column: 1 / -1; grid-row: 3; min-width: 0; }
+[data-security-page] .security-dashboard > .security-reassurance-banner { grid-column: 1; grid-row: 4; min-width: 0; }
+[data-security-page] .security-dashboard > .security-alerts-card { grid-column: 2; grid-row: 4; min-width: 0; }
+[data-security-page] .security-dashboard > * { min-width: 0; }
+@media (max-width: 900px) {
+  [data-security-page] .account-content.security-dashboard { grid-template-columns: minmax(0, 1fr); }
+  [data-security-page] .security-dashboard > .security-status-banner,
+  [data-security-page] .security-dashboard > .security-summary-grid,
+  [data-security-page] .security-dashboard > .security-password-management,
+  [data-security-page] .security-dashboard > .security-two-column,
+  [data-security-page] .security-dashboard > .security-reassurance-banner,
+  [data-security-page] .security-dashboard > .security-alerts-card { grid-column: 1; grid-row: auto; }
+  [data-security-page] .security-dashboard > .security-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-security-page] .security-dashboard > .security-two-column { grid-template-columns: minmax(0, 1fr); }
+  [data-security-page] .security-two-column > .security-two-factor,
+  [data-security-page] .security-two-column > .trusted-devices-card { grid-column: 1; }
+}
+@media (max-width: 600px) {
+  [data-security-page] .security-dashboard > .security-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  [data-security-page] .security-status-banner { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: start; }
+  [data-security-page] .security-banner-status { grid-column: 1 / -1; width: 100%; min-width: 0; box-sizing: border-box; }
+}
