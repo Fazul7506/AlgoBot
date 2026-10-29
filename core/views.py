@@ -66,7 +66,7 @@ def signals_page(request): return render(request,'core/signals.html')
 @login_required
 def analysis_page(request):
     markets = list(
-        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
+        MarketSymbol.objects.filter(broker="deriv", is_active=True, is_tradable=True)
         .values("symbol", "display_name", "market", "sub_market")
         .order_by("market", "symbol")
     )
