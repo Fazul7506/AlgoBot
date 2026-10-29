@@ -108,3 +108,12 @@ This change does not yet prove full reference-image parity or end-to-end backend
 | `templates/core/settings.html` | Frontend | Adds layout, chart position, default-page and refresh preference selectors and persistence payload | Template validation pending CI; end-to-end data-poller integration remains partial |
 | `core/tests/test_security_settings_api.py` | Tests | Covers password-gated registration, hash-only token, ownership isolation, revocation and alert scoping | Added; Django test execution pending CI |
 | `core/tests/test_account_settings_pages.py` | Tests | Extends account preference persistence tests for layout, chart position, default page and refresh values | Added; Django test execution pending CI |
+
+
+## Follow-up: contrast-tested accent foregrounds (29 October 2026)
+
+- Corrected the Dark-theme blue accent foreground to a dark ink colour; white text on the bright blue accent did not meet WCAG AA contrast for normal-size primary-action text.
+- Applied the shared `--accent-foreground` token to primary action buttons and added mathematical contrast-ratio assertions for cyan, blue, teal, violet and amber in Light and Dark palettes.
+- Bumped the shared theme stylesheet cache key to `20261029-global-theme-contract4` so clients fetch the corrected CSS.
+- Corrected the four-page navigation contract test to verify the global appearance stylesheet shared by all four pages rather than requiring the Profile-specific stylesheet cache key on Preferences and Security pages.
+- Validation: preference runtime/contrast tests, market asset registry test, frontend structure validator, Django system check, migration check, 70-template compilation, and the focused 31-test account/security suite passed. The first focused run exposed two stale stylesheet assertions; they were corrected and the 31-test suite passed on rerun.
