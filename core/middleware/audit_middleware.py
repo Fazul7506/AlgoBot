@@ -144,7 +144,11 @@ class AuditMiddleware(MiddlewareMixin):
         is_critical = any(marker in path for marker in critical_markers)
         parts = [part for part in path.strip("/").split("/") if part and part != "api"]
         ignored = {"api", "v1", "v2", "actions", "action", "submit", "confirm", "complete", "execute"}
-        candidates = [part.replace("_", " ").replace("-", " ").strip() for part in parts if part not in ignored]
+        candidates = [
+            part.replace("_", " ").replace("-", " ").strip()
+            for part in parts
+            if part not in ignored and not part.isdigit() and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f-]{27,}", part)
+        ]
         resource = candidates[-1] if candidates else module.replace("_", " ")
         resource = re.sub(r"[^a-z0-9 ]", "", resource).strip()[:60] or module.replace("_", " ")
         verb = (parts[-1] if parts else "").replace("-", "_")
@@ -160,6 +164,12 @@ class AuditMiddleware(MiddlewareMixin):
         }
         if verb in past_tense and len(candidates) > 1:
             resource = candidates[-2]
+            resource = {
+                "strategies": "strategy", "brokers": "broker", "accounts": "account",
+                "settings": "setting", "preferences": "preference", "credentials": "credential",
+                "notifications": "notification", "sessions": "session", "devices": "device",
+                "orders": "order", "positions": "position", "recovery codes": "recovery code",
+            }.get(resource, resource)
             action = past_tense[verb]
             message = f"Your {resource} was {action} successfully."
             title = f"{resource.title()} {action.title()}"
