@@ -49,7 +49,7 @@ This change does not yet prove full reference-image parity or end-to-end backend
 
 - The initial shell image lacked Django and pip. An isolated virtual environment was bootstrapped under `/tmp/algobot-venv`; no repository dependency files were changed.
 - The full test suite uses Django's temporary test database. No production database was connected or modified.
-- Browser-based visual comparison against the four supplied screenshots is still unverified because those images were not available as inspectable files in the current workspace. No pixel-perfect claim is made.
+- The initial implementation pass could not inspect the reference images. The user supplied all four screenshots on 29 October 2026; browser-based visual comparison is still unverified because this environment has no browser/screenshot harness. No pixel-perfect claim is made.
 - The backend does not expose an account-scoped active-session inventory/remote revocation API, trusted-device registry, dedicated security-alert feed, or persisted layout/chart/default-page/refresh preferences. The Security page derives a concise alert list from real failed/blocked authentication audit events; it does not claim to have a separate alert feed.
 
 
@@ -65,7 +65,7 @@ This change does not yet prove full reference-image parity or end-to-end backend
 - `python manage.py collectstatic --noinput --clear`: passed; 271 static files copied.
 - `node static/js/market_asset_registry.test.js`, `node --check static/js/base_shell.js`, extracted inline-script `node --check` for the modified Settings/Profile/Login & Identity/Security templates, Python compilation, and `git diff --check`: passed.
 - Additional test alignment: `core/test_universal_workspace_access.py` now expects the Account Settings navigation destination; `core/tests/test_security_center_contract.py` verifies developer-key lifecycle data remains out of the personal Security overview while the backend key count remains available in context.
-- Still not verified: browser-based visual comparison against the four supplied reference images, mobile/tablet screenshot review, and deployment/production API checks. The reference images were not available as inspectable files in this repository workspace. The PR remains a draft until those visual checks and backend gaps are addressed.
+- Still not verified: rendered visual comparison against the four supplied reference images at desktop/tablet/mobile sizes, and deployment/production API checks. The screenshots are now attached to the conversation, but no browser screenshot harness is available in this workspace. The PR remains a draft until visual checks and backend gaps are addressed.
 
 - Follow-up: the Security page now presents up to three genuine failed/blocked sign-in events as concise alerts, filtered to the authenticated user's audit records. The focused security suite passed (28 tests) and the final full suite passed (878 tests).
 
