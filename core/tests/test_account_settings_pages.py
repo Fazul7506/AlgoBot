@@ -258,7 +258,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(security_response.status_code, 200)
         self.assertContains(settings_response, "Workspace preferences")
         self.assertContains(settings_response, "Notifications")
-        self.assertContains(security_response, "Password management")
+        self.assertContains(security_response, "Password Management")
         self.assertNotContains(security_response, "Protection checks")
 
     def test_all_account_settings_pages_share_reference_header_and_four_tab_navigation(self):
