@@ -355,3 +355,27 @@
 @media(max-width:1000px){.account-page[data-profile-page] .profile-main-stack{grid-column:1;grid-row:auto}}
 @media(max-width:760px){.account-page[data-profile-page] .profile-secondary-grid{grid-template-columns:minmax(0,1fr)}.account-page[data-profile-page] .profile-security-banner{grid-template-columns:34px minmax(0,1fr)}.account-page[data-profile-page] .profile-security-banner .account-btn{grid-column:1/-1;justify-self:start}}
 @media(max-width:560px){.account-page[data-profile-page] .profile-personal-fields{grid-template-columns:minmax(0,1fr);padding:8px}.account-page[data-profile-page] .profile-personal-field{grid-template-columns:minmax(0,1fr) auto}.account-page[data-profile-page] .profile-picture-upload{min-height:125px}}
+
+
+/* Preferences reference layout: appearance/layout, notifications/data, and account shortcuts. */
+.account-page[data-settings-page] .preferences-content{grid-template-columns:minmax(0,1.05fr) minmax(0,1.05fr) minmax(235px,.82fr);align-items:start}
+.account-page[data-settings-page] #appearance{grid-column:1;grid-row:1}
+.account-page[data-settings-page] #layout-preferences{grid-column:1;grid-row:2}
+.account-page[data-settings-page] #notification-preferences{grid-column:2;grid-row:1}
+.account-page[data-settings-page] #data-display{grid-column:2;grid-row:2}
+.account-page[data-settings-page] .preferences-profile-summary{grid-column:3;grid-row:1;display:flex;align-items:center;gap:14px;padding:18px;border:1px solid var(--ds-border,var(--line));border-radius:14px;background:var(--ds-surface-1,var(--panel));color:var(--ds-text,var(--text))}
+.account-page[data-settings-page] .preferences-quick-preferences{grid-column:3;grid-row:2;min-width:0;padding:18px;border:1px solid var(--ds-border,var(--line));border-radius:14px;background:var(--ds-surface-1,var(--panel));color:var(--ds-text,var(--text))}
+.account-page[data-settings-page] .preferences-quick-list{display:grid;gap:0}
+.account-page[data-settings-page] .preferences-quick-list>a{display:grid;grid-template-columns:32px minmax(0,1fr) 18px;align-items:center;gap:9px;padding:11px 0;border-bottom:1px solid var(--ds-border,var(--line));color:var(--ds-text,var(--text));text-decoration:none;min-width:0}
+.account-page[data-settings-page] .preferences-quick-list>a:last-child{border-bottom:0}
+.account-page[data-settings-page] .preferences-quick-list>a>.material-symbols-rounded:first-child{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--ds-surface-2,var(--panel2));color:var(--accent);font-size:19px}
+.account-page[data-settings-page] .preferences-quick-list strong,.account-page[data-settings-page] .preferences-quick-list small{display:block;overflow-wrap:anywhere}
+.account-page[data-settings-page] .preferences-quick-list strong{font-size:12px;font-weight:700}
+.account-page[data-settings-page] .preferences-quick-list small{margin-top:3px;color:var(--ds-muted,var(--muted));font-size:10px;line-height:1.4}
+.account-page[data-settings-page] .preferences-experience-panel{grid-column:3;grid-row:3;min-width:0;padding:20px;border:1px solid var(--ds-border,var(--line));border-radius:14px;background:var(--ds-surface-1,var(--panel));color:var(--ds-text,var(--text))}
+.account-page[data-settings-page] .preferences-experience-panel h2{color:var(--ds-text,var(--text))}
+.account-page[data-settings-page] .preferences-experience-panel>p:not(.account-kicker){color:var(--ds-muted,var(--muted))}
+.account-page[data-settings-page] .preferences-quick-links a{border-color:var(--ds-border,var(--line));color:var(--accent)}
+.account-page[data-settings-page] .preferences-save-row{grid-column:1/-1;grid-row:4}
+@media(max-width:1200px) and (min-width:1001px){.account-page[data-settings-page] .preferences-content{grid-template-columns:repeat(2,minmax(0,1fr))}.account-page[data-settings-page] #appearance{grid-column:1;grid-row:1}.account-page[data-settings-page] #layout-preferences{grid-column:1;grid-row:2}.account-page[data-settings-page] #notification-preferences{grid-column:2;grid-row:1/span 2}.account-page[data-settings-page] #data-display{grid-column:1;grid-row:3}.account-page[data-settings-page] .preferences-profile-summary{grid-column:2;grid-row:3}.account-page[data-settings-page] .preferences-quick-preferences{grid-column:2;grid-row:4}.account-page[data-settings-page] .preferences-experience-panel{grid-column:1/-1;grid-row:5}.account-page[data-settings-page] .preferences-save-row{grid-row:6}}
+@media(max-width:1000px){.account-page[data-settings-page] .preferences-content{grid-template-columns:minmax(0,1fr)}.account-page[data-settings-page] #appearance,.account-page[data-settings-page] #layout-preferences,.account-page[data-settings-page] #notification-preferences,.account-page[data-settings-page] #data-display,.account-page[data-settings-page] .preferences-profile-summary,.account-page[data-settings-page] .preferences-quick-preferences,.account-page[data-settings-page] .preferences-experience-panel,.account-page[data-settings-page] .preferences-save-row{grid-column:1;grid-row:auto}}
