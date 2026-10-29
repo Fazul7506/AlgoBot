@@ -120,7 +120,7 @@ class AuditMiddleware(MiddlewareMixin):
             (r"(?:recovery[-_]codes|recovery_codes).*(?:regenerate|rotate|refresh)", "Recovery codes regenerated", "A new set of single-use recovery codes was generated. Store them safely; older codes may no longer work."),
             (r"trusted[-_]?devices?.*(?:trust|register|create|add)", "Trusted device added", "This browser was added to your trusted devices after the security check."),
             (r"trusted[-_]?devices?.*(?:revoke|remove|delete|untrust)", "Trusted device removed", "A trusted device was removed from your account."),
-            (r"(?:password|credentials?)/?(?:change|update|reset|set)|(?:change|update|reset|set)[-_]?password", "Password updated", "Your account password was updated successfully."),
+            (r"(?:password|credentials?).*(?:change|update|reset|set)|(?:change|update|reset|set)[-_]?password", "Password updated", "Your account password was updated successfully."),
             (r"(?:email[-_]?verification|verify[-_]?email|email/verify)", "Email verification updated", "Your email-verification action was completed."),
             (r"(?:login|log[-_]?in|sign[-_]?in)", "Sign-in completed", "A successful sign-in to your account was recorded."),
             (r"(?:logout|log[-_]?out|session[-_]?revoke|revoke[-_]?session)", "Session ended", "A sign-out or session-revocation action was completed."),
