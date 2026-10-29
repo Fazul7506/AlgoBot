@@ -379,3 +379,17 @@
 .account-page[data-settings-page] .preferences-save-row{grid-column:1/-1;grid-row:4}
 @media(max-width:1200px) and (min-width:1001px){.account-page[data-settings-page] .preferences-content{grid-template-columns:repeat(2,minmax(0,1fr))}.account-page[data-settings-page] #appearance{grid-column:1;grid-row:1}.account-page[data-settings-page] #layout-preferences{grid-column:1;grid-row:2}.account-page[data-settings-page] #notification-preferences{grid-column:2;grid-row:1/span 2}.account-page[data-settings-page] #data-display{grid-column:1;grid-row:3}.account-page[data-settings-page] .preferences-profile-summary{grid-column:2;grid-row:3}.account-page[data-settings-page] .preferences-quick-preferences{grid-column:2;grid-row:4}.account-page[data-settings-page] .preferences-experience-panel{grid-column:1/-1;grid-row:5}.account-page[data-settings-page] .preferences-save-row{grid-row:6}}
 @media(max-width:1000px){.account-page[data-settings-page] .preferences-content{grid-template-columns:minmax(0,1fr)}.account-page[data-settings-page] #appearance,.account-page[data-settings-page] #layout-preferences,.account-page[data-settings-page] #notification-preferences,.account-page[data-settings-page] #data-display,.account-page[data-settings-page] .preferences-profile-summary,.account-page[data-settings-page] .preferences-quick-preferences,.account-page[data-settings-page] .preferences-experience-panel,.account-page[data-settings-page] .preferences-save-row{grid-column:1;grid-row:auto}}
+
+
+/* Compact reference-density tuning for Preferences keeps the right rail visible without oversized cards. */
+.account-page[data-settings-page] .account-card{padding:clamp(13px,1.2vw,17px)}
+.account-page[data-settings-page] .account-card__header{margin-bottom:12px}
+.account-page[data-settings-page] .preferences-fieldset{margin-bottom:12px}
+.account-page[data-settings-page] .preferences-fieldset legend{margin-bottom:8px}
+.account-page[data-settings-page] .preferences-choice{min-height:88px;padding:10px;gap:5px}
+.account-page[data-settings-page] .preferences-choice--density{min-height:88px}
+.account-page[data-settings-page] .preferences-notification-row{gap:8px;padding:7px 0;grid-template-columns:30px minmax(0,1fr) auto}
+.account-page[data-settings-page] .preferences-notification-icon{width:28px;height:28px}
+.account-page[data-settings-page] .preferences-divider{margin:9px 0}
+.account-page[data-settings-page] .preferences-profile-summary,.account-page[data-settings-page] .preferences-quick-preferences{padding:14px}
+.account-page[data-settings-page] .preferences-experience-panel{padding:15px}
