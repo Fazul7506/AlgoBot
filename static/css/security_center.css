@@ -3,10 +3,10 @@
 [data-security-page] .account-hero{align-items:center;padding:clamp(18px,2.5vw,30px);border:1px solid var(--security-border);border-radius:16px;background:radial-gradient(ellipse at 82% 20%,rgba(18,93,174,.24),transparent 44%),linear-gradient(120deg,#081a34,#07152a);margin-bottom:18px}
 [data-security-page] .account-hero h1{display:flex;align-items:center;gap:12px}
 .security-title-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:linear-gradient(145deg,#1689ff,#1246a4);color:#fff;font-size:32px;box-shadow:0 8px 28px #0068ff33}
-[data-security-page] .account-layout{grid-template-columns:190px minmax(0,1fr);gap:16px}
+[data-security-page] .account-layout{grid-template-columns:minmax(0,1fr);gap:14px}
 [data-security-page] .account-nav{background:#061326;border-color:var(--security-border)}
 [data-security-page] .account-nav a[aria-current=page]{background:linear-gradient(90deg,#0b4c91,#0c3768);color:#fff}
-[data-security-page] .account-content{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:stretch}
+[data-security-page] .account-content{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch}
 .security-status-banner,.security-summary-grid,.security-two-column,.security-tips-panel,.security-events-panel,.security-protection-checks,.security-two-factor,.account-content>.account-card{grid-column:1/-1;min-width:0}
 .security-status-banner{display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--security-border);border-radius:15px;background:radial-gradient(ellipse at right,#0b2e56,transparent 60%),#07172d}
 .security-banner-icon{display:grid;place-items:center;flex:0 0 64px;height:64px;border-radius:20px;background:linear-gradient(145deg,#168bff,#1747a7);font-size:36px;color:white}
