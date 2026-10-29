@@ -209,6 +209,15 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn('<span>Account Settings</span>', html)
         self.assertNotIn('<span>Security Center</span></a>', html)
 
+    def test_login_identity_loads_real_session_inventory_and_revoke_controls(self):
+        response = self.client.get(reverse("account_identity_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-session-panel")
+        self.assertContains(response, "data-session-list")
+        self.assertContains(response, "data-revoke-other-sessions")
+        self.assertContains(response, "/api/security/sessions/")
+        self.assertNotContains(response, "The current backend does not expose an account-scoped session inventory")
+
     def test_login_identity_renders_only_current_users_authentication_events(self):
         AuditEvent.objects.create(actor_id=self.user.pk, action="login_success", resource_type="Authentication", outcome="success", metadata={"method": "password"})
         AuditEvent.objects.create(actor_id=self.other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
