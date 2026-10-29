@@ -122,6 +122,7 @@ class AuditMiddleware(MiddlewareMixin):
             (r"trusted[-_]?devices?.*(?:revoke|remove|delete|untrust)", "Trusted device removed", "A trusted device was removed from your account."),
             (r"(?:password|credentials?)/?(?:change|update|reset|set)|(?:change|update|reset|set)[-_]?password", "Password updated", "Your account password was updated successfully."),
             (r"(?:email[-_]?verification|verify[-_]?email|email/verify)", "Email verification updated", "Your email-verification action was completed."),
+            (r"(?:login|log[-_]?in|sign[-_]?in)", "Sign-in completed", "A successful sign-in to your account was recorded."),
             (r"(?:logout|log[-_]?out|session[-_]?revoke|revoke[-_]?session)", "Session ended", "A sign-out or session-revocation action was completed."),
             (r"(?:broker|deriv).*(?:connect|link|authorize)", "Broker connection updated", "Your broker connection or authorization setting was updated."),
             (r"(?:broker|deriv).*(?:disconnect|unlink|deauthorize)", "Broker disconnected", "A broker connection was disconnected from your account."),
