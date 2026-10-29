@@ -161,7 +161,7 @@
         if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
         const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)).map(x=>{const symbol=String(x.symbol||x.underlying_symbol||x.code);const supplied=String(x.display_name||x.name||x.underlying_symbol_name||'');return {...x,symbol,display_name:marketDisplayName(symbol,supplied)};});
         const current=select.value;
-        select.innerHTML='<option value=\"\">Choose a market</option>'+instruments.map(x=>'<option value=\"'+esc(x.symbol)+'\">'+esc(x.display_name||'Market instrument')+'</option>').join('');
+        select.innerHTML='<option value="">Choose a market</option>'+instruments.map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.display_name||'Market instrument')+'</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
         else if(instruments.length)select.selectedIndex=1;
         if(!instruments.length) throw new Error('Connected broker returned zero active instruments');
