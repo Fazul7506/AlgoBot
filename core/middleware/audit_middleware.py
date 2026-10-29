@@ -124,8 +124,8 @@ class AuditMiddleware(MiddlewareMixin):
             (r"(?:email[-_]?verification|verify[-_]?email|email/verify)", "Email verification updated", "Your email-verification action was completed."),
             (r"(?:login|log[-_]?in|sign[-_]?in)", "Sign-in completed", "A successful sign-in to your account was recorded."),
             (r"(?:logout|log[-_]?out|session[-_]?revoke|revoke[-_]?session)", "Session ended", "A sign-out or session-revocation action was completed."),
-            (r"(?:broker|deriv).*(?:connect|link|authorize)", "Broker connection updated", "Your broker connection or authorization setting was updated."),
             (r"(?:broker|deriv).*(?:disconnect|unlink|deauthorize)", "Broker disconnected", "A broker connection was disconnected from your account."),
+            (r"(?:broker|deriv).*(?:connect|link|authorize)", "Broker connection updated", "Your broker connection or authorization setting was updated."),
             (r"(?:notification|preferences?).*(?:preference|settings?|update|save)", "Notification preferences saved", "Your notification preferences were saved."),
         )
         for pattern, title, message in rules:
@@ -147,9 +147,26 @@ class AuditMiddleware(MiddlewareMixin):
         candidates = [part.replace("_", " ").replace("-", " ").strip() for part in parts if part not in ignored]
         resource = candidates[-1] if candidates else module.replace("_", " ")
         resource = re.sub(r"[^a-z0-9 ]", "", resource).strip()[:60] or module.replace("_", " ")
-        action = "updated" if method.upper() in {"PUT", "PATCH"} else "removed" if method.upper() == "DELETE" else "saved"
-        title = "Security setting updated" if is_critical else f"{resource.title()} {action}"
-        message = (f"Your {resource} security action was saved successfully." if is_critical else f"Your {resource} change was {action} successfully.")
+        verb = (parts[-1] if parts else "").replace("-", "_")
+        past_tense = {
+            "activate": "activated", "deactivate": "deactivated", "connect": "connected",
+            "disconnect": "disconnected", "link": "linked", "unlink": "unlinked",
+            "create": "created", "register": "registered", "update": "updated",
+            "save": "saved", "delete": "deleted", "remove": "removed",
+            "revoke": "revoked", "enable": "enabled", "disable": "disabled",
+            "start": "started", "stop": "stopped", "cancel": "cancelled",
+            "approve": "approved", "reject": "rejected", "verify": "verified",
+            "refresh": "refreshed", "sync": "synchronized", "run": "started",
+        }
+        if verb in past_tense and len(candidates) > 1:
+            resource = candidates[-2]
+            action = past_tense[verb]
+            message = f"Your {resource} was {action} successfully."
+            title = f"{resource.title()} {action.title()}"
+        else:
+            action = "updated" if method.upper() in {"PUT", "PATCH"} else "removed" if method.upper() == "DELETE" else "saved"
+            title = f"{resource.title()} {action}"
+            message = f"Your {resource} change was {action} successfully."
         return title[:80], message[:240], ("security" if is_critical else module[:40]), ("critical" if is_critical else "info")
 
     @staticmethod
