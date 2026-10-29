@@ -41,7 +41,7 @@
   <span id="aFeed" class="reference-hidden-data"></span><span id="loadState" class="reference-hidden-data" role="status" aria-live="polite"></span><span id="prepareState" class="reference-hidden-data"></span><button id="prepare" type="button" hidden aria-hidden="true" tabindex="-1"></button>
 </main>
 {% endblock %}
-{% block extra_js %}{{ analysis_markets|json_script:"analysis-markets-data" }}<script src="{% static 'js/deriv_market_asset_manifest.js' %}?v=20261024-analysis-assets1" defer></script><script src="{% static 'js/market_asset_registry.js' %}?v=20261024-analysis-assets1" defer></script><script src="{% static 'js/analysis_workspace.js' %}?v=20261024-analysis-fast1" defer></script>
+{% block extra_js %}{{ analysis_markets|json_script:"analysis-markets-data" }}<script src="{% static 'js/deriv_market_asset_manifest.js' %}?v=20261024-analysis-assets1" defer></script><script src="{% static 'js/market_asset_registry.js' %}?v=20261024-analysis-assets1" defer></script><script src="{% static 'js/analysis_workspace.js' %}?v=20261030-analysis-market-recovery1" defer></script>
 <script>
 document.addEventListener("DOMContentLoaded",function(){
  const mirror=(source,target)=>{const a=document.getElementById(source),b=document.getElementById(target);if(!a||!b)return;const sync=()=>b.textContent=a.textContent;const observer=new MutationObserver(sync);observer.observe(a,{childList:true,characterData:true,subtree:true});sync();};
