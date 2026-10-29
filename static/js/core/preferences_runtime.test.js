@@ -62,5 +62,7 @@ for (const [name, values] of Object.entries(palette)) {
   assert.ok(themeCss.includes('html[data-theme="dark"][data-accent="' + name + '"] { --accent-foreground:' + values.darkText + '; }'), name + ' uses its contrast-tested dark foreground');
 }
 assert.ok(themeCss.includes('color:var(--accent-foreground,#06111f);'), 'shared primary actions consume the tested foreground token');
+assert.ok(themeCss.includes('Light mode must override legacy !important dark-shell'), 'Light theme must override legacy shell styles that could hide text');
+console.log('Light mode shell override contract passed.');
 console.log('Theme-aware swatch palette tests passed for all five accents.');
 console.log('Accent foreground contrast tests passed (WCAG AA, all five accents in both themes).');
