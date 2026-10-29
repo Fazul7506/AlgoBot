@@ -21,7 +21,7 @@ from apps.brokers.services import BrokerRegistry, SynchronizationService
 from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
 from apps.strategies.models import StrategySignal
-from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
+from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick, sync_active_symbols
 from apps.market_data.historical import persist_broker_chart_history, persist_broker_tick_history
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
@@ -732,23 +732,50 @@ def analysis_data(request):
     return JsonResponse(result)
 
 
-def _analysis_markets():
-    cached = _safe_cache_get("algobot:analysis:markets:v1")
-    if cached is not None:
+def _analysis_markets(force_refresh=False):
+    # Do not treat an empty cached list as a valid catalogue: an earlier
+    # startup before the market stream synced must not hide newly synced symbols.
+    cache_key = "algobot:analysis:markets:v2"
+    cached = None if force_refresh else _safe_cache_get(cache_key)
+    if cached:
         return cached
     markets = list(
-        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
+        MarketSymbol.objects.filter(
+            broker="deriv", is_active=True, is_tradable=True
+        )
         .values("symbol", "display_name", "market", "sub_market")
         .order_by("market", "symbol")
     )
-    _safe_cache_set("algobot:analysis:markets:v1", markets, ANALYSIS_MARKETS_CACHE_SECONDS)
+    if markets:
+        _safe_cache_set(cache_key, markets, ANALYSIS_MARKETS_CACHE_SECONDS)
     return markets
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_markets(request):
-    return JsonResponse({"markets": _analysis_markets()})
+    force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
+    markets = _analysis_markets(force_refresh=force_refresh)
+    # A fresh install, delayed worker, or restored database can have no local
+    # symbols yet. Recover from Deriv's authoritative active_symbols feed instead
+    # of permanently rendering an empty selector. Sync is idempotent and writes
+    # the existing catalogue rows; it does not touch account or trading data.
+    if force_refresh or not markets:
+        try:
+            sync_active_symbols()
+        except Exception:
+            logger.warning("Analysis market catalogue refresh failed", exc_info=True)
+        markets = _analysis_markets(force_refresh=True)
+    payload = {"markets": markets}
+    if not markets:
+        payload.update({
+            "status": "unavailable",
+            "code": "MARKET_CATALOGUE_UNAVAILABLE",
+            "detail": "No tradable markets are cached and the live Deriv catalogue could not be loaded. Check the broker connection and retry.",
+        })
+    else:
+        payload.update({"status": "ok", "count": len(markets)})
+    return JsonResponse(payload)
 
 
 @api_view(["GET"])
