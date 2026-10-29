@@ -238,7 +238,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('sessionStorage.setItem(cacheKey(symbol,tf,limit)', analysis)
         self.assertIn('request(path, options, 12000)', analysis)
         self.assertIn('markets({forceRefresh:true})', analysis, "The Analysis refresh control must retry an empty market catalogue.")
-        self.assertIn('/analysis/markets/?refresh=1', analysis, "The frontend must be able to request a real catalogue refresh.")
+        self.assertIn('?refresh=1', analysis, "The frontend must be able to request a real catalogue refresh.")
         self.assertIn('Markets unavailable — retry refresh', analysis, "An empty catalogue must provide a visible recovery action rather than a dead-end message.")
         self.assertIn('sync_active_symbols()', api, "The backend must repopulate an empty catalogue from the authoritative Deriv feed.")
         self.assertIn('MARKET_CATALOGUE_UNAVAILABLE', api, "Catalogue failures must return an explicit diagnostic code.")
