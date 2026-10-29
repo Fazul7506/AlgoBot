@@ -219,3 +219,49 @@
 @media(max-width:600px){.account-page[data-profile-page],.account-page[data-settings-page],.account-page[data-account-identity],.account-page[data-security-page]{padding:10px}.account-page .account-hero{align-items:flex-start;flex-direction:column;padding:15px}.account-page .account-nav{scroll-snap-type:x proximity}.account-page .account-nav a{flex:0 0 auto;min-width:110px;min-height:46px;padding:10px 13px;scroll-snap-align:start;font-size:12px}.account-page .account-fields,.account-page .security-summary-grid{grid-template-columns:minmax(0,1fr)}.account-page .account-card__header{align-items:flex-start;flex-direction:column}.account-page .account-actions .account-btn{flex:1 1 auto}.account-page .security-status-banner{align-items:flex-start;flex-wrap:wrap}.account-page .account-toggle{align-items:flex-start}.account-page .account-toggle .account-btn{flex:0 0 auto}}
 @media(max-width:380px){.account-page .account-nav a{min-width:102px;padding-inline:10px}.account-page .account-card{padding:12px}.account-page .account-btn{padding-inline:10px}}
 @media(prefers-reduced-motion:reduce){.account-page *{scroll-behavior:auto!important;transition:none!important}}
+
+/* Account Settings reference reconstruction: shared page-specific composition. */
+.account-page[data-settings-page] .preferences-content{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:14px}
+.account-page[data-settings-page] #appearance{grid-column:1;grid-row:1}
+.account-page[data-settings-page] #notification-preferences{grid-column:2;grid-row:1 / span 2}
+.account-page[data-settings-page] #data-display{grid-column:1;grid-row:2}
+.account-page[data-settings-page] .preferences-profile-summary{grid-column:2;grid-row:3;display:flex;align-items:center;gap:14px;padding:18px;border:1px solid var(--account-border);border-radius:14px;background:linear-gradient(145deg,#071a30,#06152a)}
+.account-page[data-settings-page] .preferences-save-row{grid-column:1 / -1;grid-row:4;margin-top:0;padding:14px;border:1px solid var(--account-border);border-radius:12px;background:#071a30}
+.account-page[data-settings-page] .preferences-fieldset{min-width:0;margin:0 0 18px;padding:0;border:0}
+.account-page[data-settings-page] .preferences-fieldset:last-child{margin-bottom:0}
+.account-page[data-settings-page] .preferences-fieldset legend{margin-bottom:10px;color:#dcecff;font-size:12px;font-weight:750}
+.account-page[data-settings-page] .preferences-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.account-page[data-settings-page] .preferences-choice{position:relative;display:flex;min-width:0;min-height:104px;flex-direction:column;align-items:flex-start;gap:6px;padding:12px;border:1px solid #204568;border-radius:11px;background:#06162b;cursor:pointer}
+.account-page[data-settings-page] .preferences-choice:has(input:checked){border-color:#08b9f5;background:linear-gradient(145deg,#083253,#06233c);box-shadow:inset 0 0 0 1px #08b9f533}
+.account-page[data-settings-page] .preferences-choice input{position:absolute;top:9px;right:9px;width:16px;height:16px;accent-color:#08b9f5}
+.account-page[data-settings-page] .preferences-choice strong{font-size:12px;color:#edf5ff}
+.account-page[data-settings-page] .preferences-choice small{font-size:10px;line-height:1.4;color:var(--account-muted)}
+.account-page[data-settings-page] .preferences-choice__icon svg{width:22px;height:22px;fill:none;stroke:#9bc9f4;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.account-page[data-settings-page] .preferences-accent-list{display:flex;flex-wrap:wrap;gap:10px}
+.account-page[data-settings-page] .preferences-accent-list label{display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--account-muted);font-size:10px;cursor:pointer}
+.account-page[data-settings-page] .preferences-accent-list input{position:absolute;opacity:0;pointer-events:none}
+.account-page[data-settings-page] .preferences-accent-list input:focus-visible + .accent-swatch{outline:2px solid #fff;outline-offset:3px}
+.account-page[data-settings-page] .accent-swatch{display:block;width:27px;height:27px;border:2px solid #ffffff25;border-radius:50%;box-shadow:0 0 0 1px #ffffff12}
+.account-page[data-settings-page] .accent-swatch--cyan{background:#08b9f5}.account-page[data-settings-page] .accent-swatch--blue{background:#2879ee}.account-page[data-settings-page] .accent-swatch--teal{background:#0bb99b}.account-page[data-settings-page] .accent-swatch--violet{background:#8958ed}.account-page[data-settings-page] .accent-swatch--amber{background:#f59d32}
+.account-page[data-settings-page] .preferences-accent-list input:checked + .accent-swatch{outline:2px solid #edf8ff;outline-offset:3px}
+.account-page[data-settings-page] .preferences-notification-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #163655}
+.account-page[data-settings-page] .preferences-notification-row:last-child{border-bottom:0}
+.account-page[data-settings-page] .preferences-notification-row>span:nth-child(2){display:grid;gap:3px;min-width:0}
+.account-page[data-settings-page] .preferences-notification-row strong{color:#e8f4ff;font-size:12px}
+.account-page[data-settings-page] .preferences-notification-row small{color:var(--account-muted);font-size:10px;line-height:1.45}
+.account-page[data-settings-page] .preferences-notification-row input[type=checkbox]{width:36px;height:20px;accent-color:#08b9f5}
+.account-page[data-settings-page] .preferences-notification-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#0a3150;color:#32c8f2}
+.account-page[data-settings-page] .preferences-notification-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.account-page[data-settings-page] .preferences-divider{height:1px;margin:14px 0;background:#183a5b}
+.account-page[data-account-identity] .account-content{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.account-page[data-account-identity] .account-content>form:first-child{grid-column:1}
+.account-page[data-account-identity] .account-content>form:nth-child(2){grid-column:1}
+.account-page[data-account-identity] .account-content>aside{grid-column:2;grid-row:1 / span 2;min-width:0;padding:clamp(14px,1.6vw,22px);border:1px solid var(--account-border);border-radius:14px;background:linear-gradient(145deg,#071a30,#06152a);color:var(--account-text)}
+.account-page[data-account-identity] .account-content>aside h2{margin:0 0 14px;font-size:16px}
+.account-page[data-security-page] .security-dashboard{grid-template-columns:minmax(0,1fr)}
+.account-page[data-security-page] .security-status-banner{background:linear-gradient(110deg,#063e48,#07223a);border-color:#087d85}
+.account-page[data-security-page] .security-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.account-page[data-security-page] .security-two-column{grid-template-columns:minmax(0,1fr)}
+.account-page[data-security-page] .security-summary-card{background:#071a30}
+@media(max-width:1000px){.account-page[data-settings-page] .preferences-content{grid-template-columns:minmax(0,1fr)}.account-page[data-settings-page] #appearance,.account-page[data-settings-page] #notification-preferences,.account-page[data-settings-page] #data-display,.account-page[data-settings-page] .preferences-profile-summary,.account-page[data-settings-page] .preferences-save-row{grid-column:1;grid-row:auto}.account-page[data-account-identity] .account-content{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .account-content>form:first-child,.account-page[data-account-identity] .account-content>form:nth-child(2),.account-page[data-account-identity] .account-content>aside{grid-column:1;grid-row:auto}}
+@media(max-width:560px){.account-page[data-settings-page] .preferences-choice-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.account-page[data-settings-page] .preferences-choice{padding:9px;min-height:94px}.account-page[data-settings-page] .preferences-choice strong{font-size:11px}.account-page[data-settings-page] .preferences-choice small{font-size:9px}.account-page[data-security-page] .security-summary-grid{grid-template-columns:minmax(0,1fr)}}
