@@ -41,12 +41,12 @@
           <p>Verification status comes from your account profile.</p>
           <a href="{% url 'account_identity_page' %}">Review identity <span aria-hidden="true">›</span></a>
         </article>
-        <article class="security-summary-card">
-          <div class="security-summary-top"><span class="material-symbols-rounded security-icon" aria-hidden="true">key</span><span class="security-pill is-neutral">Protected</span></div>
-          <h3>Password management</h3>
-          <p>Passwords are managed by AlgoBot’s authentication system. For security, password strength is not inferred from stored credentials.</p>
-          <a href="{% url 'account_identity_page' %}">Manage password <span aria-hidden="true">›</span></a>
-        </article>
+        
+      </section>
+      <section class="account-card security-password-management" aria-labelledby="security-password-management-title">
+        <div class="account-card__header"><div><h2 id="security-password-management-title">Password Management</h2><p class="account-card__hint">Manage your sign-in credentials.</p></div><span class="account-state account-state--good">Protected</span></div>
+        <p>Passwords are managed by AlgoBot’s authentication system. For security, password strength is not inferred from stored credentials.</p>
+        <div class="account-actions"><a class="account-btn account-btn--primary" href="{% url 'account_identity_page' %}">Change Password</a></div>
       </section>
       <div class="security-two-column">
         <section class="account-card security-two-factor" id="security-two-factor">
@@ -72,6 +72,10 @@
         <div class="account-card__header"><div><h2 id="trusted-devices-title">Trusted devices</h2><p class="account-card__hint">Browsers you explicitly trust after confirming your current password. This is separate from active login sessions.</p></div></div>
         <form data-trust-device-form class="trusted-device-form">{% csrf_token %}<div class="account-fields"><div class="account-field"><label for="trusted-device-name">Device name</label><input id="trusted-device-name" name="name" maxlength="100" value="My browser" required></div><div class="account-field"><label for="trusted-device-password">Current password</label><input id="trusted-device-password" name="current_password" type="password" autocomplete="current-password" required></div></div><div class="account-actions"><button type="submit" class="account-btn account-btn--primary">Trust this browser</button><span data-trusted-device-status role="status" aria-live="polite" class="account-help">Loading trusted devices…</span></div></form>
         <div data-trusted-device-list class="trusted-device-list"><p class="account-help">Loading…</p></div>
+      </section>
+      <section class="security-reassurance-banner" aria-label="Security reassurance">
+        <span class="material-symbols-rounded" aria-hidden="true">verified_user</span>
+        <div><strong>Stronger security. Greater control.</strong><p>Keep your authenticator, trusted devices and account activity under review.</p></div>
       </section>
       <section class="account-card security-alerts-card" aria-labelledby="security-alerts-title" data-security-alerts-card>
         <div class="account-card__header"><div><h2 id="security-alerts-title">Security alerts</h2><p class="account-card__hint">Recent failed or blocked sign-in events from the account's recorded audit trail.</p></div><a class="account-btn" href="{% url 'account_identity_page' %}">View login activity</a></div>
