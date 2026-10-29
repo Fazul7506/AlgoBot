@@ -117,3 +117,9 @@
 .security-sms-backup-status strong{display:block;color:#f0e5cf;font-size:11px}
 .security-sms-backup-status p{margin:4px 0 0;color:#b9b0a0;font-size:10px;line-height:1.55}
 @media(max-width:700px){.security-sms-backup-status{flex-wrap:wrap}.security-sms-backup-status>.security-pill{margin-left:45px}}
+
+@media(max-width:600px){
+ [data-security-page] .account-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;scroll-snap-type:none}
+ [data-security-page] .account-nav a{min-width:0;min-height:44px;flex:none;white-space:normal;line-height:1.25;padding:9px 7px;font-size:11px;border-right:1px solid var(--security-border);border-bottom:1px solid var(--security-border)}
+ [data-security-page] .account-nav a:nth-last-child(-n+2){border-bottom:0}
+}
