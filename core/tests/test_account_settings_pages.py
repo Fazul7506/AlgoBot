@@ -435,3 +435,5 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, "security-reassurance-banner")
         security_css = (Path(__file__).resolve().parents[2] / "static/css/security_center.css").read_text()
         self.assertIn("Security reference layout: overview and MFA on the left", security_css)
+        security_template = (Path(__file__).resolve().parents[2] / "templates/core/security_center.html").read_text()
+        self.assertNotIn('account-state account-state--good">Protected</span>', security_template)
