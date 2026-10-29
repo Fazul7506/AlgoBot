@@ -199,3 +199,15 @@ html[data-theme="light"] .account-page[data-settings-page] .preferences-profile-
 html[data-theme="light"] .account-page[data-settings-page] .preferences-profile-summary .account-help{color:var(--muted)!important}
 html[data-theme="light"] .account-page[data-settings-page] .preferences-quick-preferences .account-card__hint{color:var(--muted)!important}
 html[data-theme="light"] .account-page[data-settings-page] .preferences-quick-preferences .preferences-quick-list small{color:var(--muted)!important}
+
+/* Theme-aware text for security summary cards and profile completion metadata. */
+html[data-theme="light"] .account-page[data-profile-page] .profile-completion :where(strong,span,.profile-completion-value){color:var(--text)!important}
+html[data-theme="light"] .account-page[data-profile-page] .profile-quick-actions a{color:var(--accent)!important}
+html[data-theme="light"] .account-page[data-profile-page] .profile-completion .profile-completion-label{color:var(--text)!important}
+html[data-theme="light"] .account-page .security-summary-card :where(h2,h3,h4,strong){color:var(--text)!important}
+html[data-theme="light"] .account-page .security-summary-card :where(p,small){color:var(--muted)!important}
+html[data-theme="light"] .account-page .security-banner-status{background:var(--panel2)!important;background-image:none!important;color:var(--text)!important;border-color:var(--line)!important}
+html[data-theme="light"] .account-page .security-banner-status :where(strong,span){color:var(--text)!important}
+html[data-theme="light"] .account-page .security-banner-status small{color:var(--muted)!important}
+html[data-theme="light"] .account-page .security-summary-card .security-icon{background:var(--panel2)!important;color:var(--accent)!important}
+html[data-theme="light"] .account-page .security-summary-card .security-icon--green{color:var(--success,#047857)!important}
