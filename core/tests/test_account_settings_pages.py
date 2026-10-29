@@ -192,7 +192,7 @@ class AccountSettingsPagesTests(TestCase):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract5", html)
+        self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract6", html)
         self.assertIn("localStorage.getItem('algobot-theme')", html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
@@ -216,6 +216,11 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, 'name="default_page"')
         self.assertContains(response, 'name="auto_refresh_interval"')
         self.assertContains(response, 'name="refresh_frequency"')
+        self.assertContains(response, 'id="layout-preferences"')
+        self.assertContains(response, 'class="preferences-quick-preferences"')
+        settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
+        self.assertIn("Layout Preferences", settings_template)
+        self.assertIn("Quick Preferences", settings_template)
 
     def test_primary_sidebar_uses_account_settings_label(self):
         response = self.client.get(reverse("settings_page"))
@@ -269,7 +274,7 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
                 html = response.content.decode("utf-8")
-                self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract5", html)
+                self.assertIn("account_preferences_global.css?v=20261029-global-theme-contract6", html)
                 nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
