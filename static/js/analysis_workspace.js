@@ -252,7 +252,7 @@
   function boot(){
     ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
     $("refresh")?.addEventListener("click",()=>load({refreshAccount:true,refreshMarket:true}));$("prepare")?.addEventListener("click",prepare);
-    $("auto")?.addEventListener("change",()=>{clearInterval(A.timer);if($("auto").checked)A.timer=setInterval(()=>load({refreshAccount:false}),30000)});
+    const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
