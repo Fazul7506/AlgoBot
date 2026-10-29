@@ -265,3 +265,47 @@
 .account-page[data-security-page] .security-summary-card{background:#071a30}
 @media(max-width:1000px){.account-page[data-settings-page] .preferences-content{grid-template-columns:minmax(0,1fr)}.account-page[data-settings-page] #appearance,.account-page[data-settings-page] #notification-preferences,.account-page[data-settings-page] #data-display,.account-page[data-settings-page] .preferences-profile-summary,.account-page[data-settings-page] .preferences-save-row{grid-column:1;grid-row:auto}.account-page[data-account-identity] .account-content{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .account-content>form:first-child,.account-page[data-account-identity] .account-content>form:nth-child(2),.account-page[data-account-identity] .account-content>aside{grid-column:1;grid-row:auto}}
 @media(max-width:560px){.account-page[data-settings-page] .preferences-choice-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.account-page[data-settings-page] .preferences-choice{padding:9px;min-height:94px}.account-page[data-settings-page] .preferences-choice strong{font-size:11px}.account-page[data-settings-page] .preferences-choice small{font-size:9px}.account-page[data-security-page] .security-summary-grid{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Profile dashboard: summary, genuine authentication history, and responsive cards. */
+.account-page[data-profile-page] .profile-dashboard-content{grid-template-columns:minmax(250px,.78fr) minmax(0,1.35fr);align-items:start}
+.account-page[data-profile-page] .profile-summary-card{grid-column:1;grid-row:1;display:grid;gap:18px;align-content:start;background:linear-gradient(155deg,#0a1c31,#0a1423)}
+.account-page[data-profile-page] .profile-edit-launch{grid-column:2;grid-row:1;align-self:start}
+.account-page[data-profile-page] .profile-summary-card__identity{display:flex;align-items:center;gap:13px;min-width:0}
+.account-page[data-profile-page] .profile-summary-card__identity h2{font-size:16px;overflow-wrap:anywhere}
+.account-page[data-profile-page] .profile-summary-card__identity p{margin:5px 0 0;color:var(--account-muted,#94a3b8);font-size:12px;overflow-wrap:anywhere}
+.account-page[data-profile-page] .profile-summary-card__avatar{width:64px;height:64px;flex:0 0 64px}
+.account-page[data-profile-page] .profile-summary-card__status{display:flex;flex-wrap:wrap;gap:8px}
+.account-page[data-profile-page] .profile-completion__label{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--account-text,#edf4ff)}
+.account-page[data-profile-page] .profile-completion__track{height:7px;margin:9px 0 7px;overflow:hidden;border-radius:99px;background:#20334b}
+.account-page[data-profile-page] .profile-completion__track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#168bd3,#21c5ed)}
+.account-page[data-profile-page] .profile-summary-card__details{display:grid;gap:10px;margin:0}
+.account-page[data-profile-page] .profile-summary-card__details div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}
+.account-page[data-profile-page] .profile-summary-card__details dt{font-size:11px;color:var(--account-muted,#94a3b8)}
+.account-page[data-profile-page] .profile-summary-card__details dd{margin:0;font-size:12px;overflow-wrap:anywhere}
+.account-page[data-profile-page] .profile-quick-actions{display:grid;gap:8px;padding-top:14px;border-top:1px solid var(--account-border,#23364d)}
+.account-page[data-profile-page] .profile-quick-actions h3{margin:0 0 2px;font-size:12px}
+.account-page[data-profile-page] .profile-quick-actions a{color:#72d7f5;text-decoration:none;font-size:12px}
+.account-page[data-profile-page] .profile-quick-actions a:hover{text-decoration:underline}
+.account-page[data-profile-page] .profile-activity-card{margin-top:14px}
+.profile-activity-table-wrap{width:100%;overflow-x:auto}
+.profile-activity-table{width:100%;border-collapse:collapse;min-width:460px}
+.profile-activity-table th,.profile-activity-table td{padding:12px 10px;border-bottom:1px solid var(--account-border,#23364d);text-align:left;font-size:12px;vertical-align:middle}
+.profile-activity-table th{color:var(--account-muted,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+.profile-activity-table tr:last-child td{border-bottom:0}
+.profile-activity-empty{padding:14px;border:1px dashed var(--account-border,#23364d);border-radius:10px}
+@media(max-width:1000px){.account-page[data-profile-page] .profile-dashboard-content{grid-template-columns:minmax(0,1fr)}.account-page[data-profile-page] .profile-summary-card,.account-page[data-profile-page] .profile-edit-launch{grid-column:1;grid-row:auto}}
+@media(max-width:560px){.account-page[data-profile-page] .profile-summary-card__details div{grid-template-columns:78px minmax(0,1fr)}.profile-activity-table{min-width:420px}}
+.account-page[data-account-identity] .identity-activity-card,
+.account-page[data-account-identity] .identity-sessions-unavailable{grid-column:1/-1;min-width:0}
+.account-page[data-account-identity] .identity-sessions-unavailable{border-style:dashed}
+@media(max-width:1000px){.account-page[data-account-identity] .identity-activity-card,.account-page[data-account-identity] .identity-sessions-unavailable{grid-column:1}}
+
+.account-page[data-settings-page] .preferences-experience-panel{grid-column:2;grid-row:4;min-width:0;padding:20px;border:1px solid #164f70;border-radius:14px;background:radial-gradient(ellipse at top right,#0c3550 0,transparent 62%),linear-gradient(145deg,#071a30,#061321)}
+.account-page[data-settings-page] .preferences-experience-panel h2{margin:0 0 9px;font-size:17px;color:#edf7ff}
+.account-page[data-settings-page] .preferences-experience-panel>p:not(.account-kicker){margin:0;color:var(--account-muted,#a8bbcf);font-size:12px;line-height:1.6}
+.account-page[data-settings-page] .preferences-quick-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.account-page[data-settings-page] .preferences-quick-links a{padding:7px 10px;border:1px solid #28516b;border-radius:8px;color:#7edcf7;text-decoration:none;font-size:11px;font-weight:700}
+.account-page[data-settings-page] .preferences-quick-links a:hover{background:#0c2c43}
+.account-page[data-settings-page] .preferences-save-row{grid-row:5}
+@media(max-width:1000px){.account-page[data-settings-page] .preferences-experience-panel{grid-column:1;grid-row:auto}.account-page[data-settings-page] .preferences-save-row{grid-row:auto}}

@@ -326,12 +326,13 @@ def security_workspace(request):
         getattr(settings, "SESSION_COOKIE_SECURE", False)
         and getattr(settings, "CSRF_COOKIE_SECURE", False)
     )
+    # The account-security summary must not treat broker connectivity or API-key
+    # expiry as proof of personal account security. Use only account/auth state.
     checks = [
-        ("Broker connection", account_connected),
+        ("Account enabled", bool(request.user.is_active)),
+        ("Email verification", bool(profile.email_verified)),
         ("Secure session cookies", secure_session),
-        ("Account sign-in", bool(request.user.is_active and request.user.has_usable_password())),
-        ("Developer key expiry", not expired_active_keys),
-        ("Two-factor authentication", profile.two_factor_enabled),
+        ("Two-factor authentication", bool(profile.two_factor_enabled)),
     ]
     response = render(
         request,

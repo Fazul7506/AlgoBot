@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
+from apps.observability.models import AuditEvent
 from core.models import UserProfile
 
 
@@ -35,6 +36,18 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, "Email not verified")
         self.assertContains(response, "topbar-profile-unverified")
         self.assertNotContains(response, "AlgoBot account</span>")
+
+    def test_profile_summary_uses_real_completion_fields_and_user_scoped_auth_activity(self):
+        AuditEvent.objects.create(actor_id=self.user.pk, action="login_success", resource_type="Authentication", outcome="success", metadata={"method": "password"})
+        AuditEvent.objects.create(actor_id=self.other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        response = self.client.get(reverse("profile_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Profile completion")
+        self.assertContains(response, "Recent sign-in activity")
+        self.assertContains(response, "login_success")
+        self.assertNotContains(response, "login_failed")
+        self.assertEqual(response.context["profile_completion_percent"], 29)
+        self.assertEqual(len(response.context["recent_activity"]), 1)
 
     def test_profile_page_renders_editable_fields_and_settings_navigation(self):
         response = self.client.get(reverse("profile_page"))
@@ -180,6 +193,17 @@ class AccountSettingsPagesTests(TestCase):
         html = response.content.decode("utf-8")
         self.assertIn('<span>Account Settings</span>', html)
         self.assertNotIn('<span>Security Center</span></a>', html)
+
+    def test_login_identity_renders_only_current_users_authentication_events(self):
+        AuditEvent.objects.create(actor_id=self.user.pk, action="login_success", resource_type="Authentication", outcome="success", metadata={"method": "password"})
+        AuditEvent.objects.create(actor_id=self.other_user.pk, action="login_failed", resource_type="Authentication", outcome="failed", metadata={"method": "password"})
+        response = self.client.get(reverse("account_identity_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Login activity")
+        self.assertContains(response, "login_success")
+        self.assertNotContains(response, "login_failed")
+        self.assertContains(response, "Active sessions")
+        self.assertEqual(len(response.context["login_events"]), 1)
 
     def test_settings_and_security_pages_render_for_authenticated_user(self):
         settings_response = self.client.get(reverse("settings_page"))

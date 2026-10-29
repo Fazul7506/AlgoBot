@@ -31,8 +31,10 @@ class SecurityCenterHardeningTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["keys_count"], 1)
         checks = dict(response.context["checks"])
-        self.assertFalse(checks["Developer key expiry"])
-        self.assertFalse(checks["Broker connection"])
+        self.assertNotIn("Developer key expiry", checks)
+        self.assertNotIn("Broker connection", checks)
+        self.assertIn("Email verification", checks)
+        self.assertIn("Two-factor authentication", checks)
 
     def test_security_center_renders_responsive_dashboard_and_real_activity_context(self):
         user = get_user_model().objects.create_user(username="security-dashboard-test", password="test-password")

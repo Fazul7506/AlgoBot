@@ -129,8 +129,30 @@ def profile_page(request):
                 messages.success(request, "Your profile has been saved.")
                 return redirect("profile_page")
 
+    # Completion is derived from persisted profile fields, not a hardcoded score.
+    completion_fields = (
+        request.user.first_name,
+        request.user.last_name,
+        request.user.email,
+        profile.country,
+        profile.timezone,
+        profile.phone,
+        bool(profile.profile_picture_data or profile.avatar_url),
+    )
+    profile_completion_percent = round(100 * sum(bool(value and str(value).strip()) for value in completion_fields) / len(completion_fields))
+
+    # Show only genuine, user-scoped authentication audit records. The audit
+    # model deliberately stores no raw credentials and this view omits IP data.
+    from apps.observability.models import AuditEvent
+    recent_activity = list(
+        AuditEvent.objects.filter(actor_id=request.user.pk, resource_type="Authentication")
+        .order_by("-created_at")[:5]
+    )
+
     return render(request, "core/profile.html", {
         "profile": profile,
+        "profile_completion_percent": profile_completion_percent,
+        "recent_activity": recent_activity,
         "first_name": request.POST.get("first_name", request.user.first_name),
         "last_name": request.POST.get("last_name", request.user.last_name),
         "country": request.POST.get("country", profile.country),

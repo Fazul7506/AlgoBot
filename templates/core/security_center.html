@@ -9,7 +9,7 @@
     <div>
       <p class="account-kicker">ACCOUNT PROTECTION</p>
       <h1><span class="material-symbols-rounded security-title-icon" aria-hidden="true">shield_lock</span>Account Settings</h1>
-      <p class="account-subtitle">Manage account security, review recorded activity and strengthen your AlgoBot sign-in.</p>
+      <p class="account-subtitle">Manage two-factor authentication and recovery options. Review recorded sign-in activity in Login &amp; Identity.</p>
     </div>
     <span class="account-state {% if checks_ok %}account-state--good{% else %}account-state--warn{% endif %}">{% if checks_ok %}Account checks passed{% else %}Review security checks{% endif %}</span>
   </header>
@@ -26,7 +26,7 @@
       <section class="security-status-banner">
         <div class="security-banner-icon material-symbols-rounded" aria-hidden="true">verified_user</div>
         <div class="security-banner-copy"><h2>Security overview</h2><p>Review sign-in protection and manage your authenticator and recovery codes. Account status below reflects the settings actually recorded for your account.</p></div>
-        <div class="security-banner-status"><span class="material-symbols-rounded" aria-hidden="true">{% if two_factor_enabled and request.user.trading_profile.email_verified %}verified{% else %}warning{% endif %}</span><strong>{% if two_factor_enabled and request.user.trading_profile.email_verified %}Protection enabled{% else %}Review recommended{% endif %}</strong><small>Two-factor authentication and email verification</small></div>
+        <div class="security-banner-status"><span class="material-symbols-rounded" aria-hidden="true">{% if two_factor_enabled and request.user.trading_profile.email_verified %}verified{% else %}warning{% endif %}</span><strong>{% if two_factor_enabled and request.user.trading_profile.email_verified %}Key protections enabled{% else %}Review recommended{% endif %}</strong><small>Two-factor authentication and email verification</small></div>
       </section>
       <section class="security-summary-grid" aria-label="Security status summary">
         <article class="security-summary-card">

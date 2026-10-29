@@ -64,6 +64,7 @@
         <div class="preferences-profile-summary__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
         <div><h2 data-preferences-user>Account preferences</h2><p data-preferences-email>Settings apply to your signed-in AlgoBot account.</p><p class="account-help">Use Profile to update personal details and Login &amp; Identity to manage sign-in credentials.</p></div>
       </aside>
+      <aside class="preferences-experience-panel" aria-labelledby="preferences-experience-title"><p class="account-kicker">ALGOBOT WORKSPACE</p><h2 id="preferences-experience-title">Your workspace, your way</h2><p>Supported appearance, density, accent, notification-category and time-zone settings are saved to your account. Unsupported layout and refresh controls are intentionally not presented as working settings.</p><div class="preferences-quick-links"><a href="{% url 'profile_page' %}">Profile</a><a href="{% url 'account_identity_page' %}">Login &amp; Identity</a><a href="{% url 'security_center' %}">Security</a></div></aside>
       <div class="account-actions preferences-save-row"><button type="submit" class="account-btn account-btn--primary" data-save-settings disabled>Save preferences</button><span class="account-help" role="status" aria-live="polite" data-settings-message></span></div>
     </form>
   </div>
@@ -78,6 +79,18 @@
   const saveButton = root.querySelector('[data-save-settings]');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   const field = name => form.elements.namedItem(name);
+  let lastSavedFormState = null;
+  const captureFormState = () => [...form.elements].filter(control => control.name).map(control => ({name:control.name,type:control.type,value:control.value,checked:control.checked}));
+  const restoreFormState = state => {
+    if (!state) return;
+    state.forEach(saved => {
+      const control = [...form.elements].find(item => item.name === saved.name && item.type === saved.type && item.value === saved.value);
+      if (!control) return;
+      if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
+      else if (control.type !== 'submit' && control.type !== 'button') control.value = saved.value;
+    });
+    applyAppearance({theme:form.querySelector('input[name="theme"]:checked')?.value || 'dark',density:form.querySelector('input[name="density"]:checked')?.value || 'default',accent:form.querySelector('input[name="accent"]:checked')?.value || 'cyan'});
+  };
   const setRadio = (name, value) => { const input = form.querySelector('input[name="' + name + '"][value="' + value + '"]'); if (input) input.checked = true; };
   const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
   const request = async (method, body) => {
@@ -124,6 +137,7 @@
     root.querySelector('[data-preferences-user]').textContent = username;
     root.querySelector('[data-preferences-email]').textContent = email;
     applyAppearance(prefs);
+    lastSavedFormState = captureFormState();
     status.textContent = 'Preferences loaded';
     status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
     saveButton.disabled = false;
@@ -156,17 +170,28 @@
       email_notifications_enabled: field('email_notifications_enabled').checked,
       telegram_notifications_enabled: field('telegram_notifications_enabled').checked
     };
+    const submittedFormState = captureFormState();
+    // Lock the controls while this request is in flight. Otherwise users can
+    // change values after the payload is built and see unsaved values presented
+    // as though they were persisted by this request.
+    const controls = [...form.elements].filter(control => control !== saveButton);
+    controls.forEach(control => { control.disabled = true; });
     try {
       const data = await request('PATCH', {profile, preferences});
       applyAppearance(preferences);
+      lastSavedFormState = submittedFormState;
       message.textContent = data.message || 'Preferences saved.';
       status.textContent = 'Preferences saved';
       status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
     } catch (error) {
-      message.textContent = error.message || 'Could not save preferences.';
+      restoreFormState(lastSavedFormState);
+      message.textContent = error.message || 'Could not save preferences. Your previous saved settings have been restored.';
       status.textContent = 'Save failed';
       status.classList.remove('account-state--good'); status.classList.add('account-state--bad');
-    } finally { saveButton.disabled = false; }
+    } finally {
+      controls.forEach(control => { control.disabled = false; });
+      saveButton.disabled = false;
+    }
   });
   load().catch(error => {
     status.textContent = 'Could not load preferences'; status.classList.add('account-state--bad');
