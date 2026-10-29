@@ -418,3 +418,26 @@
 
 html[data-theme="dark"] .account-page[data-settings-page]{--palette-cyan:#08d7f4;--palette-blue:#65a5ff;--palette-teal:#37e3c1;--palette-violet:#c0a5ff;--palette-amber:#ffd166}
 html[data-theme="light"] .account-page[data-settings-page]{--palette-cyan:#087e91;--palette-blue:#205fca;--palette-teal:#087b68;--palette-violet:#6940b4;--palette-amber:#8a5100}
+
+/* Login & Identity reference layout: password/identity/MFA on the left, sessions/activity on the right. */
+.account-page[data-account-identity] .account-content{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:start;gap:14px}
+.account-page[data-account-identity] .account-content>form[data-password-change]{grid-column:1;grid-row:1}
+.account-page[data-account-identity] .account-content>form:not([data-password-change]){grid-column:1;grid-row:2}
+.account-page[data-account-identity] .identity-verification-card{grid-column:1;grid-row:3}
+.account-page[data-account-identity] .account-content>aside{grid-column:1;grid-row:4;min-width:0}
+.account-page[data-account-identity] .identity-mfa-card{grid-column:1;grid-row:5}
+.account-page[data-account-identity] .identity-sessions-card{grid-column:2;grid-row:1;min-width:0}
+.account-page[data-account-identity] .identity-activity-card{grid-column:2;grid-row:2;min-width:0}
+.account-page[data-account-identity] .identity-security-banner{grid-column:1/-1;grid-row:6;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;background:var(--ds-surface-1,var(--panel));border:1px solid var(--ds-border,var(--line));color:var(--ds-text,var(--text))}
+.account-page[data-account-identity] .identity-security-banner>.material-symbols-rounded{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--ds-surface-2,var(--panel2));color:var(--accent);font-size:24px}
+.account-page[data-account-identity] .identity-security-banner strong{display:block;color:var(--ds-text,var(--text))}
+.account-page[data-account-identity] .identity-security-banner p{margin:4px 0 0;color:var(--ds-muted,var(--muted));font-size:12px}
+.account-page[data-account-identity] .identity-verification-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.account-page[data-account-identity] .identity-verification-grid>div{display:grid;gap:5px;min-width:0;padding:11px;border:1px solid var(--ds-border,var(--line));border-radius:9px;background:var(--ds-surface-2,var(--panel2))}
+.account-page[data-account-identity] .identity-verification-grid span,.account-page[data-account-identity] .identity-verification-grid small{color:var(--ds-muted,var(--muted));font-size:11px}
+.account-page[data-account-identity] .identity-verification-grid strong{color:var(--ds-text,var(--text));font-size:12px;overflow-wrap:anywhere}
+.account-page[data-account-identity] .account-password-control{display:flex;align-items:stretch;gap:8px;width:100%;min-width:0}
+.account-page[data-account-identity] .account-password-control input{flex:1 1 0;width:1%;min-width:0}
+.account-page[data-account-identity] .account-password-toggle{flex:0 0 58px;min-width:58px;white-space:nowrap;word-break:normal}
+@media(max-width:1000px){.account-page[data-account-identity] .account-content{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .account-content>form[data-password-change],.account-page[data-account-identity] .account-content>form:not([data-password-change]),.account-page[data-account-identity] .identity-verification-card,.account-page[data-account-identity] .account-content>aside,.account-page[data-account-identity] .identity-mfa-card,.account-page[data-account-identity] .identity-sessions-card,.account-page[data-account-identity] .identity-activity-card,.account-page[data-account-identity] .identity-security-banner{grid-column:1;grid-row:auto}}
+@media(max-width:600px){.account-page[data-account-identity] .identity-verification-grid{grid-template-columns:minmax(0,1fr)}.account-page[data-account-identity] .identity-security-banner{grid-template-columns:34px minmax(0,1fr)}.account-page[data-account-identity] .identity-security-banner .account-btn{grid-column:1/-1;justify-self:start}}
