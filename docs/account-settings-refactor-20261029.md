@@ -119,3 +119,5 @@ This change does not yet prove full reference-image parity or end-to-end backend
 - Validation: preference runtime/contrast tests, market asset registry test, frontend structure validator, Django system check, migration check, 70-template compilation, and the focused 31-test account/security suite passed. The first focused run exposed two stale stylesheet assertions; they were corrected and the 31-test suite passed on rerun.
 
 - Dashboard polling now consumes the saved auto-refresh interval/frequency and respects Manual mode; visibility changes no longer trigger background refresh while automatic refresh is disabled. This keeps Dashboard polling aligned with the shared preference runtime.
+
+- Connected the persisted chart-position setting to the Analysis page's chart/insights grid: left and right positions now choose the corresponding column ordering, and bottom places the chart above the insights. Updated the Preferences copy to accurately describe which pages consume refresh scheduling and where chart position is applied; bumped the global theme/layout cache key to `20261029-global-theme-contract5`.
