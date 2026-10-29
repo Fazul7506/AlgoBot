@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261027-reference-unified1-session2"><script>
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/account_settings.css' %}?v=20261029-identity-reference-layout1"><script>
 document.addEventListener("click", event => { const button = event.target.closest("[data-password-toggle]"); if (!button) return; const input = button.closest(".account-password-control")?.querySelector("[data-password-field]"); if (!input) return; const show = input.type === "password"; input.type = show ? "text" : "password"; button.textContent = show ? "Hide" : "Show"; button.setAttribute("aria-label", show ? "Hide password" : "Show password"); });
 
 document.addEventListener("submit", event => {
@@ -56,6 +56,14 @@ document.addEventListener("submit", event => {
       </div>
     </form>
 
+    <section class="account-card identity-verification-card" aria-labelledby="identity-verification-title">
+      <div class="account-card__header"><div><h2 id="identity-verification-title">Identity Verification</h2><p class="account-card__hint">Verification status comes from your saved account records.</p></div><span class="account-state {% if email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if email_verified %}Email verified{% else %}Email not verified{% endif %}</span></div>
+      <div class="identity-verification-grid">
+        <div><span>Full Name</span><strong>{{ request.user.get_full_name|default:"Not provided" }}</strong></div>
+        <div><span>Email Address</span><strong>{{ email|default:"Not provided" }}</strong></div>
+        <div><span>Phone Number</span><strong>{{ profile.phone|default:"Not provided" }}</strong><small>Phone verification status is not exposed by the current profile API.</small></div>
+      </div>
+    </section>
     <form class="account-card" method="post" action="{% url 'account_identity_page' %}" data-password-change>
       {% csrf_token %}
       <input type="hidden" name="identity_action" value="change_password">
@@ -95,6 +103,16 @@ document.addEventListener("submit", event => {
       <div class="identity-session-list" data-session-list aria-live="polite"><p class="account-help">Loading session inventory…</p></div>
     </section>
 
+    <section class="account-card identity-mfa-card" aria-labelledby="identity-mfa-title">
+      <div class="account-card__header"><div><h2 id="identity-mfa-title">Two-Factor Authentication (2FA)</h2><p class="account-card__hint">Add an extra layer of protection to sign-in.</p></div><span class="account-state {% if two_factor_enabled %}account-state--good{% else %}account-state--warn{% endif %}">{% if two_factor_enabled %}Enabled{% else %}Not enabled{% endif %}</span></div>
+      <p class="account-help">{% if two_factor_enabled %}An authenticator is configured for this account.{% else %}Two-factor authentication is not enabled for this account yet.{% endif %}</p>
+      <div class="account-actions"><a class="account-btn account-btn--primary" href="{% url 'security_center' %}#security-two-factor">Manage 2FA</a></div>
+    </section>
+    <section class="account-card identity-security-banner" aria-label="Account security summary">
+      <span class="material-symbols-rounded" aria-hidden="true">shield</span>
+      <div><strong>Your account security</strong><p>Email verification, two-factor authentication and session controls are available from these account settings.</p></div>
+      <a class="account-btn" href="{% url 'security_center' %}">Open Security</a>
+    </section>
   </div></div>
 </main>
 <script>
