@@ -226,6 +226,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
     def test_analysis_bootstraps_markets_and_shared_picker_hides_symbols(self):
         from pathlib import Path
         analysis = Path("static/js/analysis_workspace.js").read_text(encoding="utf-8")
+        analysis_css = Path("static/css/analysis_reference_redesign.css").read_text(encoding="utf-8")
         analysis_template = Path("templates/core/analysis.html").read_text(encoding="utf-8")
         shared_picker = Path("static/js/market_picker_enhancement.js").read_text(encoding="utf-8")
         base = Path("templates/base.html").read_text(encoding="utf-8")
@@ -242,6 +243,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('markets({forceRefresh:true})', analysis, "The Analysis refresh control must retry an empty market catalogue.")
         self.assertIn('?refresh=1', analysis, "The frontend must be able to request a real catalogue refresh.")
         self.assertIn('Markets unavailable — retry refresh', analysis, "An empty catalogue must provide a visible recovery action rather than a dead-end message.")
+        self.assertIn("direction: ltr !important", analysis_css, "Analysis must neutralize inherited RTL layout direction.")
+        self.assertIn("text-align: left !important", analysis_css, "Analysis must restore normal left-aligned content.")
+        self.assertIn("grid-template-columns: minmax(0, 1fr) !important", analysis_css, "Analysis root must not collapse into a narrow inherited grid column.")
         self.assertIn('sync_active_symbols()', api, "The backend must repopulate an empty catalogue from the authoritative Deriv feed.")
         self.assertIn('MARKET_CATALOGUE_UNAVAILABLE', api, "Catalogue failures must return an explicit diagnostic code.")
         self.assertIn('market_picker_enhancement.js', base)
