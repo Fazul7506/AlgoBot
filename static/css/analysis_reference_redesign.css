@@ -384,3 +384,49 @@ body:has(.analysis-dashboard) #main-content.analysis-dashboard {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+
+/* Final shell-width safeguard: keep Analysis in the full app-content column.
+   Some shared shell layouts use grid/flex sizing; min-width:0 alone is not
+   enough when a child track has an intrinsic width. */
+body:has(#main-content.analysis-dashboard) .app-shell,
+body:has(#main-content.analysis-dashboard) .app-content {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+body:has(#main-content.analysis-dashboard) .app-content {
+  display: block !important;
+  overflow-x: clip;
+}
+body:has(#main-content.analysis-dashboard) #main-content.analysis-dashboard {
+  float: none !important;
+  position: relative;
+  inset-inline: auto !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  place-self: stretch !important;
+  width: 100% !important;
+  max-width: 1680px !important;
+  min-width: 0 !important;
+  margin-inline: auto !important;
+}
+.analysis-dashboard :is(.reference-page-heading,.reference-kpis,.reference-main-grid,.analysis-secondary-grid,.analysis-detail-grid,.analysis-operations-grid,.panel,.analysis-kpi) {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+.analysis-dashboard .reference-main-grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+}
+.analysis-dashboard .reference-right-column {
+  min-width: 0;
+}
+.analysis-dashboard :is(.reference-chart-controls,.analysis-toolbar,.toolbar) {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 1000px) {
+  .analysis-dashboard .reference-main-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
