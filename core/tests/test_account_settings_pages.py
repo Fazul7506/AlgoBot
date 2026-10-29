@@ -437,3 +437,17 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("Security reference layout: overview and MFA on the left", security_css)
         security_template = (Path(__file__).resolve().parents[2] / "templates/core/security_center.html").read_text()
         self.assertNotIn('account-state account-state--good">Protected</span>', security_template)
+
+    def test_security_dashboard_reflows_by_container_width_and_keeps_light_theme_text_readable(self):
+        response = self.client.get(reverse("security_center"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "20261030-security-consolidated1")
+        security_css = (Path(__file__).resolve().parents[2] / "static/css/security_center.css").read_text()
+        self.assertIn("container-name:security-page", security_css)
+        self.assertIn("@container security-page (max-width: 760px)", security_css)
+        self.assertIn("@container security-page (max-width: 520px)", security_css)
+        self.assertIn("writing-mode:horizontal-tb", security_css)
+        self.assertIn('html[data-theme="light"] [data-security-page] .security-status-banner', security_css)
+        self.assertIn("color:var(--text)", security_css)
+        self.assertIn("color:var(--muted)", security_css)
+
