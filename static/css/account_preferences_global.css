@@ -161,3 +161,10 @@ html[data-theme="light"] :where(.app-content .card,.app-content .panel,.app-cont
 html[data-theme="light"] :where(.app-content .btn-primary,.app-content .account-btn--primary,.app-content .ds-btn--primary,.app-content .primary-button) {
   color:var(--accent-foreground,#ffffff) !important;
 }
+
+
+/* Accessible theme/density radios: keep inputs keyboard-operable without native circles over card content. */
+.account-page[data-settings-page] .preferences-choice input[type="radio"]{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;appearance:none;cursor:pointer;z-index:1}
+.account-page[data-settings-page] .preferences-choice::after{content:"";display:none;position:absolute;top:11px;right:11px;width:19px;height:19px;place-items:center;border:1px solid var(--accent);border-radius:50%;background:var(--accent);color:var(--accent-foreground,#06111f);font-size:12px;font-weight:900;pointer-events:none}
+.account-page[data-settings-page] .preferences-choice:has(input:checked)::after{content:"✓";display:grid}
+.account-page[data-settings-page] .preferences-choice:focus-within{outline:2px solid var(--accent);outline-offset:3px}
