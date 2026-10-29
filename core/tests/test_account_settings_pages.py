@@ -221,6 +221,8 @@ class AccountSettingsPagesTests(TestCase):
         settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
         self.assertIn("Layout Preferences", settings_template)
         self.assertIn("Quick Preferences", settings_template)
+        account_css = (Path(__file__).resolve().parents[2] / "static/css/account_settings.css").read_text()
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;scroll-snap-type:none", account_css)
 
     def test_primary_sidebar_uses_account_settings_label(self):
         response = self.client.get(reverse("settings_page"))
