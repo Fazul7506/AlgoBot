@@ -174,6 +174,13 @@ class AccountSettingsPagesTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
 
+    def test_primary_sidebar_uses_account_settings_label(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        self.assertIn('<span>Account Settings</span>', html)
+        self.assertNotIn('<span>Security Center</span></a>', html)
+
     def test_settings_and_security_pages_render_for_authenticated_user(self):
         settings_response = self.client.get(reverse("settings_page"))
         security_response = self.client.get(reverse("security_center"))
@@ -181,7 +188,8 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(security_response.status_code, 200)
         self.assertContains(settings_response, "Workspace preferences")
         self.assertContains(settings_response, "Notifications")
-        self.assertContains(security_response, "Protection checks")
+        self.assertContains(security_response, "Password management")
+        self.assertNotContains(security_response, "Protection checks")
 
     def test_all_account_settings_pages_share_reference_header_and_four_tab_navigation(self):
         urls = (
