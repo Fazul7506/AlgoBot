@@ -12,8 +12,10 @@
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
   const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
 
-  async function request(path, options={}) {
-    return window.AlgoBotFrontendData.request(path, options, 12000);
+  async function request(path, options={}, timeout=7000) {
+    const transport=window.AlgoBotFrontendData?.request;
+    if(typeof transport!=="function") throw new Error("Authenticated AlgoBot API transport is not ready.");
+    return transport(path, options, timeout);
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function marketName(row){
@@ -231,57 +233,40 @@
       drawChart([]); drawIndicators([]);
     }
   }
-  async function markets(options={}){
+  async function markets(options={}) {
     const select=$("symbol");
     const status=$("loadState"), visibleStatus=$("marketCatalogueStatus");
     const showCatalogueStatus=message=>{if(status)status.textContent=message;if(visibleStatus){visibleStatus.textContent=message;visibleStatus.hidden=!message;}};
     if(!select)return;
+    const previous=select.value;
     select.disabled=true;
-    select.innerHTML='<option value="">Loading market catalogue…</option>';
+    select.innerHTML='<option value="">Loading broker instruments…</option>';
     showCatalogueStatus("");
-    if(status)status.textContent="Loading the live market catalogue…";
-    let detail="";
-    try{
-      if(options.forceRefresh)A.markets=[];
-      if(!A.markets.length&&!options.forceRefresh){
-        const node=$("analysis-markets-data");
-        const bootstrapped=node?JSON.parse(node.textContent||"[]"):[];
-        if(Array.isArray(bootstrapped))A.markets=bootstrapped;
-      }
-      if(!A.markets.length||options.forceRefresh){
-        const d=await request("/analysis/markets/"+(options.forceRefresh?"?refresh=1":""));
-        A.markets=Array.isArray(d.markets)?d.markets:[];
-        detail=String(d.detail||"");
-      }
-    }catch(e){
-      detail=String(e?.message||"The market catalogue request failed.");
-      A.markets=[];
-    }
-    if(!A.markets.length){
-      select.innerHTML='<option value="">Markets unavailable — retry refresh</option>';
+    try {
+      // The Terminal owns the canonical connected-broker instrument API.
+      // Analysis consumes that same endpoint and response, not a second
+      // DB-backed catalogue or a separate Deriv sync request.
+      const path="/api/market/catalogue/"+(options.forceRefresh?"?refresh=1":"");
+      const payload=await request(path,{},7000);
+      const rows=Array.isArray(payload?.symbols)?payload.symbols:[];
+      A.markets=rows.filter(row=>row&&String(row.symbol||"").trim()&&row.is_active!==false&&row.is_tradable!==false);
+      if(!A.markets.length)throw new Error(payload?.detail||"The connected broker returned no active tradable instruments.");
+      select.innerHTML=A.markets.map(row=>'<option value="'+esc(row.symbol)+'">'+esc(marketName(row))+'</option>').join("");
+      const requested=new URLSearchParams(location.search).get("symbol");
+      select.value=[previous,requested,A.markets[0].symbol].find(value=>A.markets.some(row=>row.symbol===value))||A.markets[0].symbol;
       select.disabled=false;
-      showCatalogueStatus((detail||"No tradable markets were returned. Check your broker connection, then use Refresh to retry.")+" Use the refresh button above to try again.");
+      updateSelectedMarketIcon();
+      const tf=$("timeframe").value,limit=$("limit").value,restored=restoreCached(select.value,tf,limit);
+      showCatalogueStatus(payload?.stale===true?"Showing the last known broker catalogue; live refresh is unavailable.":"");
+      void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
+    } catch(error) {
+      A.markets=[];
+      select.innerHTML='<option value="">Instruments unavailable — retry</option>';
+      select.disabled=false;
+      showCatalogueStatus((error?.message||"The connected broker instrument catalogue is unavailable.")+" Use Refresh to retry.");
       setHealth(false,"UNAVAILABLE");
       set("heroFeedState","Market catalogue unavailable");
-      return;
     }
-    A.markets=A.markets.filter(m=>m&&String(m.symbol||"").trim());
-    if(!A.markets.length){
-      select.innerHTML='<option value="">Catalogue contained no valid symbols</option>';
-      select.disabled=false;
-      showCatalogueStatus("The broker returned no valid market symbols. Use the refresh button above to try again.");
-      setHealth(false,"UNAVAILABLE");
-      return;
-    }
-    select.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(marketName(m))+'</option>').join("");
-    select.disabled=false;
-    const requested=new URLSearchParams(location.search).get("symbol");
-    const preferred=[requested,A.markets[0].symbol].find(value=>A.markets.some(m=>m.symbol===value));
-    select.value=preferred||A.markets[0].symbol;
-    updateSelectedMarketIcon();
-    const tf=$("timeframe").value,limit=$("limit").value,restored=restoreCached(select.value,tf,limit);
-    // Start the broker refresh immediately when a saved snapshot is already visible.
-    void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
   }
   async function prepare(){
     if(!A.data)return;
