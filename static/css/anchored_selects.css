@@ -68,7 +68,7 @@
   overflow: hidden;
   border: 1px solid var(--ds-border, #354257);
   border-radius: 12px;
-  background: var(--ds-panel, #0c111a);
+  background: var(--ds-surface-1, #0c111a);
   color: var(--ds-text, #edf2fa);
   box-shadow: 0 16px 38px rgba(0,0,0,.42);
 }
@@ -77,7 +77,7 @@
 .ab-select-search[hidden] { display: none !important; }
 .ab-select-options { overflow-y: auto; overscroll-behavior: contain; padding: 5px; }
 .ab-select-option { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.ab-select-option:hover, .ab-select-option:focus-visible { outline: none; background: var(--ds-surface-3, #1b2637); }
+.ab-select-option:hover, .ab-select-option:focus-visible { outline: none; background: var(--ds-surface-2, #1b2637); }
 .ab-select-option[aria-selected="true"] { background: color-mix(in srgb, var(--ds-accent, #8fb0ff) 17%, transparent); }
 .ab-select-option:disabled { opacity: .45; cursor: not-allowed; }
 .ab-select-option[hidden], .ab-select-group-label[hidden] { display: none !important; }
