@@ -7,8 +7,8 @@ const baseURL = (process.env.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.o
 const username = process.env.ALGOBOT_VISUAL_USERNAME || '';
 const password = process.env.ALGOBOT_VISUAL_PASSWORD || '';
 const totpSecret = process.env.ALGOBOT_VISUAL_TOTP_SECRET || '';
-const routes = (process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/profile/,/settings/,/account/identity/')
-  .split(',').map(value => value.trim()).filter(Boolean);
+const routes = [...new Set((process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/profile/,/settings/,/account/identity/')
+  .split(',').map(value => value.trim()).filter(Boolean))];
 const outputDir = process.env.VISUAL_OUTPUT_DIR || 'artifacts/chromium';
 const viewports = [
   { name: 'desktop', width: 1440, height: 1000 },
