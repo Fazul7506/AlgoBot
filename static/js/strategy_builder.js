@@ -8,23 +8,10 @@
   const select=$('[data-strategy-select]'),symbol=$('[data-symbol]'),timeframe=$('[data-timeframe]'),output=$('[data-builder-output]'),status=$('[data-builder-status]'),details=$('[data-strategy-details]'),rows=$('[data-parameter-rows]');
   const saveBtn=$('[data-save-strategy]'),validateBtn=$('[data-validate-strategy]'),backtestBtn=$('[data-backtest-strategy]'),optimizeBtn=$('[data-optimize-strategy]'),tradeBtn=$('[data-trade-selected]'),steps=[...root.querySelectorAll('.builder-step')];
   let strategies=[],markets=[],catalogTimeframes=[];
-  const timeout=async(p,ms=10000)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('Backend request timed out'),{code:'API_TIMEOUT'})),ms))]);
-  const csrf=()=>decodeURIComponent((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');
-  async function directGet(path,ms=10000){
-    const r=await timeout(fetch(path,{credentials:'same-origin',headers:{Accept:'application/json'}}),ms),text=await r.text();let d={};try{d=text?JSON.parse(text):{}}catch{d={detail:text||`Request failed (${r.status})`}};
-    if(!r.ok)throw Object.assign(new Error(d.detail||d.message||`Request failed (${r.status})`),{status:r.status,payload:d});return d;
-  }
   async function api(url,options={},ms=12000){
-    const method=String(options.method||'GET').toUpperCase();
-    if(method==='GET'){
-      try{return await directGet(url,ms)}catch(first){
-        if(window.AlgoBotFrontendData?.request)try{return await window.AlgoBotFrontendData.request(url,options,Math.min(ms,8000))}catch(_){throw first}
-        throw first;
-      }
-    }
-    if(window.AlgoBotFrontendData?.request)return window.AlgoBotFrontendData.request(url,options,ms);
-    const headers={Accept:'application/json','Content-Type':'application/json',...(options.headers||{})};if(csrf())headers['X-CSRFToken']=csrf();
-    return directGet(url,{...options,headers});
+    const request=window.AlgoBotServices?.request;
+    if(typeof request!=='function')throw new Error('Shared AlgoBot API service is not ready.');
+    return request('strategies',url,options,ms);
   }
   const setStatus=(text,tone='')=>{if(status){status.textContent=text;status.dataset.tone=tone}};
   const selected=()=>strategies.find(s=>String(s.id)===String(select?.value));
@@ -48,9 +35,9 @@
   }
   async function loadStrategies(){const d=await api('/api/strategies/available/');strategies=list(d?.strategies||d);renderStrategies();return true}
   async function loadBroker(){
-    const transport=window.AlgoBotFrontendData?.request;
-    if(typeof transport!=='function')throw new Error('Authenticated AlgoBot API transport is not ready.');
-    const d=await transport('/api/market/catalogue/',{},7000);
+    const catalogue=window.AlgoBotServices?.instruments?.list;
+    if(typeof catalogue!=='function')throw new Error('Shared instrument catalogue is not ready.');
+    const d=await catalogue({timeout:7000});
     catalogTimeframes=list(d?.supported_timeframes).map(String).map(x=>x.toUpperCase());
     markets=normalise(d);
     const available=markets.filter(x=>x.is_active!==false&&x.is_tradable!==false);

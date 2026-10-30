@@ -26,6 +26,8 @@ class SharedInstrumentFrontendServiceTests(SimpleTestCase):
             "static/js/live_broker_ui.js",
             "static/js/predictions_workspace_fix.js",
             "static/js/enterprise_templates.js",
+            "static/js/strategy_builder.js",
+            "static/js/backtesting_workspace_fix.js",
         )
         for path in consumers:
             with self.subTest(path=path):
@@ -36,3 +38,21 @@ class SharedInstrumentFrontendServiceTests(SimpleTestCase):
         script = self.read("static/js/trade_history.js")
         self.assertIn("AlgoBotServices.request('trade-history'", script)
         self.assertNotIn("AlgoBotAPI.apiClient", script)
+
+    def test_strategy_and_backtesting_use_shared_request_and_instrument_services(self):
+        strategy = self.read("static/js/strategy_builder.js")
+        self.assertIn("AlgoBotServices", strategy)
+        self.assertIn("instruments", strategy)
+        self.assertNotIn("directGet(", strategy)
+        self.assertNotIn("fetch(", strategy)
+        backtesting = self.read("static/js/backtesting_workspace_fix.js")
+        self.assertIn("AlgoBotServices", backtesting)
+        self.assertIn("instruments", backtesting)
+        self.assertNotIn("fetch(", backtesting)
+
+    def test_workspace_cache_does_not_shadow_the_canonical_catalogue_cache(self):
+        prefetch = self.read("static/js/core/workspace_prefetch.js")
+        self.assertNotIn("catalogue|broker-capabilities", prefetch)
+        frontend = self.read("static/js/core/frontend_data_contract.js")
+        self.assertIn("market\\/(?:catalogue|broker-catalogue)", frontend)
+        self.assertIn("return 15000", frontend)
