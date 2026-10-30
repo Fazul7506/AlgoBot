@@ -20,6 +20,7 @@ from apps.analysis.broker_intelligence import build_account_risk_context
 from apps.brokers.services import BrokerRegistry, SynchronizationService
 from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
+from apps.market_data.services import MarketDataService
 from apps.strategies.models import StrategySignal
 from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick, sync_active_symbols
 from apps.market_data.historical import persist_broker_chart_history, persist_broker_tick_history
@@ -740,11 +741,9 @@ def _analysis_markets(force_refresh=False):
     if cached:
         return cached
     markets = list(
-        MarketSymbol.objects.filter(
-            broker="deriv", is_active=True, is_tradable=True
-        )
-        .values("symbol", "display_name", "market", "sub_market")
-        .order_by("market", "symbol")
+        MarketDataService.symbols.catalogue(
+            broker="deriv", active=True, tradable=True
+        ).values("symbol", "display_name", "market", "sub_market")
     )
     if markets:
         _safe_cache_set(cache_key, markets, ANALYSIS_MARKETS_CACHE_SECONDS)
