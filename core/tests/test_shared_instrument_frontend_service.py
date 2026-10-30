@@ -49,6 +49,8 @@ class SharedInstrumentFrontendServiceTests(SimpleTestCase):
         self.assertIn("AlgoBotServices", backtesting)
         self.assertIn("instruments", backtesting)
         self.assertNotIn("fetch(", backtesting)
+        self.assertNotIn("X-CSRFToken", backtesting)
+        self.assertNotIn("csrf()", backtesting)
 
     def test_workspace_cache_does_not_shadow_the_canonical_catalogue_cache(self):
         prefetch = self.read("static/js/core/workspace_prefetch.js")
