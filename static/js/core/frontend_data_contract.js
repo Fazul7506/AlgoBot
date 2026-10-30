@@ -125,9 +125,22 @@
     return{response,text:await response.text()};
   }
 
+  function linkExternalAbortSignal(externalSignal, controller) {
+    if (!externalSignal) return () => {};
+    if (externalSignal.aborted) {
+      controller.abort();
+      return () => {};
+    }
+    const abort = () => controller.abort();
+    externalSignal.addEventListener('abort', abort, {once: true});
+    return () => externalSignal.removeEventListener('abort', abort);
+  }
+
   const protectedPublicPaths = /^\/api\/(?:brokers\/|orders(?:\/|$)|positions(?:\/|$)|dashboard(?:\/|$)|ai(?:\/|$)|predictions(?:\/|$)|automation(?:\/|$)|portfolio(?:\/|$)|backtesting(?:\/|$)|settings(?:\/|$)|tenants(?:\/|$))/;
   async function request(rawUrl,options={},timeout=25000){
     const url=normalizeEndpoint(rawUrl),method=(options.method||'GET').toUpperCase();
+    const externalSignal=options.signal,cancellable=Boolean(externalSignal);
+    if(externalSignal?.aborted){const aborted=new Error('Request aborted');aborted.name='AbortError';throw aborted;}
     const sessionAccountContext=isSessionAccountContextUrl(url);
     if (document.body?.dataset.authenticated !== 'true' && protectedPublicPaths.test(url)) {
       const error=new Error('Sign in to access your workspace data.');
@@ -141,13 +154,13 @@
     const selectedId=brokerState()?.get?.()?.account?.id||'';
     const key=`${method} ${url} account=${selectedId}`;
     if(method==='GET'){
-      if(inflight.has(key))return inflight.get(key);
+      if(!cancellable&&inflight.has(key))return inflight.get(key);
       const recent=cache.get(key);if(recent&&Date.now()-recent.at<=getCacheTtl(url))return recent.payload;
     }
     const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
     const sameOriginPath=sameOriginRetryPath(url,method,false);
     const promise=(async()=>{
-      let controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
+      let controller=new AbortController(),cleanupExternal=linkExternalAbortSignal(externalSignal,controller),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
       try{
         try{result=await fetchOnce(url,options,controller)}catch(error){
           firstError=error;
@@ -158,19 +171,23 @@
             throw e;
           }
         }
-      }finally{clearTimeout(timer)}
+      }finally{clearTimeout(timer);cleanupExternal()}
       const{response,text}=result;
       if(response.status===401&&apiAccessToken){
         apiAccessToken=null;
         try{
           controller=new AbortController();
+          cleanupExternal=linkExternalAbortSignal(externalSignal,controller);
+          const retryTimer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
+          try {
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           retryHeaders.set('Authorization','Bearer '+retryToken);
           const retryResponse=await nativeFetch(resolveUrl(url),{credentials:sessionAccountContext?'include':'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
-        }catch(_){ }
+          }catch(retryError){if(externalSignal?.aborted)throw retryError;}
+          finally{clearTimeout(retryTimer);cleanupExternal()}
       }
       const finalResponse=result.response, finalText=result.text;
       const finalParsed=parsePayload(finalResponse,finalText),finalPayload=finalParsed?.django?finalParsed.payload:finalParsed;
@@ -178,8 +195,8 @@
       if(method==='GET')cache.set(key,{payload:finalPayload,at:Date.now()});
       return finalPayload;
     })();
-    if(method==='GET')inflight.set(key,promise);
-    try{return await promise}finally{if(inflight.get(key)===promise)inflight.delete(key)}
+    if(method==='GET'&&!cancellable)inflight.set(key,promise);
+    try{return await promise}finally{if(method==='GET'&&!cancellable&&inflight.get(key)===promise)inflight.delete(key)}
   }
 
   function cached(url,maxAge=120000){const selectedId=brokerState()?.get?.()?.account?.id||'';const item=cache.get(`${'GET'} ${normalizeEndpoint(url)} account=${selectedId}`);return item&&Date.now()-item.at<=maxAge?item.payload:null}

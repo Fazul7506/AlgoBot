@@ -10,7 +10,7 @@
   const money = (v,c) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
-  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
+  const A = {markets:[],data:null,contract:null,timer:null,requestController:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
 
   async function request(path, options={}, timeout=15000) {
     const transport=window.AlgoBotFrontendData?.request;
@@ -188,16 +188,19 @@
   }
 
   async function load(options={}){
+    A.requestController?.abort();
+    const controller=new AbortController();
+    A.requestController=controller;
     const generation=++A.loadGeneration;
     const symbol=$("symbol").value, tf=$("timeframe").value, limit=$("limit").value;
-    if(!symbol){$("loadState").textContent="No active market is available.";return}
+    if(!symbol){$("loadState").textContent="No active market is available.";if(A.requestController===controller)A.requestController=null;return}
     if(A.data&&String(A.data.symbol||"")!==String(symbol)&&!A.cachedData){A.data=null;resetUnavailable();}
     $("loadState").textContent="Loading available market analysis…";
     const refreshAccount=options.refreshAccount===true;
     const refreshMarket=options.refreshMarket===true;
     const endpoint="/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh="+(refreshMarket?"1":"0")+"&refresh_account="+(refreshAccount?"1":"0");
     try{
-      const d=await request(endpoint);
+      const d=await request(endpoint,{signal:controller.signal});
       if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
       render(d);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(d));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
@@ -211,7 +214,7 @@
       if(!refreshMarket&&!options.backgroundRefresh&&!A.cachedData&&Number(e?.status)===503){
         $("loadState").textContent="No saved candles yet · requesting broker-authoritative market data…";
         try{
-          const refreshed=await request(endpoint.replace("&refresh=0","&refresh=1"));
+          const refreshed=await request(endpoint.replace("&refresh=0","&refresh=1"),{signal:controller.signal});
           if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
           if(refreshed.status==="error")throw new Error(refreshed.message||"Broker candle refresh unavailable");
           render(refreshed);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(refreshed));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();return;
@@ -279,7 +282,9 @@
     ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
     $("refresh")?.addEventListener("click",()=>{if(!A.markets.length){void markets({forceRefresh:true});return;}void load({refreshAccount:false,refreshMarket:true});});$("prepare")?.addEventListener("click",prepare);
     const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
-    window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
+    window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});
+    window.addEventListener("pagehide",()=>{A.loadGeneration+=1;A.requestController?.abort();A.requestController=null;clearInterval(A.timer);},{once:true});
+    markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();

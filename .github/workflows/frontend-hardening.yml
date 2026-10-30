@@ -36,6 +36,8 @@ jobs:
         run: node static/js/core/preferences_runtime.test.js
       - name: Validate shared market-data stream and bid/ask provenance
         run: node static/js/core/market_data_provenance.test.js
+      - name: Validate API request cancellation and bounded retries
+        run: node static/js/core/frontend_data_cancellation.test.js
 
       - name: Validate Django templates
         run: |
