@@ -6,18 +6,27 @@ from corsheaders.defaults import default_headers
 
 DEBUG = False
 # Render assigns a distinct *.onrender.com hostname to each service preview.
-# Django's leading-dot syntax safely permits the apex and all subdomains of
-# onrender.com while retaining normal host validation for every other domain.
+# Django's leading-dot syntax permits the apex and subdomains while retaining
+# normal host validation for every other domain.
 ALLOWED_HOSTS = [
     *env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"]),
     ".onrender.com",
 ]
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
+CSRF_TRUSTED_ORIGINS = [
+    *env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"]),
+    "https://*.onrender.com",
+]
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
 CORS_ALLOW_HEADERS = default_headers
 CORS_ALLOW_CREDENTIALS = True
 BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
 ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
+
+# Preview hosts are on a different registrable domain from algobot.dpdns.org.
+# Use host-only cookies there; the production cookie domain would prevent the
+# browser from sending the CSRF/session cookies to *.onrender.com.
+RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME", "").lower()
+IS_RENDER_PREVIEW_HOST = RENDER_EXTERNAL_HOSTNAME.endswith(".onrender.com")
 
 SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -34,8 +43,8 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
-SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
-CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
+SESSION_COOKIE_DOMAIN = None if IS_RENDER_PREVIEW_HOST else env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
+CSRF_COOKIE_DOMAIN = None if IS_RENDER_PREVIEW_HOST else env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
 
 WHITENOISE_MANIFEST_STRICT = False
 USE_POSTGRES = True
