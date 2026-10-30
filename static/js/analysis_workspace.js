@@ -246,8 +246,9 @@
       // The Terminal owns the canonical connected-broker instrument API.
       // Analysis consumes that same endpoint and response, not a second
       // DB-backed catalogue or a separate Deriv sync request.
-      const path="/api/market/catalogue/"+(options.forceRefresh?"?refresh=1":"");
-      const payload=await request(path,{},7000);
+      const catalogue = window.AlgoBotServices?.instruments?.list;
+      if (typeof catalogue !== 'function') throw new Error("The shared instrument catalogue is not ready.");
+      const payload = await catalogue({ forceRefresh: Boolean(options.forceRefresh), timeout: 7000 });
       const rows=Array.isArray(payload?.symbols)?payload.symbols:[];
       A.markets=rows.filter(row=>row&&String(row.symbol||"").trim()&&row.is_active!==false&&row.is_tradable!==false);
       if(!A.markets.length)throw new Error(payload?.detail||"The connected broker returned no active tradable instruments.");

@@ -4,7 +4,7 @@
   window.__algoBotTradeHistoryV2 = true;
 
   const root = document.querySelector('[data-trade-history-page]');
-  if (!root || !window.AlgoBotAPI?.apiClient) return;
+  if (!root || typeof window.AlgoBotServices?.instruments?.list !== 'function' || typeof window.AlgoBotServices?.request !== 'function') return;
 
   const $ = selector => root.querySelector(selector);
   const tbody = $('[data-history-table] tbody');
@@ -134,9 +134,7 @@
     if (!select) return;
     const previous = select.value;
     try {
-      const transport = window.AlgoBotFrontendData?.request;
-      if (typeof transport !== 'function') throw new Error('Authenticated AlgoBot API transport is not ready.');
-      const payload = await transport('/api/market/catalogue/', {}, 7000);
+      const payload = await window.AlgoBotServices.instruments.list({ timeout: 7000 });
       const items = Array.isArray(payload?.symbols) ? payload.symbols : Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.markets) ? payload.markets : [];
       select.innerHTML = '<option value="">All markets</option>' + items.map(item => {
         const symbol = String(item?.symbol || item?.underlying_symbol || item?.code || '');
@@ -160,7 +158,7 @@
     message.textContent = '';
     tbody.innerHTML = '<tr><td colspan="12">Retrieving authoritative Deriv history…</td></tr>';
     try {
-      const payload = await window.AlgoBotAPI.apiClient.get(`/api/trade-history/?${params(page, refreshBroker).toString()}`);
+      const payload = await window.AlgoBotServices.request('trade-history', `/api/trade-history/?${params(page, refreshBroker).toString()}`, {}, 25000);
       const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
       if (seq !== requestSeq || requestedAccountId !== currentAccountId) return;
       lastPayload = payload;

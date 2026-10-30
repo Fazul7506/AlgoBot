@@ -20,7 +20,7 @@
     const value = String(name || '').trim().toLowerCase();
     const aliases = {
       dashboard: 'dashboard',
-      market: 'market-data', markets: 'market-data', scanner: 'market-data',
+      market: 'market-data', markets: 'market-data', scanner: 'market-data', instrument: 'market-data', instruments: 'market-data',
       order: 'orders', orders: 'orders',
       position: 'positions', positions: 'positions',
       trade: 'trading', terminal: 'trading', trading: 'trading',
@@ -66,8 +66,31 @@
   const patch = (name, url, body, options = {}, timeout) => request(name, url, { ...options, method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, body: body == null ? undefined : JSON.stringify(body) }, timeout);
   const cancel = name => runtime()?.cancel?.(serviceFor(name));
 
+  // One frontend instrument catalogue facade. The canonical transport owns
+  // account scoping, in-flight deduplication, cache freshness and error handling.
+  const instruments = Object.freeze({
+    list: async (options = {}) => {
+      const forceRefresh = Boolean(options.forceRefresh);
+      const timeout = Number.isFinite(Number(options.timeout)) ? Number(options.timeout) : 7000;
+      const notifyOnError = options.notifyOnError === true;
+      const url = '/api/market/catalogue/' + (forceRefresh ? '?refresh=1' : '');
+      const payload = await get('market-data', url, { notifyOnError }, timeout);
+      const rows = Array.isArray(payload?.symbols) ? payload.symbols
+        : Array.isArray(payload?.results) ? payload.results
+        : Array.isArray(payload?.data) ? payload.data
+        : Array.isArray(payload?.markets) ? payload.markets
+        : Array.isArray(payload) ? payload : [];
+      return {
+        ...(payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}),
+        symbols: rows,
+        results: rows
+      };
+    },
+    refresh: (options = {}) => instruments.list({ ...options, forceRefresh: true })
+  });
+
   const services = Object.freeze({
-    accountId, account, serviceFor, register, request, get, post, put, patch, run, cancel,
+    accountId, account, serviceFor, register, request, get, post, put, patch, run, cancel, instruments,
     runtime: () => runtime()?.snapshot?.() || null
   });
 

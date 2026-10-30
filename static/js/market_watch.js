@@ -268,11 +268,11 @@
   };
 
   const loadSymbols = async () => {
-    const request = window.AlgoBotFrontendData?.request;
-    if (!request) throw new Error('AlgoBot market service is not ready.');
+    const catalogue = window.AlgoBotServices?.instruments?.list;
+    if (typeof catalogue !== 'function') throw new Error('AlgoBot shared instrument service is not ready.');
     const seq = ++loadSeq;
     const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
-    const data = await request('/api/market/catalogue/', {}, 7000);
+    const data = await catalogue({ timeout: 7000 });
     const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
     if (seq !== loadSeq || requestedAccountId !== currentAccountId) return;
     rows = list(data?.symbols).filter(
