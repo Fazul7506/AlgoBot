@@ -227,12 +227,14 @@
           const symbol = String(tick.symbol || '');
           const price = tick.quote == null || tick.quote === '' ? NaN : Number(tick.quote);
           if (!symbol || !Number.isFinite(price)) return;
-          const bid = tick.bid == null || tick.bid === '' ? price : Number(tick.bid);
-          const ask = tick.ask == null || tick.ask === '' ? price : Number(tick.ask);
+          const bidValue = tick.bid == null || tick.bid === '' ? null : Number(tick.bid);
+          const askValue = tick.ask == null || tick.ask === '' ? null : Number(tick.ask);
+          const bid = Number.isFinite(bidValue) ? bidValue : null;
+          const ask = Number.isFinite(askValue) ? askValue : null;
           quotes.set(symbol, {
             price,
-            bid: Number.isFinite(bid) ? bid : price,
-            ask: Number.isFinite(ask) ? ask : price,
+            bid,
+            ask,
             state: 'live',
             receivedAt: Date.now()
           });
