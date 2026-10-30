@@ -1,5 +1,6 @@
 from .cache import MarketCacheService
-from .models import Candle, MarketSnapshot, MarketSymbol, Tick
+from .models import Candle, MarketSnapshot, Tick
+from .services import MarketDataService
 
 class MarketRepository:
     @staticmethod
@@ -18,4 +19,4 @@ class MarketRepository:
     def snapshot(symbol):
         return MarketCacheService().snapshot(symbol) or MarketSnapshot.objects.filter(symbol__symbol=symbol).first()
     @staticmethod
-    def symbols(): return MarketSymbol.objects.filter(is_active=True)
+    def symbols(): return MarketDataService.symbols.catalogue(active=True, tradable=None)
