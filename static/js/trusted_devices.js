@@ -4,12 +4,14 @@
   const form = root.querySelector('[data-trust-device-form]');
   const list = root.querySelector('[data-trusted-device-list]');
   const status = root.querySelector('[data-trusted-device-status]');
-  const csrf = () => form.querySelector('[name="csrfmiddlewaretoken"]')?.value || decodeURIComponent(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '');
   const request = async (url, options = {}) => {
-    const response = await fetch(url, {credentials:'same-origin', ...options, headers:{Accept:'application/json', ...(options.body ? {'Content-Type':'application/json'} : {}), ...(options.method && options.method !== 'GET' ? {'X-CSRFToken':csrf()} : {}), ...(options.headers || {})}});
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.detail || 'Request failed. Please try again.');
-    return payload;
+    const client = window.AlgoBotFrontendData;
+    if (!client?.request) throw new Error('The shared API client is unavailable. Refresh the page and try again.');
+    return client.request(url, {
+      ...options,
+      credentials: 'include',
+      headers: {Accept:'application/json', ...(options.body ? {'Content-Type':'application/json'} : {}), ...(options.headers || {})},
+    }, 15000);
   };
   const node = (tag, cls, value) => { const el = document.createElement(tag); if (cls) el.className = cls; el.textContent = value; return el; };
   async function load() {
