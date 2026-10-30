@@ -11,7 +11,8 @@ from rest_framework import status
 from core.account_context import get_active_account
 from apps.indicators.calculator import IndicatorCalculator
 from .historical import normalize_timeframe
-from .models import Candle, MarketSymbol
+from .models import Candle
+from .services import MarketDataService
 
 
 DEFAULT_TIMEFRAME = "1m"
@@ -215,21 +216,13 @@ def scanner(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    queryset = (
-        MarketSymbol.objects.filter(
-            broker=account.broker.broker_type,
-            is_active=True,
-            is_tradable=True,
-        )
-        .select_related("snapshot")
-        .order_by("market", "symbol")
-    )
-    if market:
-        queryset = queryset.filter(market=market)
-    if search:
-        queryset = queryset.filter(
-            Q(symbol__icontains=search) | Q(display_name__icontains=search)
-        )
+    queryset = MarketDataService.symbols.catalogue(
+        broker=account.broker.broker_type,
+        active=True,
+        tradable=True,
+        market=market or None,
+        search=search or None,
+    ).select_related("snapshot")
 
     symbols = list(queryset)
     symbol_ids = [row.id for row in symbols]
