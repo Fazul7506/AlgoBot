@@ -29,12 +29,14 @@ class BrokerEventConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
+            self._broker_connection_accepted = False
             await self.close(code=4401)
             return
         self.active_account_pk = await self.selected_account_pk()
         self.group_name = f"algobot-user-{user.pk}-broker"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        self._broker_connection_accepted = True
         await self.send_json({
             "type": "connection.ready",
             "resource": self.resource,

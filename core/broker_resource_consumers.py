@@ -13,6 +13,8 @@ class PortfolioBrokerEventConsumer(BrokerEventConsumer):
 
     async def connect(self):
         await super().connect()
+        if not getattr(self, "_broker_connection_accepted", False):
+            return
         await self.send_json({"type": "portfolio.snapshot", **await self.portfolio_snapshot()})
 
     @database_sync_to_async
@@ -39,6 +41,8 @@ class NotificationBrokerEventConsumer(BrokerEventConsumer):
 
     async def connect(self):
         await super().connect()
+        if not getattr(self, "_broker_connection_accepted", False):
+            return
         await self.send_json({"type": "notification.snapshot", "notifications": await self.latest_notifications()})
 
     @database_sync_to_async
