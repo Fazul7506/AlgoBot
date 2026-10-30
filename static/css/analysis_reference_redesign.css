@@ -433,7 +433,7 @@ body:has(#main-content.analysis-dashboard) #main-content.analysis-dashboard {
 
 
 /* Analysis headings stay left-aligned inside inherited flex/grid shells. */
-.analysis-dashboard .panel > .section-head{justify-content:flex-start!important;align-items:flex-start!important;text-align:left!important}
-.analysis-dashboard .panel > .section-head h2{justify-content:flex-start!important;text-align:left!important;margin:0 auto 0 0!important}
-.analysis-dashboard .panel > .section-head > a{margin-left:auto;flex:0 0 auto}
-.analysis-dashboard .reference-insights > .section-head{flex-direction:row!important;align-items:center!important}
+.workspace .panel > .section-head{display:flex!important;justify-content:flex-start!important;align-items:flex-start!important;text-align:left!important}
+.workspace .panel > .section-head h2{display:flex!important;justify-content:flex-start!important;text-align:left!important;margin:0 auto 0 0!important}
+.workspace .panel > .section-head > a{margin-left:auto;flex:0 0 auto}
+.workspace .reference-insights > .section-head{flex-direction:row!important;align-items:center!important}
