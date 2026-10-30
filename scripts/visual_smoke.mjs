@@ -135,9 +135,9 @@ try {
             if (colors.contrast < 4.5) failures.push(normalizedRoute + ' at ' + viewport.name + ': timezone menu contrast is below WCAG AA (' + colors.contrast.toFixed(2) + ':1)');
             const search = menu.locator('.ab-select-search');
             if (await search.isVisible()) {
-              await search.fill('Africa/Nairobi');
+              await search.fill('Nairobi');
               const matches = await menu.locator('.ab-select-option:not([hidden])').count();
-              if (matches !== 1) failures.push(`${normalizedRoute} at ${viewport.name}: searchable timezone menu returned ${matches} matches for Africa/Nairobi`);
+              if (matches !== 1) failures.push(`${normalizedRoute} at ${viewport.name}: searchable timezone menu returned ${matches} matches for Nairobi`);
             } else {
               failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu has no accessible search control`);
             }
