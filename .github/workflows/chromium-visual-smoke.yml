@@ -53,7 +53,7 @@ jobs:
           ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
           ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
           ALGOBOT_VISUAL_TOTP_SECRET: ${{ secrets.ALGOBOT_VISUAL_TOTP_SECRET }}
-          ALGOBOT_VISUAL_PATHS: ${{ vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/security/,/analysis/' }}
+          ALGOBOT_VISUAL_PATHS: ${{ vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/' }}
         run: node scripts/visual_smoke.mjs
 
       - name: Upload Chromium screenshots
