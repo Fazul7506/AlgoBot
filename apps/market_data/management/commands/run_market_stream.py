@@ -10,7 +10,6 @@ from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 
 from apps.market_data.deriv_sync import DERIV_PUBLIC_WS, sync_active_symbols
-from apps.market_data.models import MarketSymbol
 from apps.market_data.exceptions import ValidationError as MarketDataValidationError
 from apps.market_data.services import MarketDataService
 
@@ -23,7 +22,11 @@ class Command(BaseCommand):
 
     async def run(self):
         await sync_to_async(sync_active_symbols)()
-        symbols = await sync_to_async(list)(MarketSymbol.objects.filter(broker="deriv", is_active=True).values_list("symbol", flat=True))
+        symbols = await sync_to_async(list)(
+            MarketDataService.symbols.catalogue(
+                broker="deriv", active=True, tradable=None
+            ).values_list("symbol", flat=True)
+        )
         if not symbols:
             raise RuntimeError("No active Deriv markets are available")
         url = getattr(settings, "DERIV_PUBLIC_WS_URL", DERIV_PUBLIC_WS)
