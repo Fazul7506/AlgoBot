@@ -87,7 +87,6 @@
   const status = root.querySelector('[data-settings-status]');
   const message = root.querySelector('[data-settings-message]');
   const saveButton = root.querySelector('[data-save-settings]');
-  const csrf = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   const field = name => form.elements.namedItem(name);
   let lastSavedFormState = null;
   const captureFormState = () => [...form.elements].filter(control => control.name).map(control => ({name:control.name,type:control.type,value:control.value,checked:control.checked}));
@@ -104,10 +103,13 @@
   const setRadio = (name, value) => { const input = form.querySelector('input[name="' + name + '"][value="' + value + '"]'); if (input) input.checked = true; };
   const check = (name, value) => { if (field(name)) field(name).checked = Boolean(value); };
   const request = async (method, body) => {
-    const response = await fetch('/api/settings/', {method,credentials:'same-origin',headers:{'Accept':'application/json',...(body?{'Content-Type':'application/json','X-CSRFToken':csrf}:{})},...(body?{body:JSON.stringify(body)}:{})});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || data.message || 'Could not save settings. Please try again.');
-    return data;
+    const client = window.AlgoBotFrontendData;
+    if (!client?.request) throw new Error('The shared API client is unavailable. Refresh the page and try again.');
+    return client.request('/api/settings/', {
+      method,
+      credentials: 'include',
+      ...(body ? {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {}),
+    }, 25000);
   };
   const applyAppearance = (prefs) => {
     const html = document.documentElement;
