@@ -145,11 +145,11 @@
         select.addEventListener('change',()=>{const selected=select.selectedOptions?.[0];const symbol=selected?.value||'';const label=selected?.textContent||symbol;icon.innerHTML=symbol?marketAssetIcon(symbol, label, label):'';});
       }
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
-      const boundedJSON = async path => {
+      const boundedJSON = async request => {
         let timer;
         try {
           return await Promise.race([
-            getJSON(path),
+            request,
             new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Instrument catalogue request timed out')), 12000); })
           ]);
         } finally {
@@ -159,17 +159,19 @@
       try {
         let d;
         try {
-          d=await boundedJSON('/api/market/broker-catalogue/?limit=500');
+          d=await boundedJSON(getJSON('/api/market/broker-catalogue/?limit=500'));
         } catch (primaryError) {
           // Give the fallback its own timeout window. Reusing an already-rejected
           // Promise.race timeout here made the fallback fail immediately after the
           // primary request timed out, leaving no chance to recover the selector.
-          d=await boundedJSON('/api/market/symbols/?limit=500');
+          d=await boundedJSON(getJSON('/api/market/symbols/?limit=500'));
           if (!d || (!Array.isArray(d.symbols) && !Array.isArray(d.results) && !Array.isArray(d.data))) throw primaryError;
         }
         const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
         if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
-        const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)).map(x=>{const symbol=String(x.symbol||x.underlying_symbol||x.code);const supplied=String(x.display_name||x.name||x.underlying_symbol_name||'');return {...x,symbol,display_name:marketDisplayName(symbol,supplied)};});
+        const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)
+          && x.is_active !== false && x.is_tradable !== false
+          && x.active !== false && x.tradable !== false).map(x=>{const symbol=String(x.symbol||x.underlying_symbol||x.code);const supplied=String(x.display_name||x.name||x.underlying_symbol_name||'');return {...x,symbol,display_name:marketDisplayName(symbol,supplied)};});
         const current=select.value;
         select.innerHTML='<option value="">Choose a market</option>'+instruments.map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.display_name||'Market instrument')+'</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
