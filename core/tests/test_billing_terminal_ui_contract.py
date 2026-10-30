@@ -185,11 +185,21 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.location.origin", client)
         self.assertIn("Execution", client)
 
-    def test_websocket_account_switch_requires_http_session_selection(self):
+    def test_active_broker_websocket_scopes_events_to_the_http_session_account(self):
         from pathlib import Path
-        realtime = Path("core/realtime.py").read_text(encoding="utf-8")
-        self.assertIn("ACCOUNT_CONTEXT_NOT_ACTIVE", realtime)
-        self.assertIn("session_account = await self.selected_account()", realtime)
+        consumer = Path("core/broker_events.py").read_text(encoding="utf-8")
+        portfolio = Path("core/broker_resource_consumers.py").read_text(encoding="utf-8")
+        routing = Path("deriv_platform/routing.py").read_text(encoding="utf-8")
+        positions = Path("static/js/positions.js").read_text(encoding="utf-8")
+        self.assertIn("get_active_account_for_session", consumer)
+        self.assertIn('self.scope.get("session")', consumer)
+        self.assertIn("account_event_matches_active_account", consumer)
+        self.assertIn("get_active_account_for_session", portfolio)
+        self.assertIn('self.scope.get("session")', portfolio)
+        self.assertIn('path("ws/broker/", BrokerEventConsumer.as_asgi())', routing)
+        self.assertIn("function reconnect()", positions)
+        self.assertIn("window.AlgoBotBrokerState?.subscribe?.", positions)
+        self.assertNotIn("account.switch", positions)
 
     def test_ai_predictions_workspace_uses_authenticated_bearer_transport_for_post(self):
         from pathlib import Path

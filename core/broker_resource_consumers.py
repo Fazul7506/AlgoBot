@@ -5,7 +5,7 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 
 from .broker_events import BrokerEventConsumer
-from .account_context import get_active_account
+from .account_context import get_active_account_for_session
 
 
 class PortfolioBrokerEventConsumer(BrokerEventConsumer):
@@ -17,7 +17,7 @@ class PortfolioBrokerEventConsumer(BrokerEventConsumer):
 
     @database_sync_to_async
     def portfolio_snapshot(self):
-        account = get_active_account(self.scope["user"], request=None)
+        account = get_active_account_for_session(self.scope["user"], self.scope.get("session"))
         if not account:
             return {"status": "empty", "balance": None, "equity": None, "unrealized_pnl": None}
         realtime = dict((account.credentials or {}).get("realtime") or {})

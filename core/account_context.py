@@ -31,35 +31,39 @@ def _has_known_environment(account):
     return account.broker.broker_type != "deriv" or account.account_type in {"demo", "real"}
 
 
-def get_active_account(user, request=None, broker_type=None):
-    """Resolve the authenticated user's server-side active broker account.
-
-    Request headers and query parameters are transport metadata, not account
-    authority. A stale or ineligible explicit session selection is cleared and
-    returns no account; it must never silently route the request to another
-    connected account. Requests without a browser session retain the existing
-    default-account behavior for background consumers.
-    """
+def _resolve_active_account(user, session=None, broker_type=None):
     qs = connected_accounts(user)
     if broker_type:
         qs = qs.filter(broker__broker_type=broker_type)
 
-    session = _session(request)
     selected_id = session.get(SESSION_KEY) if session is not None else None
     if selected_id:
         selected = qs.filter(pk=selected_id).first()
         if selected and _has_known_environment(selected):
             return selected
-        # The explicitly selected account is no longer eligible. Clear the
-        # stale selection and fail closed instead of silently using another
-        # account, especially across DEMO/REAL boundaries.
+        # A stale explicit selection must fail closed across DEMO/REAL boundaries.
         session.pop(SESSION_KEY, None)
-        session.modified = True
+        if hasattr(session, "modified"):
+            session.modified = True
         return None
 
-    # Read-only broker/market-data views may need a default context without an
-    # explicit browser selection. This fallback is not permission to execute trades.
+    # Read-only consumers may use the user's default account when no explicit
+    # browser selection exists. This fallback is never permission to execute trades.
     return qs.order_by("-last_synced_at", "-id").first()
+
+
+def get_active_account(user, request=None, broker_type=None):
+    """Resolve the active account from an HTTP request's server-side session."""
+    return _resolve_active_account(user, _session(request), broker_type)
+
+
+def get_active_account_for_session(user, session=None, broker_type=None):
+    """Resolve the active account from an explicit Django session mapping.
+
+    Channels consumers use this entry point so their account context follows
+    the same authenticated session authority as HTTP views.
+    """
+    return _resolve_active_account(user, session, broker_type)
 
 
 def require_active_account(user, request):

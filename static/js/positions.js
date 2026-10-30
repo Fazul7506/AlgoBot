@@ -93,15 +93,17 @@
     }
   }
   function schedule(){ clearTimeout(state.timer); state.timer=setTimeout(load,250); }
+  function reconnect() {
+    const previous = state.socket;
+    state.socket = null;
+    if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(4001, 'account context changed');
+    connect();
+  }
   function connect() {
     const protocol=location.protocol === 'https:' ? 'wss' : 'ws';
     const socket=new WebSocket(protocol + '://' + location.host + '/ws/broker/');
     state.socket=socket;
-    socket.onopen=() => {
-      state.retry=0;
-      const id=accountId();
-      if(id) socket.send(JSON.stringify({action:'account.switch',account_id:id}));
-    };
+    socket.onopen=() => { state.retry=0; };
     socket.onmessage=event => {
       try {
         const message=JSON.parse(event.data), payload=message.payload || {}, eventAccount=payload.account_id == null ? null : String(payload.account_id), current=accountId();
@@ -129,7 +131,7 @@
         state.rows=[]; state.meta=null;
         setState('loading','Account changed — loading its broker positions…'); summary(); render();
         schedule();
-        if(state.socket?.readyState === WebSocket.OPEN && next) state.socket.send(JSON.stringify({action:'account.switch',account_id:next}));
+        reconnect();
       }
     });
     state.accountId=accountId(); load(); connect();

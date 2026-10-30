@@ -7,7 +7,18 @@ poll broker endpoints themselves.
 from __future__ import annotations
 
 from django.utils import timezone
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+from .account_context import get_active_account_for_session
+
+
+def account_event_matches_active_account(payload, active_account_pk):
+    """Keep account-scoped events inside the account selected by the HTTP session."""
+    event_account_id = payload.get("account_id") if isinstance(payload, dict) else None
+    if event_account_id is None:
+        return True
+    return active_account_pk is not None and str(event_account_id) == str(active_account_pk)
 
 
 class BrokerEventConsumer(AsyncJsonWebsocketConsumer):
@@ -20,6 +31,7 @@ class BrokerEventConsumer(AsyncJsonWebsocketConsumer):
         if not user or not user.is_authenticated:
             await self.close(code=4401)
             return
+        self.active_account_pk = await self.selected_account_pk()
         self.group_name = f"algobot-user-{user.pk}-broker"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
@@ -56,11 +68,19 @@ class BrokerEventConsumer(AsyncJsonWebsocketConsumer):
             },
         })
 
+    @database_sync_to_async
+    def selected_account_pk(self):
+        account = get_active_account_for_session(self.scope.get("user"), self.scope.get("session"))
+        return account.pk if account else None
+
     async def broker_event(self, event):
-        """Channels group handler for BrokerRealtimeSync events."""
+        """Forward only the account-scoped events selected in this HTTP session."""
+        payload = event.get("payload") or {}
+        if not account_event_matches_active_account(payload, getattr(self, "active_account_pk", None)):
+            return
         await self.send_json({
             "type": event.get("event_type", "broker.event"),
-            "payload": event.get("payload") or {},
+            "payload": payload,
             "source": "broker",
             "timestamp": timezone.now().timestamp(),
         })
