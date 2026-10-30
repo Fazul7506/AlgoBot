@@ -248,7 +248,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("text-align: left !important", analysis_css, "Analysis must restore normal left-aligned content.")
         self.assertIn("grid-template-columns: minmax(0, 1fr) !important", analysis_css, "Analysis root must not collapse into a narrow inherited grid column.")
         self.assertIn(".app-content {\n  display: block !important;", analysis_css, "Analysis must use the full app-content column rather than a constrained shared grid track.")
-        self.assertIn("20261030-reference-layout3", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
+        self.assertIn("20261030-reference-layout4", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
         self.assertIn('sync_active_symbols()', api, "The backend must repopulate an empty catalogue from the authoritative Deriv feed.")
         self.assertIn('MARKET_CATALOGUE_UNAVAILABLE', api, "Catalogue failures must return an explicit diagnostic code.")
         self.assertIn("/api/market/catalogue/", analysis, "Analysis must use the same connected-broker catalogue as Terminal.")
