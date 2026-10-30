@@ -38,7 +38,7 @@
 
   const endpointMap = {
     trading: ['/api/orders/', '/api/positions/open/', '/api/dashboard/signals/'],
-    markets: ['/api/market/symbols/', '/api/market/snapshots/all_snapshots/', '/api/market/stats/'],
+    markets: ['/api/market/catalogue/', '/api/market/snapshots/all_snapshots/', '/api/market/stats/'],
     strategies: ['/api/strategies/', '/api/strategies/signals/', '/api/strategies/performance/'],
     backtesting: ['/api/backtests/', '/api/statistics/', '/api/optimization/results/'],
     ai: ['/api/ai/models/', '/api/ai/predictions/', '/api/ai/recommendations/', '/api/ai/training-jobs/'],
@@ -125,7 +125,7 @@
   }
 
   const moduleLinks = {
-    markets: [['/markets/', 'Market workspace'], ['/api/market/symbols/', 'Symbol universe']],
+    markets: [['/markets/', 'Market workspace'], ['/api/market/catalogue/', 'Symbol universe']],
     strategies: [['/strategies/', 'Strategy manager'], ['/api/strategies/', 'Strategy API']],
     backtesting: [['/backtesting/', 'Backtest lab'], ['/api/backtests/', 'Backtest records']],
     ai: [['/predictions/', 'Prediction center'], ['/api/ai/models/', 'Model registry']],
