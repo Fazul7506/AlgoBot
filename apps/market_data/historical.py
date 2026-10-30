@@ -12,6 +12,7 @@ from django.db import transaction
 
 from .constants import TIMEFRAMES
 from .models import Candle, MarketSymbol, Tick
+from .services import MarketDataService
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,10 @@ def normalize_timeframe(timeframe: str) -> str:
 
 
 def _market_symbol(symbol: str) -> MarketSymbol:
-    market_symbol = MarketSymbol.objects.filter(
+    market_symbol = MarketDataService.symbols.catalogue(
+        active=True,
+        tradable=True,
         symbol=str(symbol or "").strip(),
-        is_active=True,
-        is_tradable=True,
     ).first()
     if market_symbol is None:
         raise ValueError(f"Instrument '{symbol}' is not active or tradable in the broker catalogue.")
