@@ -47,8 +47,19 @@
     const m=markets.find(x=>x.symbol===String(symbol?.value||'').toUpperCase());let values=Array.isArray(m?.supported_timeframes)?m.supported_timeframes:catalogTimeframes;values=[...new Set(values.map(String).map(x=>x.trim().toUpperCase()).filter(Boolean))];setOptions(timeframe,values.map(v=>({value:v,label:v})),values.length?'Select broker-supported timeframe…':'No broker timeframe data available');const p=String(preferred||'').toUpperCase();if(p&&values.includes(p))timeframe.value=p;else if(values.length&&!timeframe.value)timeframe.value=values[0];renderDetails(selected());
   }
   async function loadStrategies(){const d=await api('/api/strategies/available/');strategies=list(d?.strategies||d);renderStrategies();return true}
-  async function loadBroker(){let d;try{d=await directGet('/api/market/broker-catalogue/',10000)}catch(first){try{d=await directGet('/api/market/catalogue/',10000)}catch(second){if(window.AlgoBotFrontendData?.request)d=await window.AlgoBotFrontendData.request('/api/market/broker-catalogue/',{},8000);else throw first}}
-    catalogTimeframes=list(d?.supported_timeframes).map(String).map(x=>x.toUpperCase());markets=normalise(d);const available=markets.filter(x=>x.is_active!==false&&x.is_tradable!==false);setOptions(symbol,available.map(x=>({value:x.symbol,label:`${x.symbol} — ${x.display_name||x.symbol}`})),'Select broker instrument…');const q=new URLSearchParams(location.search),wanted=(q.get('symbol')||'').toUpperCase();if(wanted&&[...symbol.options].some(o=>o.value===wanted))symbol.value=wanted;refreshTimeframes(q.get('timeframe')||'');return available.length}
+  async function loadBroker(){
+    const transport=window.AlgoBotFrontendData?.request;
+    if(typeof transport!=='function')throw new Error('Authenticated AlgoBot API transport is not ready.');
+    const d=await transport('/api/market/catalogue/',{},7000);
+    catalogTimeframes=list(d?.supported_timeframes).map(String).map(x=>x.toUpperCase());
+    markets=normalise(d);
+    const available=markets.filter(x=>x.is_active!==false&&x.is_tradable!==false);
+    setOptions(symbol,available.map(x=>({value:x.symbol,label:x.symbol+' — '+(x.display_name||x.symbol)})),'Select broker instrument…');
+    const q=new URLSearchParams(location.search),wanted=(q.get('symbol')||'').toUpperCase();
+    if(wanted&&[...symbol.options].some(o=>o.value===wanted))symbol.value=wanted;
+    refreshTimeframes(q.get('timeframe')||'');
+    return available.length;
+  }
   function renderEmpty(title,text){output.dataset.state='';output.innerHTML=`<div class="result-empty"><strong>${esc(title)}</strong><span>${esc(text)}</span></div>`;refreshStep()}
   const params=()=>{const p={};rows?.querySelectorAll('.parameter-row').forEach(r=>{const k=r.querySelector('[data-param-name]')?.value.trim(),v=r.querySelector('[data-param-value]')?.value.trim();if(!k||!v)return;if(/^-?\d+(\.\d+)?$/.test(v))p[k]=Number(v);else if(/^(true|false)$/i.test(v))p[k]=v.toLowerCase()==='true';else p[k]=v});return p};
   const payload=()=>({symbol:String(symbol?.value||'').trim().toUpperCase(),timeframe:String(timeframe?.value||''),parameters:params(),risk_profile:$('[data-risk-profile]')?.value||'balanced',schedule:$('[data-schedule]')?.value||'every_candle'});
