@@ -159,6 +159,11 @@
             window.location.reload();
             return;
           }
+          if (xhr.status === 422 || xhr.status === 503) {
+            if (uploadLabel) uploadLabel.textContent = 'The server rejected the upload. Refreshing to show the saved validation message…';
+            window.location.reload();
+            return;
+          }
           if (submit) submit.disabled = false;
           if (uploadLabel) uploadLabel.textContent = 'The profile picture could not be saved. Please review the form and retry.';
           if (uploadProgress) uploadProgress.hidden = false;
