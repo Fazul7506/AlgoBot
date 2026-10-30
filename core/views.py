@@ -1,6 +1,7 @@
 """Browser-based views for AlgoBot."""
 import json
 import logging
+from zoneinfo import available_timezones
 from urllib.parse import urlparse
 from django.conf import settings
 from django.http import Http404,HttpResponse,JsonResponse
@@ -71,7 +72,10 @@ def billing_success_page(request): return render(request,'core/billing_success.h
 def billing_cancel_page(request): return render(request,'core/billing_cancel.html')
 @login_required
 def settings_page(request):
-    return render(request, 'core/settings.html')
+    # Keep the Preferences selector aligned with the full IANA timezone set
+    # accepted by the authenticated settings API.
+    timezone_choices = ["UTC"] + sorted(available_timezones() - {"UTC"})
+    return render(request, 'core/settings.html', {"timezone_choices": timezone_choices})
 @login_required
 def profile_page(request):
     """Delegate legacy imports to the canonical persistent profile editor."""

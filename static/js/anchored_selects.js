@@ -106,10 +106,10 @@
       item.setAttribute('role', 'option');
       item.dataset.value = option.value;
       item.dataset.index = String(index);
-      item.setAttribute('aria-selected', String(option.value === select.value));
+      item.setAttribute('aria-selected', String(index === select.selectedIndex));
       item.disabled = option.disabled || option.parentElement?.disabled || select.disabled;
       item.innerHTML = iconFor(select, option) + '<span class="ab-select-option-label">' + esc(optionLabel(option)) + '</span>' +
-        (option.value === select.value ? '<span class="material-symbols-rounded ab-select-check" aria-hidden="true">check</span>' : '');
+        (index === select.selectedIndex ? '<span class="material-symbols-rounded ab-select-check" aria-hidden="true">check</span>' : '');
       item.addEventListener('click', () => choose(select, option));
       item.addEventListener('keydown', event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -142,10 +142,14 @@
 
   function choose(select, option) {
     if (!option || option.disabled || select.disabled) return;
-    const previous = select.value;
-    select.value = option.value;
+    const previousIndex = select.selectedIndex;
+    const nextIndex = [...select.options].indexOf(option);
+    if (nextIndex < 0) return;
+    // Select by option identity/index, not value: country calling codes can repeat
+    // (for example +1 for both the US and Canada).
+    select.selectedIndex = nextIndex;
     select.dataset.abInvalid = 'false';
-    if (previous !== select.value) {
+    if (previousIndex !== nextIndex) {
       select.dispatchEvent(new Event('input', {bubbles:true}));
       select.dispatchEvent(new Event('change', {bubbles:true}));
     }

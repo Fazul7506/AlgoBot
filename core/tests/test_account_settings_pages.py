@@ -235,6 +235,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("var(--ds-surface-1", select_css)
         self.assertIn("var(--ds-surface-2", select_css)
 
+    def test_preferences_timezone_selector_contains_the_supported_iana_timezone_dataset(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        for zone in ("UTC", "Africa/Nairobi", "America/Los_Angeles", "Pacific/Apia"):
+            self.assertContains(response, f'<option value="{zone}">{zone}</option>')
+
     def test_global_theme_and_accent_contract_is_loaded_on_every_page(self):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
