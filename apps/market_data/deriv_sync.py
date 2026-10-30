@@ -156,7 +156,7 @@ def sync_active_symbols() -> int:
         raise RuntimeError("Deriv market catalogue refresh is already in progress")
 
     try:
-        response = asyncio.run(_request({"active_symbols": "brief"}))
+        response = asyncio.run(asyncio.wait_for(_request({"active_symbols": "brief"}), timeout=6.0))
         symbols = response.get("active_symbols", [])
         if not isinstance(symbols, list):
             raise RuntimeError("Deriv returned an invalid active_symbols payload")
