@@ -176,19 +176,18 @@
       const{response,text}=result;
       if(response.status===401&&apiAccessToken){
         apiAccessToken=null;
-        try{
-          controller=new AbortController();
-          cleanupExternal=linkExternalAbortSignal(externalSignal,controller);
-          const retryTimer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
-          try {
+        controller=new AbortController();
+        cleanupExternal=linkExternalAbortSignal(externalSignal,controller);
+        const retryTimer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
+        try {
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           retryHeaders.set('Authorization','Bearer '+retryToken);
           const retryResponse=await nativeFetch(resolveUrl(url),{credentials:sessionAccountContext?'include':'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
-          }catch(retryError){if(externalSignal?.aborted)throw retryError;}
-          finally{clearTimeout(retryTimer);cleanupExternal()}
+        }catch(retryError){if(externalSignal?.aborted)throw retryError;}
+        finally{clearTimeout(retryTimer);cleanupExternal()}
       }
       const finalResponse=result.response, finalText=result.text;
       const finalParsed=parsePayload(finalResponse,finalText),finalPayload=finalParsed?.django?finalParsed.payload:finalParsed;
