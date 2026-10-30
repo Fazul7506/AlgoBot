@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -16,6 +17,7 @@ from apps.market_data.models import Candle, MarketSymbol, Tick
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 class BrokerNativeCatalogueFallbackTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
             username="catalogue-fallback-user", password="test-pass"
