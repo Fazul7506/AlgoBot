@@ -119,7 +119,7 @@ def persist_broker_tick_history(symbol: str, items: list[dict]) -> dict:
             if not quote.is_finite() or quote <= 0:
                 raise ValueError("invalid quote")
             rows_by_key[(epoch, quote)] = Tick(
-                symbol=market_symbol, epoch=epoch, quote=quote, volume=Decimal("0"),
+                symbol=market_symbol, epoch=epoch, quote=quote, volume=Decimal("0"), bid_ask_source="unavailable",
             )
         except (KeyError, TypeError, ValueError, ArithmeticError, InvalidOperation):
             rejected += 1
