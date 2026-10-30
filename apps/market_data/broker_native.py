@@ -55,41 +55,11 @@ def _public_deriv(payload):
     return asyncio.run(asyncio.wait_for(_request(payload), timeout=6.0))
 
 
-def _normalise_symbol(item):
-    """Normalise current and legacy Deriv active_symbols payloads consistently."""
-    symbol = str(
-        item.get("underlying_symbol") or item.get("symbol") or item.get("code") or ""
-    ).strip()
-    return {
-        "symbol": symbol,
-        "display_name": str(
-            item.get("underlying_symbol_name")
-            or item.get("display_name")
-            or item.get("name")
-            or symbol
-        ).strip(),
-        "market": str(item.get("market") or item.get("market_name") or "").strip(),
-        "sub_market": str(
-            item.get("submarket") or item.get("sub_market") or item.get("subgroup") or ""
-        ).strip(),
-        "symbol_type": str(
-            item.get("underlying_symbol_type") or item.get("symbol_type") or ""
-        ).strip(),
-        "pip_size": item.get("pip_size"),
-        "is_active": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "exchange_is_open": bool(item.get("exchange_is_open", True)),
-        "is_trading_suspended": bool(item.get("is_trading_suspended", False)),
-        "trade_count": item.get("trade_count"),
-        "supported_timeframes": BACKTEST_TIMEFRAMES,
-    }
-
-
 def _cached_database_catalogue():
     rows = MarketSymbol.objects.filter(
         broker="deriv", is_active=True, is_tradable=True
     ).order_by("market", "symbol")
-    return _with_available_timeframes([
+    return [
         {
             "symbol": row.symbol,
             "display_name": row.display_name,
@@ -104,7 +74,7 @@ def _cached_database_catalogue():
             "supported_timeframes": BACKTEST_TIMEFRAMES,
         }
         for row in rows
-    ])
+    ]
 def _catalogue_response(account, payload, *, stale=False):
     payload = _with_available_timeframes(payload)
     return Response({
