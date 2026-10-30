@@ -7,7 +7,7 @@ const baseURL = (process.env.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.o
 const username = process.env.ALGOBOT_VISUAL_USERNAME || '';
 const password = process.env.ALGOBOT_VISUAL_PASSWORD || '';
 const totpSecret = process.env.ALGOBOT_VISUAL_TOTP_SECRET || '';
-const routes = (process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/')
+const routes = (process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/profile/,/settings/,/account/identity/')
   .split(',').map(value => value.trim()).filter(Boolean);
 const outputDir = process.env.VISUAL_OUTPUT_DIR || 'artifacts/chromium';
 const viewports = [
@@ -103,6 +103,36 @@ try {
           path: path.join(outputDir, `${normalizedRoute.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'page'}-${viewport.name}.png`),
           fullPage: true,
         });
+        if (normalizedRoute === '/settings/') {
+          await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+          const timezone = page.locator('#settings-timezone');
+          if (await timezone.count()) {
+            await timezone.evaluate(element => element.__abSelectRoot?.querySelector('.ab-select-trigger')?.click());
+            const menu = page.locator('.ab-select-menu:not([hidden])').last();
+            await menu.waitFor({ state: 'visible', timeout: 5000 });
+            const bounds = await menu.boundingBox();
+            const size = page.viewportSize();
+            if (!bounds || bounds.x < 0 || bounds.y < 0 || bounds.x + bounds.width > size.width + 1 || bounds.y + bounds.height > size.height + 1) {
+              failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu is clipped or outside the viewport`);
+            }
+            const colors = await menu.evaluate(element => {
+              const style = getComputedStyle(element);
+              return { background: style.backgroundColor, text: style.color };
+            });
+            if (colors.background === colors.text) failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu text is not distinguishable from its background`);
+            const search = menu.locator('.ab-select-search');
+            if (await search.isVisible()) {
+              await search.fill('Africa/Nairobi');
+              const matches = await menu.locator('.ab-select-option:not([hidden])').count();
+              if (matches !== 1) failures.push(`${normalizedRoute} at ${viewport.name}: searchable timezone menu returned ${matches} matches for Africa/Nairobi`);
+            } else {
+              failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu has no accessible search control`);
+            }
+            await page.keyboard.press('Escape');
+          } else {
+            failures.push(`${normalizedRoute} at ${viewport.name}: timezone preference control is missing`);
+          }
+        }
       }
     }
   } else {
