@@ -135,7 +135,7 @@
       const uploadBar = document.querySelector('[data-profile-upload-bar]');
       const uploadLabel = document.querySelector('[data-profile-upload-label]');
       profileForm?.addEventListener('submit', event => {
-        if (!avatarInput.files?.length || typeof XMLHttpRequest !== 'function') return;
+        if (event.defaultPrevented || !avatarInput.files?.length || typeof XMLHttpRequest !== 'function') return;
         event.preventDefault();
         const submit = profileForm.querySelector('button[type="submit"]');
         const xhr = new XMLHttpRequest();
