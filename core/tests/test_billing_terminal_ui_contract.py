@@ -258,6 +258,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         self.assertIn("/api/market/catalogue/", market_watch)
         self.assertIn("/api/market/catalogue/", trade_history)
+        self.assertIn("window.AlgoBotFrontendData?.request", trade_history)
         self.assertIn("/api/market/catalogue/", terminal)
         backtesting = Path("static/js/backtesting_workspace_fix.js").read_text(encoding="utf-8")
         strategy_builder = Path("static/js/strategy_builder.js").read_text(encoding="utf-8")
