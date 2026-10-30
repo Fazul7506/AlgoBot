@@ -55,6 +55,18 @@ jobs:
       - name: Validate frontend structure
         run: python scripts/validate_frontend_structure.py
 
+      - name: Generate tracked-file reference audit
+        run: python scripts/repository_file_audit.py
+
+      - name: Upload tracked-file reference audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-file-reference-audit-${{ github.run_number }}
+          path: audit-output/repository-file-reference-audit.csv
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Compile every Django template
         run: python scripts/validate_templates.py
 

@@ -66,12 +66,10 @@ def main() -> int:
         else:
             module_refs = []
         refs = sorted(set(exact_path_refs + filename_refs + module_refs))
-        if rel == "docs/REPOSITORY_DEAD_CODE_AUDIT.md":
-            decision, risk, reason = "REMOVE_DOCUMENTATION", "low", "Superseded by generated per-file audit output and PR description; user requested removal after audit."
+        if rel.endswith(("/migrations/",)) or "/migrations/" in rel or re.search(r"(^|/)migrations?(_|/|\.)", rel):
+            decision, risk, reason = "RETAIN_MIGRATION_REVIEW", "critical", "Migration history/schema dependencies require database-state and migration-graph validation."
         elif name in HIGH_RISK_NAMES or rel.startswith((".github/", "config/", "core/", "services/", "urls/", "deploy/", "scripts/", "deriv_platform/", "apps/", "tests/")) or "/tests/" in rel or name.startswith("test_"):
             decision, risk, reason = "RETAIN_REVIEW_REFERENCES", "high", "Framework/runtime/deployment entry point; static text references cannot establish reachability."
-        elif rel.endswith(("/migrations/",)) or "/migrations/" in rel or re.search(r"(^|/)migrations?(_|/|\.)", rel):
-            decision, risk, reason = "RETAIN_MIGRATION_REVIEW", "critical", "Migration history/schema dependencies require database-state and migration-graph validation."
         elif refs:
             decision, risk, reason = "RETAIN_REFERENCED", "medium", "Found repository text/module references; inspect reference semantics before any consolidation."
         else:
