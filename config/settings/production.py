@@ -5,7 +5,13 @@ from .utils import env, env_bool, env_list, validate_required_settings
 from corsheaders.defaults import default_headers
 
 DEBUG = False
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
+# Render assigns a distinct *.onrender.com hostname to each service preview.
+# Django's leading-dot syntax safely permits the apex and all subdomains of
+# onrender.com while retaining normal host validation for every other domain.
+ALLOWED_HOSTS = [
+    *env_list("ALLOWED_HOSTS", ["algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"]),
+    ".onrender.com",
+]
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", ["https://algobot.dpdns.org", "https://www.algobot.dpdns.org", "https://api.algobot.dpdns.org"])
 CORS_ALLOW_HEADERS = default_headers
