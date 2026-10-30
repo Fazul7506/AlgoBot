@@ -255,7 +255,9 @@ def fetch_tick(symbol: str) -> dict:
     quote = tick.get("quote")
     if quote is None:
         raise RuntimeError(f"Deriv returned no quote for {symbol}")
-    if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists():
+    if not MarketDataService.symbols.catalogue(
+        broker="deriv", active=True, tradable=None, symbol=symbol
+    ).exists():
         raise RuntimeError(f"Symbol {symbol} is not present in the broker market catalogue")
     return {
         "symbol": symbol,
