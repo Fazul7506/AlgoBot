@@ -50,8 +50,9 @@ def markets(request):
     if not account:
         return Response({"detail": "Connect a broker before loading markets."}, status=status.HTTP_409_CONFLICT)
     values = (
-        MarketSymbol.objects
-        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
+        MarketDataService.symbols.catalogue(
+            broker=account.broker.broker_type, active=True, tradable=True
+        )
         .values_list("market", flat=True)
         .distinct()
         .order_by("market")
@@ -69,10 +70,8 @@ def symbols(request):
     account = _connected_account(request.user, request=request)
     if not account:
         return Response({"detail": "Connect a broker before loading its market universe."}, status=status.HTTP_409_CONFLICT)
-    queryset = (
-        MarketSymbol.objects
-        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
-        .order_by("market", "symbol")
+    queryset = MarketDataService.symbols.catalogue(
+        broker=account.broker.broker_type, active=True, tradable=True
     )
     data = MarketSymbolSerializer(queryset[:_limit(request, default=100, maximum=500)], many=True).data
     return Response({
