@@ -52,7 +52,7 @@ def _account(user, request=None):
 
 
 def _public_deriv(payload):
-    return asyncio.run(_request(payload))
+    return asyncio.run(asyncio.wait_for(_request(payload), timeout=6.0))
 
 
 def _normalise_symbol(item):
