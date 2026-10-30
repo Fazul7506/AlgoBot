@@ -61,8 +61,10 @@ class AuthenticatedStateConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def symbol_exists(self, symbol):
-        from apps.market_data.models import MarketSymbol
-        return MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists()
+        from apps.market_data.services import MarketDataService
+        return MarketDataService.symbols.catalogue(
+            active=True, tradable=None, symbol=symbol
+        ).exists()
 
     @database_sync_to_async
     def live_tick(self, symbol):
