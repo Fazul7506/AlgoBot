@@ -12,7 +12,7 @@
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
   const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
 
-  async function request(path, options={}, timeout=7000) {
+  async function request(path, options={}, timeout=15000) {
     const transport=window.AlgoBotFrontendData?.request;
     if(typeof transport!=="function") throw new Error("Authenticated AlgoBot API transport is not ready.");
     return transport(path, options, timeout);
