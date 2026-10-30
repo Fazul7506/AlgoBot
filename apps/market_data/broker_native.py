@@ -66,12 +66,14 @@ def _cached_database_catalogue():
             "display_name": row.display_name,
             "market": row.market,
             "sub_market": row.sub_market,
-            "symbol_type": "",
+            "symbol_type": None,
             "pip_size": row.pip_size,
             "is_active": row.is_active,
             "is_tradable": row.is_tradable,
-            "exchange_is_open": True,
-            "is_trading_suspended": False,
+            # These live exchange fields are not persisted in MarketSymbol.
+            # Never claim an exchange is open or unsuspended from a stale DB row.
+            "exchange_is_open": None,
+            "is_trading_suspended": None,
             "supported_timeframes": BACKTEST_TIMEFRAMES,
         }
         for row in rows
