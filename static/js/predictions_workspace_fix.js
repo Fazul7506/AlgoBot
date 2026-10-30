@@ -3,7 +3,7 @@
   if (!page) return;
   const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
-  const getJSON = async (url, timeout=25000) => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},timeout); };
+  const getJSON = async (url, timeout=12000) => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},timeout); };
   const marketAssetIcon = (raw, market, displayName) => {
     const assets = window.AlgoBotMarketAssets;
     const resolved = assets?.resolve?.({symbol:raw, market, display_name:displayName});
