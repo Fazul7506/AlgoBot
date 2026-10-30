@@ -1,6 +1,6 @@
 from decimal import Decimal
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Max, Min, Count
+from django.db.models import Avg, Max, Min, Count, Q
 from django.utils import timezone
 from .cache import MarketCacheService
 from .constants import TIMEFRAMES, EVENT_TICK_RECEIVED, EVENT_NEW_CANDLE, EVENT_SUBSCRIPTION_ADDED, EVENT_SUBSCRIPTION_REMOVED
@@ -10,14 +10,56 @@ from .websocket import event_bus
 
 
 class SymbolService:
-    def symbols(self): return MarketSymbol.objects.all()
-    def symbol(self, symbol): return MarketSymbol.objects.get(symbol=symbol)
-    def search(self, q): return MarketSymbol.objects.filter(symbol__icontains=q) | MarketSymbol.objects.filter(display_name__icontains=q)
-    def active(self): return MarketSymbol.objects.filter(is_active=True)
-    def inactive(self): return MarketSymbol.objects.filter(is_active=False)
-    def favorite(self, user=None): return self.active()
-    def market(self, market): return MarketSymbol.objects.filter(market=market)
-    def submarket(self, submarket): return MarketSymbol.objects.filter(sub_market=submarket)
+    """Shared query boundary for the persisted broker instrument catalogue."""
+
+    def catalogue(
+        self, *, broker=None, active=True, tradable=None, market=None,
+        sub_market=None, search=None, symbol=None,
+    ):
+        queryset = MarketSymbol.objects.all()
+        if broker:
+            queryset = queryset.filter(broker__iexact=str(broker).strip())
+        if active is not None:
+            queryset = queryset.filter(is_active=bool(active))
+        if tradable is not None:
+            queryset = queryset.filter(is_tradable=bool(tradable))
+        if market:
+            queryset = queryset.filter(market__iexact=str(market).strip())
+        if sub_market:
+            queryset = queryset.filter(sub_market__iexact=str(sub_market).strip())
+        if symbol:
+            queryset = queryset.filter(symbol__iexact=str(symbol).strip())
+        if search:
+            term = str(search).strip()
+            if term:
+                queryset = queryset.filter(
+                    Q(symbol__icontains=term) | Q(display_name__icontains=term)
+                )
+        return queryset.order_by("market", "symbol")
+
+    def symbols(self):
+        return self.catalogue(active=None, tradable=None)
+
+    def symbol(self, symbol):
+        return self.catalogue(active=None, tradable=None, symbol=symbol).get()
+
+    def search(self, q):
+        return self.catalogue(active=None, tradable=None, search=q)
+
+    def active(self):
+        return self.catalogue(active=True, tradable=None)
+
+    def inactive(self):
+        return self.catalogue(active=False, tradable=None)
+
+    def favorite(self, user=None):
+        return self.active()
+
+    def market(self, market):
+        return self.catalogue(active=None, tradable=None, market=market)
+
+    def submarket(self, submarket):
+        return self.catalogue(active=None, tradable=None, sub_market=submarket)
 
 
 class CandleService:
