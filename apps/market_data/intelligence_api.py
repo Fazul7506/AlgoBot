@@ -9,7 +9,7 @@ from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import MarketSymbol
+from .services import MarketDataService
 from apps.brokers.models import Order, Position
 from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
@@ -57,11 +57,14 @@ def market_intelligence(request):
     symbol_filter = str(request.query_params.get("symbol") or "").strip()
     fresh_only = str(request.query_params.get("fresh_only") or "").lower() in {"1", "true", "yes"}
     now = timezone.now()
-    symbols = MarketSymbol.objects.filter(is_active=True, is_tradable=True).select_related("snapshot")
-    if symbol_filter:
-        symbols = symbols.filter(symbol=symbol_filter)
-    symbol_values = list(symbols.values_list("symbol", flat=True))
     account = get_active_account(request.user, request=request)
+    symbols = MarketDataService.symbols.catalogue(
+        broker=account.broker.broker_type if account else None,
+        active=True,
+        tradable=True,
+        symbol=symbol_filter or None,
+    ).select_related("snapshot")
+    symbol_values = list(symbols.values_list("symbol", flat=True))
     signals = StrategySignal.objects.filter(
         configuration__user=request.user,
         configuration__broker_account=account,
@@ -152,7 +155,9 @@ def signal_lifecycle(request):
     if market:
         # Market classifications come from the canonical active market registry,
         # never from ticker-prefix guesses in the browser.
-        market_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
+        market_symbols = MarketDataService.symbols.catalogue(
+            active=True, tradable=None, market=market
+        ).values_list("symbol", flat=True)
         qs = qs.filter(symbol__in=market_symbols)
     filtered_qs = qs
     category_counts = {
@@ -173,11 +178,15 @@ def signal_lifecycle(request):
 
     asset_qs = (StrategySignal.objects.filter(configuration__user=request.user, configuration__broker_account=account, timestamp__lte=now) if account else StrategySignal.objects.none())
     if market:
-        asset_qs = asset_qs.filter(symbol__in=MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True))
+        asset_qs = asset_qs.filter(symbol__in=market_symbols)
     total = qs.count()
     start = (page - 1) * page_size
     records = list(qs[start:start + page_size])
-    registry_markets = dict(MarketSymbol.objects.filter(symbol__in={row.symbol for row in records}, is_active=True).values_list("symbol", "market"))
+    registry_markets = dict(
+        MarketDataService.symbols.catalogue(
+            active=True, tradable=None
+        ).filter(symbol__in={row.symbol for row in records}).values_list("symbol", "market")
+    )
     data = []
     for signal in records:
         age_seconds = max(0, int((now - signal.timestamp).total_seconds()))
