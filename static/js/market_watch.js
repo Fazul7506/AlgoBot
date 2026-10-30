@@ -272,7 +272,7 @@
     if (!request) throw new Error('AlgoBot market service is not ready.');
     const seq = ++loadSeq;
     const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
-    const data = await request('/api/market/broker-catalogue/', {}, 10000);
+    const data = await request('/api/market/catalogue/', {}, 10000);
     const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
     if (seq !== loadSeq || requestedAccountId !== currentAccountId) return;
     rows = list(data?.symbols).filter(
