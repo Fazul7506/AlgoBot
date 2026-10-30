@@ -78,4 +78,6 @@ class ProductionApiContractTests(SimpleTestCase):
         self.assertIn("const MAX_RECONNECT_DELAY_MS = 30000", source)
         self.assertIn("Math.min(1000 * (2 ** Math.min(reconnectAttempts, 5)), MAX_RECONNECT_DELAY_MS)", source)
         self.assertIn("reconnectAttempts = 0;", source)
-        self.assertIn("closeSocket(); scheduleReconnect(); return;", source)
+        self.assertIn("No broker ticks received within 15 seconds; reconnecting…", source)
+        self.assertIn("closeSocket();", source, "A stale socket must be closed before reconnecting.")
+        self.assertIn("scheduleReconnect();", source, "A stale socket must enter the bounded reconnect path.")
