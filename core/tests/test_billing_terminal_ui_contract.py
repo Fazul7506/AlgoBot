@@ -591,7 +591,9 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         from pathlib import Path
 
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
-        self.assertIn("if(inflight.has(key))return inflight.get(key)", client)
+        self.assertIn("const externalSignal=options.signal,cancellable=Boolean(externalSignal);", client)
+        self.assertIn("if(!cancellable&&inflight.has(key))return inflight.get(key)", client, "Only requests without caller-owned abort signals may share an in-flight promise.")
+        self.assertIn("if(method==='GET'&&!cancellable)inflight.set(key,promise)", client)
         self.assertIn("getCacheTtl(url)", client)
         self.assertIn("market\\/(?:catalogue|broker-catalogue)", client)
 
