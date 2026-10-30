@@ -8,7 +8,7 @@
   const inflight=new Map(),cache=new Map(),GET_CACHE_MS=1200;
   const getCacheTtl=url=>{
     const path=new URL(resolveUrl(url),window.location.origin).pathname;
-    if (/^\/api\/(?:strategies\/available|market\/broker-catalogue|market\/broker-capabilities)\/$/.test(path)) return 15000;
+    if (/^\/api\/(?:strategies\/available|market\/(?:catalogue|broker-catalogue)|market\/broker-capabilities)\/$/.test(path)) return 15000;
     if (/^\/api\/brokers\/accounts\/$/.test(path)) return 2500;
     return GET_CACHE_MS;
   };
