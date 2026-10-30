@@ -1,0 +1,48 @@
+name: Chromium Visual Smoke
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromium-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Capture desktop, tablet, and mobile screenshots
+        env:
+          ALGOBOT_VISUAL_BASE_URL: ${{ secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
+          ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
+          ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
+          ALGOBOT_VISUAL_PATHS: ${{ vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/security/,/analysis/' }}
+        run: node scripts/visual_smoke.mjs
+
+      - name: Upload Chromium screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: algobot-chromium-screenshots-${{ github.run_number }}
+          path: artifacts/chromium/
+          if-no-files-found: warn
+          retention-days: 14
