@@ -1,13 +1,8 @@
 name: Chromium Visual Smoke
 
-# Repository-wide browser smoke coverage:
-# - Every branch push gets a Chromium run against the deployed AlgoBot site.
-# - Every PR targeting main gets a run as well (including draft PR updates).
-# - Manual runs remain available from the Actions tab.
+# Browser smoke coverage runs against the Render Service Preview for each PR.
+# Manual runs remain available from the Actions tab for a configured base URL.
 on:
-  push:
-    branches:
-      - '**'
   pull_request:
     branches: [main]
   workflow_dispatch:
