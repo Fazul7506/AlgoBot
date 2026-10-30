@@ -59,6 +59,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, 'id="profile-edit-form"')
         self.assertContains(response, 'form="profile-edit-form"')
         self.assertContains(response, "data-avatar-editor")
+        html = response.content.decode("utf-8")
+        self.assertEqual(html.count("data-avatar-preview"), 1)
+        self.assertIn("profile-summary-card__avatar", html)
+        self.assertIn("data-profile-upload-progress", html)
+        self.assertNotIn("data-profile-picture-upload", html)
+        self.assertNotIn("profile-picture-upload", html)
 
 
     def test_complete_profile_has_crop_editor_before_image_submission(self):
@@ -128,6 +134,27 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(page_response.status_code, 200)
         html = page_response.content.decode("utf-8")
         self.assertGreaterEqual(html.count(f'src="{reverse("profile_picture")}?v='), 3)
+
+
+    def test_profile_picture_ajax_upload_uses_django_messages_and_progress_response(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
+        upload = SimpleUploadedFile(
+            "avatar.png", buffer.getvalue(), content_type="image/png"
+        )
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+                "timezone": "Africa/Nairobi", "phone": "", "bio": "",
+                "profile_picture": upload,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 204)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
 
     def test_profile_update_rolls_back_identity_if_profile_persistence_fails(self):
         original_first_name = self.user.first_name
@@ -208,7 +235,9 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn('data-chart-panel', analysis_template)
         profile_template = (Path(__file__).resolve().parents[2] / "templates/core/profile.html").read_text()
         self.assertIn('profile-personal-fields', profile_template)
-        self.assertIn('profile-picture-upload', profile_template)
+        self.assertIn('profile-summary-card__avatar', profile_template)
+        self.assertIn('data-profile-upload-progress', profile_template)
+        self.assertNotIn('profile-picture-upload', profile_template)
         self.assertIn('profile-quick-action-list', profile_template)
         self.assertIn('profile-security-banner', profile_template)
         self.assertContains(response, 'name="layout"')
