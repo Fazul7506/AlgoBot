@@ -133,18 +133,10 @@ document.addEventListener('input',function(event){
   const list = panel.querySelector('[data-session-list]');
   const status = panel.querySelector('[data-session-status]');
   const revokeOthers = panel.querySelector('[data-revoke-other-sessions]');
-  const csrf = () => {
-    const field = document.querySelector('input[name="csrfmiddlewaretoken"]');
-    if (field?.value) return field.value;
-    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-  };
   const request = async (url, method = 'GET') => {
-    const token = csrf();
-    const response = await fetch(url, {method, credentials:'same-origin', headers:{Accept:'application/json', ...(method !== 'GET' && token ? {'X-CSRFToken':token} : {})}});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || 'The session request failed. Please retry.');
-    return data;
+    const client = window.AlgoBotFrontendData;
+    if (!client?.request) throw new Error('The shared API client is unavailable. Refresh the page and try again.');
+    return client.request(url, {method, credentials:'include'}, 15000);
   };
   let sessions = [];
   const makeText = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
