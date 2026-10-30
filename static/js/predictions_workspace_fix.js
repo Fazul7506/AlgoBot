@@ -299,6 +299,46 @@
       }
     });
   };
-  const run = async () => { const root=mount(); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} bind(root); };
+  const injectThemeStyle = () => {
+    const id = 'algobot-ai-predictions-theme-contract';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab { color:var(--ds-text)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-hero h1,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card h2,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card h3,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-value,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table td,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row strong,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight { color:var(--ds-text)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-hero p,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-note,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-empty,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-stat-label,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row span,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight>span:first-child,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-label { color:var(--ds-muted)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-model,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-result,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-footer,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-market-option { background:var(--ds-surface-1)!important; border-color:var(--ds-border)!important; color:var(--ds-text)!important; box-shadow:none!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-tile { background:var(--ds-surface-2)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-controls input,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-controls select { background:var(--ds-surface-2)!important; color:var(--ds-text)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table th { background:var(--ds-surface-2)!important; color:var(--ds-muted)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table td,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight { border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-chart { background:#04152b!important; color:#dbeafe!important; }
+      body:has([data-page="core-predictions"]) .ai-lab button:focus-visible,
+      body:has([data-page="core-predictions"]) .ai-lab input:focus-visible,
+      body:has([data-page="core-predictions"]) .ai-lab select:focus-visible { outline:2px solid var(--ds-accent)!important; outline-offset:2px!important; }
+    `;
+    document.head.appendChild(style);
+  };
+  const run = async () => { const root=mount(); injectThemeStyle(); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} bind(root); };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true}); else run();
 })();
