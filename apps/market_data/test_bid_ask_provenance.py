@@ -37,6 +37,11 @@ class BidAskProvenanceTests(SimpleTestCase):
         self.assertEqual(clean["ask"], Decimal("100.1"))
         self.assertEqual(clean["bid_ask_source"], "broker")
 
+    def test_market_cache_namespace_invalidates_legacy_bid_ask_snapshots(self):
+        from apps.market_data.cache import MarketCacheService
+
+        self.assertEqual(MarketCacheService().key("snapshot", "R_100"), "market_data:v2:snapshot:R_100")
+
     def test_legacy_unknown_bid_ask_values_are_not_serialized_as_real_quotes(self):
         tick = SimpleNamespace(
             symbol=SimpleNamespace(symbol="R_100"),
