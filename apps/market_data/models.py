@@ -7,6 +7,14 @@ from django.utils import timezone
 from .constants import SUPPORTED_MARKETS, TIMEFRAMES
 
 
+BID_ASK_SOURCE_CHOICES = [
+    ("unknown", "Unknown legacy provenance"),
+    ("broker", "Broker-provided bid and ask"),
+    ("partial", "Partial broker-provided quote"),
+    ("unavailable", "Not supplied by broker"),
+]
+
+
 class MarketSymbol(models.Model):
     broker = models.CharField(max_length=80, default="deriv")
     symbol = models.CharField(max_length=40, unique=True, db_index=True)
@@ -34,6 +42,7 @@ class Tick(models.Model):
     ask = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     quote = models.DecimalField(max_digits=20, decimal_places=8)
     spread = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    bid_ask_source = models.CharField(max_length=16, choices=BID_ASK_SOURCE_CHOICES, default="unknown", db_index=True)
     epoch = models.BigIntegerField(db_index=True)
     volume = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     received_at = models.DateTimeField(default=timezone.now)
@@ -69,6 +78,7 @@ class MarketSnapshot(models.Model):
     bid = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     ask = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     spread = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    bid_ask_source = models.CharField(max_length=16, choices=BID_ASK_SOURCE_CHOICES, default="unknown", db_index=True)
     high = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     low = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     change = models.DecimalField(max_digits=20, decimal_places=8, default=0)
@@ -92,6 +102,7 @@ class Subscription(models.Model):
 class MarketStatistics(models.Model):
     symbol = models.ForeignKey(MarketSymbol, on_delete=models.CASCADE, related_name="statistics")
     average_spread = models.DecimalField(max_digits=20, decimal_places=8, default=0)
+    spread_sample_count = models.PositiveBigIntegerField(default=0)
     highest_price = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     lowest_price = models.DecimalField(max_digits=20, decimal_places=8, default=0)
     highest_volume = models.DecimalField(max_digits=20, decimal_places=8, default=0)

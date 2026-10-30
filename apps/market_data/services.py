@@ -105,7 +105,7 @@ class TickService:
                 return existing
 
         clean = ValidationService().validate_tick(data)
-        spread = max(Decimal("0"), clean["ask"] - clean["bid"])
+        spread = max(Decimal("0"), clean["ask"] - clean["bid"]) if clean["bid"] is not None and clean["ask"] is not None else Decimal("0")
         try:
             # Use an inner savepoint so a uniqueness race does not poison the
             # request transaction before we read the winning row.
@@ -127,13 +127,27 @@ class TickService:
         return tick
 
     def update_snapshot(self,tick):
-        defaults={"last_price":tick.quote,"bid":tick.bid,"ask":tick.ask,"spread":tick.spread,"timestamp":timezone.now()}
+        defaults={"last_price":tick.quote,"bid":tick.bid,"ask":tick.ask,"spread":tick.spread,"bid_ask_source":tick.bid_ask_source,"timestamp":timezone.now()}
         snap,_=MarketSnapshot.objects.get_or_create(symbol=tick.symbol, defaults={**defaults,"high":tick.quote,"low":tick.quote,"volume":tick.volume})
         if snap.pk:
-            snap.last_price=tick.quote; snap.bid=tick.bid; snap.ask=tick.ask; snap.spread=tick.spread; snap.high=max(snap.high,tick.quote); snap.low=min(snap.low,tick.quote); snap.volume += tick.volume; snap.timestamp=timezone.now(); snap.save()
-        MarketCacheService().set_snapshot(tick.symbol.symbol, {"last_price": str(snap.last_price), "spread": str(snap.spread)})
+            snap.last_price=tick.quote; snap.bid=tick.bid; snap.ask=tick.ask; snap.spread=tick.spread; snap.bid_ask_source=tick.bid_ask_source; snap.high=max(snap.high,tick.quote); snap.low=min(snap.low,tick.quote); snap.volume += tick.volume; snap.timestamp=timezone.now(); snap.save()
+        MarketCacheService().set_snapshot(tick.symbol.symbol, {"last_price": str(snap.last_price), "bid": str(snap.bid) if snap.bid_ask_source in {"broker", "partial"} and snap.bid is not None else None, "ask": str(snap.ask) if snap.bid_ask_source in {"broker", "partial"} and snap.ask is not None else None, "spread": str(snap.spread) if snap.bid_ask_source == "broker" and snap.bid is not None and snap.ask is not None else None, "bid_ask_source": snap.bid_ask_source, "bid_ask_available": snap.bid_ask_source == "broker" and snap.bid is not None and snap.ask is not None})
 
-    def serialize(self,t): return {"symbol":t.symbol.symbol,"bid":str(t.bid),"ask":str(t.ask),"quote":str(t.quote),"spread":str(t.spread),"epoch":t.epoch,"volume":str(t.volume)}
+    def serialize(self,t):
+        source = getattr(t, "bid_ask_source", "unknown")
+        has_bid_ask = source in {"broker", "partial"}
+        complete = source == "broker" and t.bid is not None and t.ask is not None
+        return {
+            "symbol": t.symbol.symbol,
+            "bid": str(t.bid) if has_bid_ask and t.bid is not None else None,
+            "ask": str(t.ask) if has_bid_ask and t.ask is not None else None,
+            "quote": str(t.quote),
+            "spread": str(t.spread) if complete else None,
+            "bid_ask_source": source,
+            "bid_ask_available": complete,
+            "epoch": t.epoch,
+            "volume": str(t.volume),
+        }
 
 
 class HistoricalDataService:
@@ -147,8 +161,19 @@ class HistoricalDataService:
 class MarketStatisticsService:
     def calculate(self, symbol):
         sym = MarketSymbol.objects.get(symbol=symbol) if isinstance(symbol,str) else symbol
-        agg=Tick.objects.filter(symbol=sym).aggregate(avg_spread=Avg("spread"), high=Max("quote"), low=Min("quote"), high_vol=Max("volume"), count=Count("id"), avg_vol=Avg("volume"))
-        return MarketStatistics.objects.create(symbol=sym, average_spread=agg["avg_spread"] or 0, highest_price=agg["high"] or 0, lowest_price=agg["low"] or 0, highest_volume=agg["high_vol"] or 0, tick_count=agg["count"] or 0, average_volume=agg["avg_vol"] or 0)
+        ticks = Tick.objects.filter(symbol=sym)
+        agg = ticks.aggregate(high=Max("quote"), low=Min("quote"), high_vol=Max("volume"), count=Count("id"), avg_vol=Avg("volume"))
+        spread_agg = ticks.filter(bid_ask_source="broker").aggregate(avg_spread=Avg("spread"), sample_count=Count("id"))
+        return MarketStatistics.objects.create(
+            symbol=sym,
+            average_spread=spread_agg["avg_spread"] or 0,
+            spread_sample_count=spread_agg["sample_count"] or 0,
+            highest_price=agg["high"] or 0,
+            lowest_price=agg["low"] or 0,
+            highest_volume=agg["high_vol"] or 0,
+            tick_count=agg["count"] or 0,
+            average_volume=agg["avg_vol"] or 0,
+        )
 
 
 class SubscriptionService:
