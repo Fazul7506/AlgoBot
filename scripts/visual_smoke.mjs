@@ -117,10 +117,22 @@ try {
               failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu is clipped or outside the viewport`);
             }
             const colors = await menu.evaluate(element => {
+              const parse = value => {
+                const parts = value.match(/[\d.]+/g)?.map(Number) || [];
+                return parts.length >= 3 ? parts.slice(0, 3) : [0, 0, 0];
+              };
+              const luminance = value => {
+                const channels = parse(value).map(channel => {
+                  const normalized = channel / 255;
+                  return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+                });
+                return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+              };
               const style = getComputedStyle(element);
-              return { background: style.backgroundColor, text: style.color };
+              const a = luminance(style.backgroundColor), b = luminance(style.color);
+              return { contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
             });
-            if (colors.background === colors.text) failures.push(`${normalizedRoute} at ${viewport.name}: timezone menu text is not distinguishable from its background`);
+            if (colors.contrast < 4.5) failures.push(normalizedRoute + ' at ' + viewport.name + ': timezone menu contrast is below WCAG AA (' + colors.contrast.toFixed(2) + ':1)');
             const search = menu.locator('.ab-select-search');
             if (await search.isVisible()) {
               await search.fill('Africa/Nairobi');
