@@ -57,6 +57,7 @@
     const current = selectedOption(select);
     const label = root.querySelector('.ab-select-value');
     const icon = root.querySelector('.ab-select-current-icon');
+    const menu = menuFor(root);
     if (label) {
       if (select.id === 'phone_country_code' && current) {
         const iso = current.dataset.iso || '';
@@ -69,12 +70,11 @@
     if (icon) icon.innerHTML = select.id === 'phone_country_code' ? '' : iconFor(select, current);
     if (button) {
       button.disabled = select.disabled;
-      button.setAttribute('aria-expanded', String(!root.querySelector('.ab-select-menu').hidden));
+      button.setAttribute('aria-expanded', String(menu ? !menu.hidden : false));
       button.setAttribute('aria-required', String(select.dataset.abRequired === 'true'));
       button.setAttribute('aria-invalid', select.dataset.abInvalid === 'true' ? 'true' : 'false');
       button.title = current ? optionLabel(current) : '';
     }
-    const menu = menuFor(root);
     const search = menu?.querySelector('.ab-select-search');
     const keepSearch = search?.value || '';
     if (!menu) return;
@@ -238,7 +238,7 @@
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'ab-select-search';
-    search.placeholder = instrumentSelect ? 'Search instruments…' : 'Search options…';
+    search.placeholder = isWideCountryMenu(select) ? 'Search countries…' : (instrumentSelect ? 'Search instruments…' : 'Search options…');
     search.setAttribute('aria-label', isWideCountryMenu(select) ? 'Search countries' : search.placeholder);
     search.hidden = true;
     const list = document.createElement('div');
@@ -264,14 +264,14 @@
     button.addEventListener('keydown', event => {
       if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); open(root);
-        const active = root.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') || root.querySelector('.ab-select-option:not(:disabled)');
+        const active = menuFor(root)?.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') || menuFor(root)?.querySelector('.ab-select-option:not(:disabled)');
         active?.focus();
       } else if (event.key === 'Escape') close(root);
     });
     search.addEventListener('input', () => filterOptions(root, search.value));
     search.addEventListener('keydown', event => {
       if (event.key === 'Escape') { event.preventDefault(); close(root, true); }
-      if (event.key === 'ArrowDown') { event.preventDefault(); root.querySelector('.ab-select-option:not(:disabled):not([hidden])')?.focus(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); menuFor(root)?.querySelector('.ab-select-option:not(:disabled):not([hidden])')?.focus(); }
     });
     select.addEventListener('change', () => refresh(select));
     select.addEventListener('input', () => refresh(select));
