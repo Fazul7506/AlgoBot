@@ -107,6 +107,7 @@ try {
           await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
           const timezone = page.locator('#settings-timezone');
           if (await timezone.count()) {
+            await timezone.evaluate(element => element.__abSelectRoot?.querySelector('.ab-select-trigger')?.scrollIntoView({ block: 'center' }));
             await timezone.evaluate(element => element.__abSelectRoot?.querySelector('.ab-select-trigger')?.click());
             const menu = page.locator('.ab-select-menu:not([hidden])').last();
             await menu.waitFor({ state: 'visible', timeout: 5000 });
