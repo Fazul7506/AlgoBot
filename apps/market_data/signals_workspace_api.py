@@ -13,7 +13,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from apps.market_data.models import MarketSymbol
+from apps.market_data.services import MarketDataService
 from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
 
@@ -154,7 +154,7 @@ def signals_workspace_api(request):
     if search:
         base = base.filter(Q(symbol__icontains=search) | Q(strategy__name__icontains=search) | Q(strategy__category__icontains=search) | Q(metadata__display_name__icontains=search))
     if market:
-        matching_symbols = MarketSymbol.objects.filter(is_active=True, market__iexact=market).values_list("symbol", flat=True)
+        matching_symbols = MarketDataService.symbols.catalogue(active=True, tradable=None, market=market).values_list("symbol", flat=True)
         base = base.filter(Q(symbol__in=matching_symbols) | Q(metadata__market_type__iexact=market) | Q(metadata__market__iexact=market))
 
     detail_id = str(request.GET.get("detail_id") or "").strip()
@@ -164,7 +164,7 @@ def signals_workspace_api(request):
         detail_row = base.filter(pk=int(detail_id)).select_related("strategy", "configuration").first()
         if detail_row is None:
             return JsonResponse({"status": "error", "message": "Signal not found for the selected authorized account."}, status=404)
-        detail_market = MarketSymbol.objects.filter(symbol=detail_row.symbol).only("symbol", "display_name", "market").first()
+        detail_market = MarketDataService.symbols.catalogue(active=None, tradable=None, symbol=detail_row.symbol).only("symbol", "display_name", "market").first()
         return JsonResponse({"status": "success", "detail": _serialize(detail_row, {detail_row.symbol: detail_market} if detail_market else {})})
 
     # Keep table rows paginated in SQL and compute counts without materializing the
@@ -190,7 +190,7 @@ def signals_workspace_api(request):
         page = pages
     start = (page - 1) * page_size
     page_rows = list(filtered_qs.select_related("strategy", "configuration").order_by("-timestamp", "-pk")[start:start + page_size])
-    market_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in page_rows]).only("symbol", "display_name", "market")}
+    market_lookup = {m.symbol: m for m in MarketDataService.symbols.catalogue(active=None, tradable=None).filter(symbol__in=[r.symbol for r in page_rows]).only("symbol", "display_name", "market")}
 
     recent_start = now - timedelta(days=7)
     prior_start = now - timedelta(days=14)
@@ -237,13 +237,13 @@ def signals_workspace_api(request):
     }
     performance = outcomes
     try:
-        assets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("symbol", flat=True).distinct().order_by("symbol")[:500])
+        assets = list(MarketDataService.symbols.catalogue(active=True, tradable=True).filter(symbol__in=base.values("symbol")).values_list("symbol", flat=True).distinct().order_by("symbol")[:500])
         markets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("market", flat=True).distinct().order_by("market"))
     except Exception:
         log.exception("Unable to load Signals filter catalog")
         assets, markets = list(base.values_list("symbol", flat=True).distinct()[:500]), []
     recent_rows = list(base.select_related("strategy", "configuration").order_by("-timestamp", "-pk")[:5])
-    recent_lookup = {m.symbol: m for m in MarketSymbol.objects.filter(symbol__in=[r.symbol for r in recent_rows]).only("symbol", "display_name", "market")}
+    recent_lookup = {m.symbol: m for m in MarketDataService.symbols.catalogue(active=None, tradable=None).filter(symbol__in=[r.symbol for r in recent_rows]).only("symbol", "display_name", "market")}
     return JsonResponse({
         "status": "success", "signals": [_serialize(r, market_lookup) for r in page_rows],
         "count": total, "total_unfiltered": category_counts["all"], "page": page, "page_size": page_size, "pages": pages,
