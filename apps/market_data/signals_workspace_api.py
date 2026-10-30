@@ -238,7 +238,9 @@ def signals_workspace_api(request):
     performance = outcomes
     try:
         assets = list(MarketDataService.symbols.catalogue(active=True, tradable=True).filter(symbol__in=base.values("symbol")).values_list("symbol", flat=True).distinct().order_by("symbol")[:500])
-        markets = list(MarketSymbol.objects.filter(is_active=True, is_tradable=True, symbol__in=base.values("symbol")).values_list("market", flat=True).distinct().order_by("market"))
+        markets = list(MarketDataService.symbols.catalogue(
+            active=True, tradable=True
+        ).filter(symbol__in=base.values("symbol")).values_list("market", flat=True).distinct().order_by("market"))
     except Exception:
         log.exception("Unable to load Signals filter catalog")
         assets, markets = list(base.values_list("symbol", flat=True).distinct()[:500]), []
