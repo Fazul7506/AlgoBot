@@ -332,11 +332,7 @@
 .account-page[data-profile-page] .profile-personal-field strong{min-width:0;overflow-wrap:anywhere;font-size:13px;font-weight:600;color:var(--ds-text,var(--account-text,#e8effa))}
 .account-page[data-profile-page] .profile-personal-field .account-state{justify-self:end;font-size:10px}
 .account-page[data-profile-page] .profile-secondary-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch;min-width:0}
-.account-page[data-profile-page] .profile-picture-upload{display:flex;min-height:150px;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:20px 12px;border:1px dashed var(--account-line,#1b5c91);border-radius:10px;background:var(--ds-surface-1,var(--account-panel,#07172c));text-align:center;cursor:pointer;transition:border-color .15s,background-color .15s}
-.account-page[data-profile-page] .profile-picture-upload:hover,.account-page[data-profile-page] .profile-picture-upload:focus-visible,.account-page[data-profile-page] .profile-picture-upload.is-dragging{border-color:var(--accent,#08c7ee);background:var(--ds-surface-2,var(--account-panel2,#0b1b31));outline:2px solid transparent}
-.account-page[data-profile-page] .profile-picture-upload>.material-symbols-rounded{font-size:30px;color:var(--accent,#08c7ee)}
-.account-page[data-profile-page] .profile-picture-upload strong{font-size:12px;font-weight:600;color:var(--ds-text,var(--account-text,#e8effa))}
-.account-page[data-profile-page] .profile-picture-upload small{font-size:11px;color:var(--ds-muted,var(--account-muted,#94a3b8))}
+.account-page[data-profile-page] .profile-secondary-grid--single{grid-template-columns:minmax(0,1fr)}
 .account-page[data-profile-page] .profile-quick-action-list{display:grid;gap:0}
 .account-page[data-profile-page] .profile-quick-action-list>a{display:grid;grid-template-columns:32px minmax(0,1fr) 18px;align-items:center;gap:10px;min-width:0;padding:10px 2px;border-bottom:1px solid var(--account-line,#173b62);color:var(--ds-text,var(--account-text,#e8effa));text-decoration:none}
 .account-page[data-profile-page] .profile-quick-action-list>a:last-child{border-bottom:0}
@@ -354,7 +350,7 @@
 .account-page[data-profile-page] .profile-activity-card{grid-column:1/-1;margin-top:0}
 @media(max-width:1000px){.account-page[data-profile-page] .profile-main-stack{grid-column:1;grid-row:auto}}
 @media(max-width:760px){.account-page[data-profile-page] .profile-secondary-grid{grid-template-columns:minmax(0,1fr)}.account-page[data-profile-page] .profile-security-banner{grid-template-columns:34px minmax(0,1fr)}.account-page[data-profile-page] .profile-security-banner .account-btn{grid-column:1/-1;justify-self:start}}
-@media(max-width:560px){.account-page[data-profile-page] .profile-personal-fields{grid-template-columns:minmax(0,1fr);padding:8px}.account-page[data-profile-page] .profile-personal-field{grid-template-columns:minmax(0,1fr) auto}.account-page[data-profile-page] .profile-picture-upload{min-height:125px}}
+@media(max-width:560px){.account-page[data-profile-page] .profile-personal-fields{grid-template-columns:minmax(0,1fr);padding:8px}.account-page[data-profile-page] .profile-personal-field{grid-template-columns:minmax(0,1fr) auto}}
 
 
 /* Preferences reference layout: appearance/layout, notifications/data, and account shortcuts. */
@@ -448,3 +444,6 @@ html[data-theme="light"] .account-page[data-settings-page]{--palette-cyan:#087e9
   .account-page .account-nav a:nth-child(odd){border-right:1px solid var(--line)}
   .account-page .account-nav a:nth-last-child(-n+2){border-bottom:0}
 }
+.account-page[data-profile-page] .profile-upload-progress{display:grid;gap:7px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--account-line,#173b62);border-radius:9px;background:var(--ds-surface-1,var(--account-panel,#07172c));color:var(--ds-text,var(--account-text,#e8effa));font-size:12px}
+.account-page[data-profile-page] .profile-upload-progress[hidden]{display:none}
+.account-page[data-profile-page] .profile-upload-progress progress{width:100%;height:8px;accent-color:var(--accent,#08c7ee)}
