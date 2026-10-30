@@ -134,7 +134,9 @@
     if (!select) return;
     const previous = select.value;
     try {
-      const payload = await window.AlgoBotAPI.apiClient.get('/api/market/catalogue/');
+      const transport = window.AlgoBotFrontendData?.request;
+      if (typeof transport !== 'function') throw new Error('Authenticated AlgoBot API transport is not ready.');
+      const payload = await transport('/api/market/catalogue/', {}, 7000);
       const items = Array.isArray(payload?.symbols) ? payload.symbols : Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.markets) ? payload.markets : [];
       select.innerHTML = '<option value="">All markets</option>' + items.map(item => {
         const symbol = String(item?.symbol || item?.underlying_symbol || item?.code || '');
