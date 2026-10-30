@@ -117,13 +117,10 @@ class MarketEventConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def symbol_exists(self, symbol):
-        from apps.market_data.models import MarketSymbol
+        from apps.market_data.services import MarketDataService
 
-        return MarketSymbol.objects.filter(
-            broker="deriv",
-            symbol=symbol,
-            is_active=True,
-            is_tradable=True,
+        return MarketDataService.symbols.catalogue(
+            broker="deriv", active=True, tradable=True, symbol=symbol
         ).exists()
 
     async def broker_event(self, event):
