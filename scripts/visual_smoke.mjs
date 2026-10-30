@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHmac } from 'node:crypto';
 
 const baseURL = (process.env.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org').replace(/\/$/, '');
+const expectedCommit = process.env.ALGOBOT_EXPECTED_COMMIT || '';
 const username = process.env.ALGOBOT_VISUAL_USERNAME || '';
 const password = process.env.ALGOBOT_VISUAL_PASSWORD || '';
 const totpSecret = process.env.ALGOBOT_VISUAL_TOTP_SECRET || '';
@@ -45,6 +46,13 @@ const page = await context.newPage();
 const failures = [];
 
 try {
+  if (!expectedCommit) throw new Error('ALGOBOT_EXPECTED_COMMIT is required; refusing to test an unverified deployment.');
+  const healthResponse = await page.request.get(`${baseURL}/health/`, { timeout: 15000 });
+  if (!healthResponse.ok()) throw new Error(`Preview health endpoint returned HTTP ${healthResponse.status()}.`);
+  const healthPayload = await healthResponse.json();
+  if (healthPayload.commit !== expectedCommit) {
+    throw new Error(`Stale preview deployment: expected commit ${expectedCommit}, but /health/ reports ${healthPayload.commit || 'no commit metadata'}. No page screenshots were evaluated.`);
+  }
   const loginResponse = await page.goto(`${baseURL}/login/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!loginResponse || loginResponse.status() >= 400) {
     throw new Error(`Login page returned ${loginResponse?.status() ?? 'no response'}`);
