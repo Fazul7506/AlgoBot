@@ -149,7 +149,9 @@
   }
 
   function discoverSymbol() {
-    return canonicalRequest('/api/market/catalogue/', {}, 7000).then(list).then(rows => {
+    const catalogue = window.AlgoBotServices?.instruments?.list;
+    if (typeof catalogue !== 'function') return Promise.reject(new Error('Shared instrument service is unavailable.'));
+    return catalogue({ timeout: 7000 }).then(list).then(rows => {
       const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
       const s = $('[data-symbol]');
       const requested = new URLSearchParams(window.location.search).get('symbol');

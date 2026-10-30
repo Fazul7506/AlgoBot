@@ -7,7 +7,7 @@ class AIPredictionsUIContractTests(SimpleTestCase):
     def test_predictions_workspace_uses_shared_authenticated_transport(self):
         script = (Path(__file__).resolve().parents[2] / "static/js/predictions_workspace_fix.js").read_text()
         self.assertIn("window.AlgoBotFrontendData?.request", script)
-        self.assertIn("getJSON('/api/market/catalogue/',7000)", script)
+        self.assertIn("window.AlgoBotServices?.instruments?.list", script)
         self.assertIn("No synthetic or placeholder candles have been drawn", script)
 
     def test_predictions_workspace_obeys_global_light_theme_tokens(self):

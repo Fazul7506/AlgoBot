@@ -2,7 +2,14 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-  const json = async (url, opts = {}) => window.AlgoBotFrontendData.request(url, opts, 10000);
+  const json = async (url, opts = {}) => {
+    if (url === '/api/market/catalogue/') {
+      const catalogue = window.AlgoBotServices?.instruments?.list;
+      if (typeof catalogue !== 'function') throw new Error('Shared instrument catalogue is not ready.');
+      return catalogue({ timeout: 10000, notifyOnError: false });
+    }
+    return window.AlgoBotFrontendData.request(url, opts, 10000);
+  };
 
   const csrf = () => {
     const cookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);

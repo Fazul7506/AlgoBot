@@ -149,7 +149,9 @@
         // Match the Terminal's single canonical connected-broker catalogue API.
         // Pass the timeout to the shared transport so the underlying fetch is
         // aborted too; do not race an orphaned request or fall back to a second API.
-        const d=await getJSON('/api/market/catalogue/',7000);
+        const catalogue = window.AlgoBotServices?.instruments?.list;
+        if (typeof catalogue !== 'function') throw new Error('Shared instrument catalogue is not ready.');
+        const d = await catalogue({ timeout: 7000 });
         const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
         if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
         const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)
