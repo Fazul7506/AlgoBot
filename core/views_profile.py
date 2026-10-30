@@ -84,6 +84,8 @@ def profile_page(request):
         if errors:
             for error in errors:
                 messages.error(request, error)
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return HttpResponse(status=422)
         else:
             profile, _ = UserProfile.objects.get_or_create(user=request.user)
             request.user.first_name = first_name
@@ -125,8 +127,12 @@ def profile_page(request):
                     "We couldn't save your profile because of a temporary storage problem. "
                     "Your changes were not applied; please try again.",
                 )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return HttpResponse(status=503)
             else:
                 messages.success(request, "Your profile has been saved.")
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return HttpResponse(status=204)
                 return redirect("profile_page")
 
     # Completion is derived from persisted profile fields, not a hardcoded score.
