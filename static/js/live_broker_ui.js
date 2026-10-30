@@ -149,7 +149,7 @@
   }
 
   function discoverSymbol() {
-    return canonicalRequest('/api/markets/symbols/', {}, 5000).then(list).then(rows => {
+    return canonicalRequest('/api/market/catalogue/', {}, 5000).then(list).then(rows => {
       const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
       const s = $('[data-symbol]');
       const requested = new URLSearchParams(window.location.search).get('symbol');
