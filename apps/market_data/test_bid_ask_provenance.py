@@ -74,3 +74,14 @@ class BidAskProvenanceTests(SimpleTestCase):
         self.assertIsNone(serializer.get_ask(snapshot))
         self.assertIsNone(serializer.get_spread(snapshot))
         self.assertFalse(serializer.get_bid_ask_available(snapshot))
+
+    def test_legacy_average_spread_is_not_exposed_without_verified_samples(self):
+        from apps.market_data.serializers import MarketStatisticsSerializer
+
+        serializer = MarketStatisticsSerializer()
+        self.assertIsNone(serializer.get_average_spread(SimpleNamespace(
+            average_spread=Decimal("0"), spread_sample_count=0
+        )))
+        self.assertEqual(serializer.get_average_spread(SimpleNamespace(
+            average_spread=Decimal("0.2"), spread_sample_count=4
+        )), "0.2")

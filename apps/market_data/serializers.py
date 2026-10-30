@@ -104,4 +104,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
 class MarketStatisticsSerializer(serializers.ModelSerializer):
     symbol = serializers.SlugRelatedField(slug_field='symbol', read_only=True)
-    class Meta: model = MarketStatistics; fields = '__all__'
+    average_spread = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MarketStatistics
+        fields = '__all__'
+
+    def get_average_spread(self, obj):
+        return str(obj.average_spread) if obj.spread_sample_count > 0 else None
