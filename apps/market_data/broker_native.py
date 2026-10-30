@@ -18,7 +18,8 @@ from rest_framework import status
 
 from core.account_context import get_active_account
 from .deriv_sync import _request, sync_active_symbols
-from .models import Candle, MarketSymbol, Tick
+from .models import Candle, Tick
+from .services import MarketDataService
 from .constants import TIMEFRAMES
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
@@ -56,9 +57,9 @@ def _public_deriv(payload):
 
 
 def _cached_database_catalogue():
-    rows = MarketSymbol.objects.filter(
-        broker="deriv", is_active=True, is_tradable=True
-    ).order_by("market", "symbol")
+    rows = MarketDataService.symbols.catalogue(
+        broker="deriv", active=True, tradable=True
+    )
     return [
         {
             "symbol": row.symbol,
