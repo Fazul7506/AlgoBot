@@ -32,6 +32,8 @@ jobs:
 
       - name: Validate official market icon registry contract
         run: node static/js/market_asset_registry.test.js
+      - name: Validate preferences runtime and WCAG theme contracts
+        run: node static/js/core/preferences_runtime.test.js
 
       - name: Validate Django templates
         run: |
