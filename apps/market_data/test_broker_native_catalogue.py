@@ -80,6 +80,42 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         sync_symbols.assert_called_once_with()
         public_request.assert_not_called()
 
+    @patch("apps.market_data.broker_native._public_deriv")
+    @patch("apps.market_data.broker_native.sync_active_symbols", return_value=0)
+    def test_refresh_without_new_symbols_marks_database_catalogue_stale(self, sync_symbols, public_request):
+        response = self.client.get("/api/market/catalogue/?refresh=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["stale"])
+        self.assertEqual(response.json()["source"], "cached_broker_catalogue")
+        sync_symbols.assert_called_once_with()
+        public_request.assert_not_called()
+
+    @patch("apps.market_data.broker_native._public_deriv")
+    @patch("apps.market_data.broker_native.sync_active_symbols")
+    def test_empty_first_run_uses_one_authoritative_sync(self, sync_symbols, public_request):
+        MarketSymbol.objects.all().delete()
+
+        def populate_catalogue():
+            MarketSymbol.objects.create(
+                broker="deriv",
+                symbol="R_100",
+                display_name="Volatility 100 Index",
+                market="Volatility Indices",
+                is_active=True,
+                is_tradable=True,
+            )
+            return 1
+
+        sync_symbols.side_effect = populate_catalogue
+        response = self.client.get("/api/market/catalogue/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["stale"])
+        self.assertEqual(response.json()["symbols"][0]["symbol"], "R_100")
+        sync_symbols.assert_called_once_with()
+        public_request.assert_not_called()
+
     @patch(
         "apps.market_data.broker_native._public_deriv",
         side_effect=RuntimeError("provider unavailable"),
