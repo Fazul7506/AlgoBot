@@ -3,7 +3,7 @@
   if (!page) return;
   const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
-  const getJSON = async url => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},25000); };
+  const getJSON = async (url, timeout=25000) => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},timeout); };
   const marketAssetIcon = (raw, market, displayName) => {
     const assets = window.AlgoBotMarketAssets;
     const resolved = assets?.resolve?.({symbol:raw, market, display_name:displayName});
@@ -145,27 +145,11 @@
         select.addEventListener('change',()=>{const selected=select.selectedOptions?.[0];const symbol=selected?.value||'';const label=selected?.textContent||symbol;icon.innerHTML=symbol?marketAssetIcon(symbol, label, label):'';});
       }
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
-      const boundedJSON = async path => {
-        let timer;
-        try {
-          return await Promise.race([
-            getJSON(path),
-            new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Instrument catalogue request timed out')), 12000); })
-          ]);
-        } finally {
-          if (timer) clearTimeout(timer);
-        }
-      };
       try {
-        let d;
-        try {
-          d=await boundedJSON('/api/market/broker-catalogue/?limit=500');
-        } catch (primaryError) {
-          // Each endpoint is invoked inside its own bounded request so a timed-out
-          // primary request cannot consume the fallback endpoint's recovery window.
-          d=await boundedJSON('/api/market/symbols/?limit=500');
-          if (!d || (!Array.isArray(d.symbols) && !Array.isArray(d.results) && !Array.isArray(d.data))) throw primaryError;
-        }
+        // Match the Terminal's single canonical connected-broker catalogue API.
+        // Pass the timeout to the shared transport so the underlying fetch is
+        // aborted too; do not race an orphaned request or fall back to a second API.
+        const d=await getJSON('/api/market/catalogue/',7000);
         const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
         if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
         const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)
