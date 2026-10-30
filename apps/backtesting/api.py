@@ -12,7 +12,8 @@ from rest_framework.exceptions import ValidationError
 from .models import Backtest, BacktestClusterJob, BacktestStatistics
 from .serializers import BacktestSerializer, BacktestStatisticsSerializer, BacktestTradeSerializer, canonical_timeframe
 from apps.strategies.models import Strategy as StrategyModel
-from apps.market_data.models import MarketSymbol, Tick
+from apps.market_data.models import Tick
+from apps.market_data.services import MarketDataService
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.broker_native import BACKTEST_TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
@@ -112,7 +113,9 @@ class BacktestViewSet(viewsets.ModelViewSet):
         strategy_ref = str(data.get('strategy') or data.get('strategy_slug') or '').strip()
         if not symbol or not timeframe or not (strategy_id or strategy_ref):
             raise ValidationError({'detail': 'strategy, symbol, timeframe, start_date and end_date are required.'})
-        market = MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).first()
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).first()
         if not market:
             raise ValidationError({'symbol': 'The selected instrument is not in the active broker market catalogue.'})
         supported_timeframes = BACKTEST_TIMEFRAMES if str(market.broker or "").strip().lower() == "deriv" else tuple(TIMEFRAMES.keys())
