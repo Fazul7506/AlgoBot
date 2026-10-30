@@ -62,23 +62,24 @@ try {
     await page.locator('#identifier').fill(username);
     await page.locator('#password').fill(password);
     await page.locator('form button[type="submit"], form button').first().click();
-    await page.waitForURL(url => !url.pathname.endsWith('/login/'), { timeout: 15000 }).catch(() => null);
+    const otp = page.locator('input[autocomplete="one-time-code"]:visible, input[name="two_factor_code"]:visible, input[name="otp"]:visible, input[name="totp"]:visible, input[id*="otp"]:visible, input[id*="totp"]:visible').first();
+    await Promise.race([
+      page.waitForURL(url => !url.pathname.endsWith('/login/'), { timeout: 15000 }).catch(() => null),
+      otp.waitFor({ state: 'visible', timeout: 15000 }).catch(() => null),
+    ]);
 
-    if (new URL(page.url()).pathname.endsWith('/login/')) {
-      const otp = page.locator('input[autocomplete="one-time-code"], input[name="two_factor_code"], input[name="otp"], input[name="totp"], input[id*="otp"], input[id*="totp"]').first();
-      if (await otp.count()) {
-        if (!totpSecret) {
-          await page.screenshot({ path: path.join(outputDir, 'login-mfa-required.png'), fullPage: true });
-          throw new Error('The visual test account requires MFA. Add the ALGOBOT_VISUAL_TOTP_SECRET GitHub Actions secret to enable authenticated screenshots.');
-        }
-        await otp.fill(generateTotp(totpSecret));
-        await page.locator('form button[type="submit"], form button').first().click();
-        await page.waitForURL(url => !url.pathname.endsWith('/login/'), { timeout: 30000 });
-      } else {
-        const messages = await page.locator('[role="alert"], .alert-danger, .errorlist, .login-error').allTextContents().catch(() => []);
-        await page.screenshot({ path: path.join(outputDir, 'login-auth-failed.png'), fullPage: true });
-        throw new Error('Visual test sign-in did not complete. Check ALGOBOT_VISUAL_USERNAME/PASSWORD and account access. ' + messages.join(' ').trim());
+    if (await otp.count()) {
+      if (!totpSecret) {
+        await page.screenshot({ path: path.join(outputDir, 'login-mfa-required.png'), fullPage: true });
+        throw new Error('The visual test account requires MFA. Add the ALGOBOT_VISUAL_TOTP_SECRET GitHub Actions secret to enable authenticated screenshots.');
       }
+      await otp.fill(generateTotp(totpSecret));
+      await page.locator('form button[type="submit"], form button').first().click();
+      await page.waitForURL(url => !url.pathname.endsWith('/login/') && !/mfa|two.factor|verify/i.test(url.pathname), { timeout: 30000 });
+    } else if (new URL(page.url()).pathname.endsWith('/login/') || /mfa|two.factor|verify/i.test(new URL(page.url()).pathname)) {
+      const messages = await page.locator('[role="alert"], .alert-danger, .errorlist, .login-error').allTextContents().catch(() => []);
+      await page.screenshot({ path: path.join(outputDir, 'login-auth-failed.png'), fullPage: true });
+      throw new Error('Visual test sign-in did not complete. Check credentials and MFA configuration. ' + messages.join(' ').trim());
     }
 
     for (const route of routes) {
