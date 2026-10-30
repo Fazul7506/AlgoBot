@@ -215,7 +215,7 @@ const baseTemplate = fs.readFileSync('templates/base.html','utf8');
 assert(baseTemplate.includes('market_picker_enhancement.js'), 'the shared picker enhancement is installed across AlgoBot pages');
 const analysisTemplate = fs.readFileSync('templates/core/analysis.html','utf8');
 const analysisWorkspace = fs.readFileSync('static/js/analysis_workspace.js','utf8');
-assert(analysisTemplate.includes('analysisMarketIcon') && analysisTemplate.includes('analysis-shared-catalogue2'), 'Analysis loads the updated market picker and shared catalogue assets');
+assert(analysisTemplate.includes('analysisMarketIcon') && analysisTemplate.includes('analysis-shared-catalogue3'), 'Analysis loads the updated market picker and shared catalogue assets');
 assert(analysisWorkspace.includes("/api/market/catalogue/") && !analysisWorkspace.includes("/analysis/markets/"), 'Analysis uses the same canonical instrument API as Terminal rather than a duplicate catalogue');
 
 const anchoredSelects = fs.readFileSync('static/js/anchored_selects.js','utf8');
