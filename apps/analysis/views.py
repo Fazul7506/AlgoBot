@@ -329,7 +329,7 @@ def analysis_data(request):
                     last = broker_data["items"][-1]
                     live_tick = {"quote": last.get("close"), "epoch": last.get("epoch"), "symbol": market.symbol}
             try:
-                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=5.0))
+                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=1.5))
                 if latest and latest.get("price") is not None and latest.get("epoch") is not None:
                     live_tick = {
                         "symbol": market.symbol,
