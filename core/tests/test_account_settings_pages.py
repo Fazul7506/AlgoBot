@@ -215,6 +215,13 @@ class AccountSettingsPagesTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
 
+    def test_preferences_page_uses_the_shared_session_bound_api_client(self):
+        settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
+        api_contract = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "frontend_data_contract.js").read_text()
+        self.assertIn("window.AlgoBotFrontendData", settings_template)
+        self.assertNotIn("fetch('/api/settings/'", settings_template)
+        self.assertIn("path==='/api/settings/'", api_contract)
+
     def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
         settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
         profile_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "profile.html").read_text()
