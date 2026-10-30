@@ -118,7 +118,7 @@
     profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
     const avatarInput = document.querySelector('#profile-picture');
-    const avatar = document.querySelector('[data-avatar-preview]');
+    const avatar = document.querySelector('.profile-summary-card__avatar');
     if (avatarInput && avatar) {
       const editor = document.querySelector('[data-avatar-editor]');
       const stage = document.querySelector('[data-avatar-stage]');
