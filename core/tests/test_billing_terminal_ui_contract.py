@@ -173,7 +173,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureApiAccessToken", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261027-canonical-transport1", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261030-canonical-catalogue-cache2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
@@ -358,7 +358,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261009-accountstate2", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261030-shared-catalogue2", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
@@ -576,7 +576,7 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("if(inflight.has(key))return inflight.get(key)", client)
         self.assertIn("getCacheTtl(url)", client)
-        self.assertIn("market\\/broker-catalogue", client)
+        self.assertIn("market\\/(?:catalogue|broker-catalogue)", client)
 
     def test_service_runtime_uses_canonical_bearer_authenticated_transport_first(self):
         from pathlib import Path
