@@ -55,6 +55,7 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         )
         Tick.objects.create(symbol=market, quote="2", epoch=1790000060)
         response = self.client.get("/api/market/catalogue/")
+        _request.assert_not_called()
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["stale"])
@@ -66,6 +67,18 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertIn("1h", response.json()["supported_timeframes"])
         self.assertNotIn("1s", response.json()["supported_timeframes"])
         self.assertNotIn("5s", response.json()["supported_timeframes"])
+
+    @patch("apps.market_data.broker_native._public_deriv")
+    @patch("apps.market_data.broker_native.sync_active_symbols", return_value=1)
+    def test_forced_refresh_uses_single_sync_request_and_database_result(self, sync_symbols, public_request):
+        response = self.client.get("/api/market/catalogue/?refresh=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["stale"])
+        self.assertEqual(response.json()["source"], "connected_broker")
+        self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
+        sync_symbols.assert_called_once_with()
+        public_request.assert_not_called()
 
     @patch(
         "apps.market_data.broker_native._public_deriv",
