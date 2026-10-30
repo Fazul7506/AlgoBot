@@ -105,6 +105,20 @@ def _cached_database_catalogue():
         }
         for row in rows
     ])
+def _catalogue_response(account, payload, *, stale=False):
+    payload = _with_available_timeframes(payload)
+    return Response({
+        "status": "stale" if stale else "ok",
+        "source": "cached_broker_catalogue" if stale else "connected_broker",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "symbols": payload,
+        "count": len(payload),
+        "supported_timeframes": BACKTEST_TIMEFRAMES,
+        "stale": stale,
+    })
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def catalogue(request):
@@ -116,37 +130,44 @@ def catalogue(request):
     try:
         force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
         payload = None if force_refresh else cache.get(CATALOGUE_CACHE)
-        if force_refresh:
-            # Refresh the durable DB catalogue through the same authoritative
-            # Deriv active_symbols parser used by the market-data worker. This
-            # also repairs persisted Boom/Crash/Volatility classifications.
-            sync_active_symbols()
-            payload = None
-        if payload is None:
-            response = _public_deriv({"active_symbols": "brief"})
-            raw = response.get("active_symbols") or []
-            payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
-            payload = [item for item in payload if item["is_active"]]
-            if payload:
-                cache.set(CATALOGUE_CACHE, payload, timeout=30)
         if payload:
-            payload = _with_available_timeframes(payload)
-            if force_refresh:
-                payload = [
-                    {
-                        **item,
-                        "market": row.market,
-                        "sub_market": row.sub_market,
-                    }
-                    for item in payload
-                    for row in MarketSymbol.objects.filter(symbol=item["symbol"]).only("market","sub_market")
-                ] or payload
-            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":False})
-        raise RuntimeError("Deriv returned no active tradable instruments")
+            return _catalogue_response(account, payload)
+
+        # Prefer the durable broker catalogue before making a network request.
+        # This keeps every workspace responsive when the public Deriv socket is
+        # slow or temporarily unavailable; the response is explicitly marked
+        # stale and the user can request a live refresh.
+        if not force_refresh:
+            database_payload = _cached_database_catalogue()
+            if database_payload:
+                cache.set(CATALOGUE_CACHE, database_payload, timeout=30)
+                return _catalogue_response(account, database_payload, stale=True)
+
+        if force_refresh:
+            # sync_active_symbols already performs the authoritative
+            # active_symbols request and persists it. Do not immediately issue
+            # a second identical WebSocket request after syncing.
+            sync_active_symbols()
+            payload = _cached_database_catalogue()
+            if not payload:
+                raise RuntimeError("Deriv returned no active tradable instruments")
+            cache.set(CATALOGUE_CACHE, payload, timeout=30)
+            return _catalogue_response(account, payload)
+
+        # A brand-new database with no synced symbols gets one bounded public
+        # request. Subsequent workspaces share the cache/database result above.
+        response = _public_deriv({"active_symbols": "brief"})
+        raw = response.get("active_symbols") or []
+        payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
+        payload = [item for item in payload if item["is_active"]]
+        if not payload:
+            raise RuntimeError("Deriv returned no active tradable instruments")
+        cache.set(CATALOGUE_CACHE, payload, timeout=30)
+        return _catalogue_response(account, payload)
     except Exception as exc:
         cached = _cached_database_catalogue()
         if cached:
-            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
+            return _catalogue_response(account, cached, stale=True)
         return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
