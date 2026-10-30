@@ -164,6 +164,7 @@
       try{
         try{result=await fetchOnce(url,options,controller)}catch(error){
           firstError=error;
+          if(externalSignal?.aborted)throw error;
           if(!result){
             const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));
             e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';e.status=0;e.retryable=safeMethods.has(method);
