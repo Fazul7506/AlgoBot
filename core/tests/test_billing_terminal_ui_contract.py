@@ -196,7 +196,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         client = Path("static/js/predictions_workspace_fix.js").read_text(encoding="utf-8")
         self.assertIn("window.AlgoBotFrontendData?.request", client)
         self.assertIn("request('/api/ai/predict/'", client)
-        self.assertIn("},25000)", client, "AI workspace GETs must use the shared transport timeout rather than timing out early.")
+        self.assertIn("timeout=12000", client, "AI workspace GETs must have a bounded timeout so the page cannot remain loading indefinitely.")
         self.assertNotIn("/api/ai/training-jobs/", client, "Staff-only AI governance endpoints must not be polled by the user-facing predictions page.")
         self.assertIn("const [models, preds] = await Promise.allSettled([", client)
         self.assertIn("Staff only", client, "The page must not misrepresent staff-only training job data as a user-accessible metric.")
