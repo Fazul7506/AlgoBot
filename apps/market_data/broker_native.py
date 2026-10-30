@@ -143,27 +143,16 @@ def catalogue(request):
                 cache.set(CATALOGUE_CACHE, database_payload, timeout=30)
                 return _catalogue_response(account, database_payload, stale=True)
 
-        if force_refresh:
-            # sync_active_symbols already performs the authoritative
-            # active_symbols request and persists it. Do not immediately issue
-            # a second identical WebSocket request after syncing.
-            sync_active_symbols()
-            payload = _cached_database_catalogue()
-            if not payload:
-                raise RuntimeError("Deriv returned no active tradable instruments")
-            cache.set(CATALOGUE_CACHE, payload, timeout=30)
-            return _catalogue_response(account, payload)
-
-        # A brand-new database with no synced symbols gets one bounded public
-        # request. Subsequent workspaces share the cache/database result above.
-        response = _public_deriv({"active_symbols": "brief"})
-        raw = response.get("active_symbols") or []
-        payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
-        payload = [item for item in payload if item["is_active"]]
+        # The sync service is the single authoritative active_symbols reader
+        # and persists its normalized result. Use it for both explicit refreshes
+        # and a genuinely empty first-run database; never fetch the same feed
+        # again through a second adapter in this request.
+        synced_count = sync_active_symbols()
+        payload = _cached_database_catalogue()
         if not payload:
             raise RuntimeError("Deriv returned no active tradable instruments")
         cache.set(CATALOGUE_CACHE, payload, timeout=30)
-        return _catalogue_response(account, payload)
+        return _catalogue_response(account, payload, stale=not bool(synced_count))
     except Exception as exc:
         cached = _cached_database_catalogue()
         if cached:
