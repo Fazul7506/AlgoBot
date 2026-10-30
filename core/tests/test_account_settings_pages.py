@@ -215,6 +215,19 @@ class AccountSettingsPagesTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
 
+    def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
+        settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
+        profile_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "profile.html").read_text()
+        select_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "anchored_selects.js").read_text()
+        select_css = (Path(__file__).resolve().parents[2] / "static" / "css" / "anchored_selects.css").read_text()
+        self.assertIn('id="settings-timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', settings_template)
+        self.assertIn('data-country-select data-ab-searchable="true"', profile_template)
+        self.assertIn('id="profile-timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', profile_template)
+        self.assertIn("document.body.append(menu)", select_script)
+        self.assertIn("function positionMenu(root)", select_script)
+        self.assertIn("var(--ds-surface-1", select_css)
+        self.assertIn("var(--ds-surface-2", select_css)
+
     def test_global_theme_and_accent_contract_is_loaded_on_every_page(self):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
