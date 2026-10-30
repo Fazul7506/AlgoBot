@@ -784,7 +784,9 @@ def analysis_contracts(request):
     if not symbol:
         return JsonResponse({"status": "error", "code": "SYMBOL_REQUIRED", "message": "A market symbol is required."}, status=400)
     try:
-        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).get()
     except MarketSymbol.DoesNotExist:
         return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
     account = get_active_account(request.user, request=request)
@@ -915,7 +917,9 @@ def broker_proposal(request):
         return JsonResponse({"status": "error", "code": "UNSUPPORTED_PROPOSAL_BASIS", "message": "Risk-capped proposals currently support stake basis only."}, status=422)
 
     try:
-        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).get()
     except MarketSymbol.DoesNotExist:
         return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
 
