@@ -194,11 +194,14 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("get_active_account_for_session", consumer)
         self.assertIn('self.scope.get("session")', consumer)
         self.assertIn("account_event_matches_active_account", consumer)
+        self.assertIn("_broker_connection_accepted = True", consumer)
         self.assertIn("get_active_account_for_session", portfolio)
         self.assertIn('self.scope.get("session")', portfolio)
+        self.assertIn('if not getattr(self, "_broker_connection_accepted", False):', portfolio)
         self.assertIn('path("ws/broker/", BrokerEventConsumer.as_asgi())', routing)
         self.assertIn("function reconnect()", positions)
         self.assertIn("window.AlgoBotBrokerState?.subscribe?.", positions)
+        self.assertIn("state.accountId=accountId();", positions)
         self.assertNotIn("account.switch", positions)
 
     def test_ai_predictions_workspace_uses_authenticated_bearer_transport_for_post(self):
