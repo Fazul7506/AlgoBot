@@ -34,7 +34,7 @@ def _historical_ai_feedback(symbol: str, timeframe: str, before_epoch: int) -> t
     ).filter(Q(correct=True) | Q(correct=False)).order_by("-resolved_at")[:100]
     rows = list(outcomes.values_list("correct", "actual_return"))
     if not rows:
-        return 0.5, 0.0, 0
+        return 0.0, 0.0, 0
     accuracy = sum(bool(correct) for correct, _ in rows) / len(rows)
     mean_return = sum(float(ret or 0.0) for _, ret in rows) / len(rows)
     return float(accuracy), float(mean_return), len(rows)
