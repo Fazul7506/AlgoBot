@@ -218,3 +218,67 @@ def current_external_signal_features(symbol: str, before_epoch: int | None = Non
         "orderbook_spread_bps": spread_bps,
         "orderbook_available": book_available,
     }
+
+
+class ExternalSignalTimeline:
+    """Preload external observations once per training dataset, then do as-of joins."""
+    def __init__(self, symbol: str, first_epoch: int, last_epoch: int):
+        first = datetime.fromtimestamp(int(first_epoch), tz=timezone.utc)
+        last = datetime.fromtimestamp(int(last_epoch), tz=timezone.utc)
+        sentiment_rows = SentimentObservation.objects.filter(
+            symbol=symbol,
+            published_at__gte=first - timedelta(hours=24),
+            published_at__lte=last,
+        ).order_by("published_at").values_list(
+            "compound", "positive", "negative", "published_at"
+        )
+        self.sentiment = list(sentiment_rows)
+        self.sentiment_times = [row[3].timestamp() for row in self.sentiment]
+        book_rows = OrderBookSnapshot.objects.filter(
+            symbol=symbol,
+            observed_at__gte=first - timedelta(minutes=5),
+            observed_at__lte=last,
+        ).order_by("observed_at").values_list(
+            "imbalance", "bid_volume", "ask_volume", "spread_bps", "observed_at"
+        )
+        self.books = list(book_rows)
+        self.book_times = [row[4].timestamp() for row in self.books]
+
+    def features(self, epoch: int) -> dict[str, float]:
+        cutoff = float(epoch)
+        sentiment_end = bisect_right(self.sentiment_times, cutoff)
+        sentiment_start = bisect_right(self.sentiment_times, cutoff - 86400)
+        recent = self.sentiment[max(sentiment_start, sentiment_end - 100):sentiment_end]
+        if recent:
+            count = len(recent)
+            sentiment = sum(float(row[0]) for row in recent) / count
+            positive = sum(float(row[1]) for row in recent) / count
+            negative = sum(float(row[2]) for row in recent) / count
+            age = max(0.0, (cutoff - self.sentiment_times[sentiment_end - 1]) / 60.0)
+            sentiment_available = 1.0
+        else:
+            sentiment = positive = negative = 0.0
+            age = 1440.0
+            sentiment_available = 0.0
+
+        book_end = bisect_right(self.book_times, cutoff)
+        book = self.books[book_end - 1] if book_end else None
+        if book and cutoff - self.book_times[book_end - 1] <= 300:
+            imbalance = float(book[0])
+            depth = float(book[1]) + float(book[2])
+            spread_bps = float(book[3])
+            book_available = 1.0
+        else:
+            imbalance = depth = spread_bps = 0.0
+            book_available = 0.0
+        return {
+            "sentiment_compound": sentiment,
+            "sentiment_positive": positive,
+            "sentiment_negative": negative,
+            "sentiment_age_minutes": age,
+            "sentiment_available": sentiment_available,
+            "orderbook_imbalance": imbalance,
+            "orderbook_total_depth": depth,
+            "orderbook_spread_bps": spread_bps,
+            "orderbook_available": book_available,
+        }
