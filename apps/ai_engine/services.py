@@ -139,7 +139,7 @@ class ExplainabilityService:
 class RecommendationService:
     MIN_CONFIDENCE=65.; MIN_MODELS=1; MIN_CONFLUENCE=.50; MAX_CHOP=.80
     def recommend(self,symbol,prediction,user=None):
-        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); confidence=confidence*100.0 if 0.0 <= confidence <= 1.0 else confidence; models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
         blocked=chop>self.MAX_CHOP or confluence<self.MIN_CONFLUENCE or (alignment==0 and abs(_num(price_action.get('trend_score')))>0.15)
         actionable=decision in {'BUY','SELL'} and confidence>=self.MIN_CONFIDENCE and models>=self.MIN_MODELS and not blocked
         rec=decision if actionable else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'; evidence={**payload,'consensus':{**consensus,'decision':decision,'confidence':confidence,'actionable':actionable},'price_action_gate':{'confluence':confluence,'chop':chop,'mtf_alignment':alignment,'blocked':blocked}}
@@ -148,7 +148,7 @@ class RecommendationService:
 class ConsensusDecisionGate:
     MIN_CONFIDENCE=65.
     def validate(self,prediction,intended_direction=None):
-        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',0) or 0); pa=payload.get('price_action') or {}; confluence=_num(pa.get('confluence_score')); chop=_num(pa.get('chop_score'))
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); confidence=confidence*100.0 if 0.0 <= confidence <= 1.0 else confidence; models=int(consensus.get('models_used',0) or 0); pa=payload.get('price_action') or {}; confluence=_num(pa.get('confluence_score')); chop=_num(pa.get('chop_score'))
         if decision not in {'BUY','SELL'}:return False,'Ensemble consensus is not actionable'
         if confidence<self.MIN_CONFIDENCE:return False,f'Ensemble confidence {confidence:.2f}% below {self.MIN_CONFIDENCE:.2f}% gate'
         if models<1:return False,'No trained ensemble models available'
