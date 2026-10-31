@@ -86,7 +86,10 @@ class AuditMiddleware(MiddlewareMixin):
         """
         path = request.path.lower()
         if (
-            path.startswith(("/notifications/", "/api/notifications/", "/static/", "/media/"))
+            path.startswith((
+                "/notifications/", "/api/notifications/", "/static/", "/media/",
+                "/login/", "/register/", "/logout/", "/auth/", "/api/auth/",
+            ))
             or "webhook" in path
             or path.endswith("/callback/")
         ):
