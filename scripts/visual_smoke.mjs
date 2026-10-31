@@ -4,7 +4,6 @@ import path from 'node:path';
 import { createHmac } from 'node:crypto';
 
 const baseURL = (process.env.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org').replace(/\/$/, '');
-const expectedCommit = process.env.ALGOBOT_EXPECTED_COMMIT || '';
 const username = process.env.ALGOBOT_VISUAL_USERNAME || '';
 const password = process.env.ALGOBOT_VISUAL_PASSWORD || '';
 const totpSecret = process.env.ALGOBOT_VISUAL_TOTP_SECRET || '';
@@ -71,9 +70,9 @@ try {
   if (!loginResponse) {
     throw new Error(`Preview URL ${baseURL} did not serve /login/ successfully within 10 minutes. Last result: ${lastLoginError}.`);
   }
-  const loginResponse = await page.goto(`${baseURL}/login/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  if (!loginResponse || loginResponse.status() >= 400) {
-    throw new Error(`Login page returned ${loginResponse?.status() ?? 'no response'}`);
+  const loginPageResponse = await page.goto(`${baseURL}/login/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  if (!loginPageResponse || loginPageResponse.status() >= 400) {
+    throw new Error(`Login page returned ${loginPageResponse?.status() ?? 'no response'}`);
   }
 
   for (const viewport of viewports) {
