@@ -24,6 +24,10 @@ class Migration(migrations.Migration):
             ],
             options={"ordering": ["-published_at"], "constraints": [models.UniqueConstraint(fields=("symbol", "content_hash"), name="ai_sentiment_symbol_content_uniq")]},
         ),
+        migrations.AddIndex(
+            model_name="sentimentobservation",
+            index=models.Index(fields=["symbol", "-published_at"], name="ai_sentiment_sym_time_idx"),
+        ),
         migrations.CreateModel(
             name="OrderBookSnapshot",
             fields=[
