@@ -100,7 +100,32 @@ class PredictionService:
         feats['strategy_signal_confidence']=signal_confidence
         feats['strategy_signal_count']=float(signal_count)
         FeatureStoreService().store(symbol,timeframe,feats)
-        raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
+        # Training uses a complete 60-candle feature window. Refuse inference
+        # on shorter history rather than padding missing market observations
+        # with zeros and presenting the result as a genuine model prediction.
+        if len(candles) < 60:
+            raw = {
+                'direction': 'AVOID',
+                'probability': 0.0,
+                'expected_return': 0.0,
+                'expected_return_available': False,
+                'expected_return_source': 'not_estimated_by_direction_classifier',
+                'risk_score': 1.0,
+                'models_used': 0,
+                'model_types': [],
+                'source': 'insufficient_market_history',
+                'consensus': {
+                    'decision': 'AVOID',
+                    'probability': 0.0,
+                    'confidence': 0.0,
+                    'models_used': 0,
+                    'reason': 'insufficient_market_history',
+                    'required_candles': 60,
+                    'available_candles': len(candles),
+                },
+            }
+        else:
+            raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
         consensus=raw.get('consensus',{})
         consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
