@@ -78,7 +78,7 @@
         : Array.isArray(payload?.data) ? payload.data
         : Array.isArray(payload?.markets) ? payload.markets
         : Array.isArray(payload) ? payload : [];
-      let url = '/api/market/catalogue/' + (forceRefresh ? '?refresh=1' : '');
+      const url = '/api/market/catalogue/' + (forceRefresh ? '?refresh=1' : '');
       let payload = await get('market-data', url, { notifyOnError }, timeout);
       let rows = rowsFrom(payload);
 
@@ -87,8 +87,8 @@
       // initial 202 response while the broker sync is still running.
       for (let attempt = 0; !rows.length && payload?.refreshing === true && attempt < 4; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
-        url = '/api/market/catalogue/?catalogue_poll=' + (attempt + 1);
-        payload = await get('market-data', url, { notifyOnError }, timeout);
+        const pollUrl = '/api/market/catalogue/?catalogue_poll=' + (attempt + 1);
+        payload = await get('market-data', pollUrl, { notifyOnError }, timeout);
         rows = rowsFrom(payload);
       }
 
