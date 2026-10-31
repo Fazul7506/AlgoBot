@@ -73,13 +73,25 @@
       const forceRefresh = Boolean(options.forceRefresh);
       const timeout = Number.isFinite(Number(options.timeout)) ? Number(options.timeout) : 7000;
       const notifyOnError = options.notifyOnError === true;
-      const url = '/api/market/catalogue/' + (forceRefresh ? '?refresh=1' : '');
-      const payload = await get('market-data', url, { notifyOnError }, timeout);
-      const rows = Array.isArray(payload?.symbols) ? payload.symbols
+      const rowsFrom = payload => Array.isArray(payload?.symbols) ? payload.symbols
         : Array.isArray(payload?.results) ? payload.results
         : Array.isArray(payload?.data) ? payload.data
         : Array.isArray(payload?.markets) ? payload.markets
         : Array.isArray(payload) ? payload : [];
+      let url = '/api/market/catalogue/' + (forceRefresh ? '?refresh=1' : '');
+      let payload = await get('market-data', url, { notifyOnError }, timeout);
+      let rows = rowsFrom(payload);
+
+      // An empty first-run catalogue is refreshed asynchronously by the server.
+      // Poll with unique query keys so the shared GET cache cannot replay the
+      // initial 202 response while the broker sync is still running.
+      for (let attempt = 0; !rows.length && payload?.refreshing === true && attempt < 4; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        url = '/api/market/catalogue/?catalogue_poll=' + (attempt + 1);
+        payload = await get('market-data', url, { notifyOnError }, timeout);
+        rows = rowsFrom(payload);
+      }
+
       return {
         ...(payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}),
         symbols: rows,
