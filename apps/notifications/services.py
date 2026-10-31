@@ -80,9 +80,20 @@ def render_email_html(title: str, message: str, category: str, sender: SenderIde
 def send_transactional_email(*, recipient: str, subject: str, message: str, category: str = "general", metadata=None) -> str:
     sender = sender_for_category(category)
     html_body = render_email_html(subject, message, category, sender, metadata)
+    # Keep transactional calls usable in text-only clients and accessibility
+    # tools. The action URL is a short-lived, user-specific link supplied by
+    # the calling auth flow; HTML-only CTAs are otherwise invisible in plain
+    # text mail clients.
+    text_body = message or ""
+    metadata = metadata or {}
+    action_url = metadata.get("action_url")
+    action_label = metadata.get("action_label", "Open AlgoBot")
+    if isinstance(action_url, str) and action_url.startswith("https://"):
+        text_body = f"{text_body.rstrip()}\\n\\n{action_label}: {action_url}".strip()
+
     email = EmailMultiAlternatives(
         subject=subject,
-        body=message,
+        body=text_body,
         from_email=f"{sender.name} <{sender.email}>",
         to=[recipient],
     )
