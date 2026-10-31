@@ -54,26 +54,39 @@ start_worker
 start_beat
 start_market_stream
 
-# Keep the web process authoritative. Restart a failed background component
-# with bounded backoff; never allow a worker crash to silently disable a
-# scheduled pipeline or the broker market feed.
-while kill -0 "$WEB_PID" 2>/dev/null; do
-  sleep 5
-  if ! kill -0 "$WORKER_PID" 2>/dev/null; then
-    wait "$WORKER_PID" 2>/dev/null || true
-    sleep 5
-    start_worker
+# Reap the exact child that exits. kill -0 alone is insufficient because
+# an exited child can remain a zombie until wait() reaps it.
+while true; do
+  exited_pid=""
+  if wait -n -p exited_pid "$WEB_PID" "$WORKER_PID" "$BEAT_PID" "$STREAM_PID"; then
+    exit_status=0
+  else
+    exit_status=$?
   fi
-  if ! kill -0 "$BEAT_PID" 2>/dev/null; then
-    wait "$BEAT_PID" 2>/dev/null || true
-    sleep 5
-    start_beat
-  fi
-  if ! kill -0 "$STREAM_PID" 2>/dev/null; then
-    wait "$STREAM_PID" 2>/dev/null || true
-    sleep 5
-    start_market_stream
-  fi
-done
 
-wait "$WEB_PID"
+  case "$exited_pid" in
+    "$WEB_PID")
+      echo "AlgoBot web server exited (status=$exit_status)" >&2
+      exit "$exit_status"
+      ;;
+    "$WORKER_PID")
+      echo "Celery worker exited (status=$exit_status); restarting" >&2
+      sleep 5
+      start_worker
+      ;;
+    "$BEAT_PID")
+      echo "Celery Beat exited (status=$exit_status); restarting" >&2
+      sleep 5
+      start_beat
+      ;;
+    "$STREAM_PID")
+      echo "Deriv market stream exited (status=$exit_status); restarting" >&2
+      sleep 5
+      start_market_stream
+      ;;
+    *)
+      echo "Runtime supervisor could not identify an exited child" >&2
+      exit 1
+      ;;
+  esac
+done
