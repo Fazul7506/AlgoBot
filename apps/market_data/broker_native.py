@@ -8,8 +8,11 @@ Actual order execution remains authenticated and broker/risk gated.
 from __future__ import annotations
 
 import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from django.core.cache import cache
+from django.db import close_old_connections
 from rest_framework.decorators import api_view, permission_classes
 from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
@@ -28,6 +31,9 @@ CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
 CAPABILITIES_CACHE_SECONDS = 300
 CAPABILITIES_STALE_SECONDS = 86400
 BACKTEST_TIMEFRAMES = ["tick", "1m", "2m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "8h", "1d"]
+_CATALOGUE_SYNC_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="broker-catalogue-sync")
+_CATALOGUE_SYNC_LOCK = threading.Lock()
+_catalogue_sync_future = None
 
 
 def _with_available_timeframes(items):
@@ -78,10 +84,33 @@ def _cached_database_catalogue():
         }
         for row in rows
     ]
-def _catalogue_response(account, payload, *, stale=False):
+def _run_catalogue_sync():
+    """Refresh the authoritative Deriv catalogue outside the request lifecycle."""
+    close_old_connections()
+    try:
+        return sync_active_symbols()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("broker_catalogue_background_refresh_failed", exc_info=True)
+        return 0
+    finally:
+        close_old_connections()
+
+
+def _schedule_catalogue_sync():
+    """Coalesce refreshes so slow Deriv responses never block catalogue requests."""
+    global _catalogue_sync_future
+    with _CATALOGUE_SYNC_LOCK:
+        if _catalogue_sync_future is not None and not _catalogue_sync_future.done():
+            return False
+        _catalogue_sync_future = _CATALOGUE_SYNC_EXECUTOR.submit(_run_catalogue_sync)
+        return True
+
+
+def _catalogue_response(account, payload, *, stale=False, refreshing=False):
     payload = _with_available_timeframes(payload)
     return Response({
-        "status": "stale" if stale else "ok",
+        "status": "refreshing" if refreshing and not payload else "stale" if stale else "ok",
         "source": "cached_broker_catalogue" if stale else "connected_broker",
         "broker": account.broker.name,
         "account_id": account.account_id,
@@ -89,6 +118,7 @@ def _catalogue_response(account, payload, *, stale=False):
         "count": len(payload),
         "supported_timeframes": BACKTEST_TIMEFRAMES,
         "stale": stale,
+        "refreshing": refreshing,
     })
 
 
@@ -100,37 +130,45 @@ def catalogue(request):
         return Response({"detail": "Connect a broker before loading its market catalogue."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv":
         return Response({"detail": f"Live market catalogue is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
+
+    force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
     try:
-        force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
         payload = None if force_refresh else cache.get(CATALOGUE_CACHE)
-        if payload:
-            return _catalogue_response(account, payload)
+    except Exception:
+        payload = None
 
-        # Prefer the durable broker catalogue before making a network request.
-        # This keeps every workspace responsive when the public Deriv socket is
-        # slow or temporarily unavailable; the response is explicitly marked
-        # stale and the user can request a live refresh.
-        if not force_refresh:
-            database_payload = _cached_database_catalogue()
-            if database_payload:
-                cache.set(CATALOGUE_CACHE, database_payload, timeout=30)
-                return _catalogue_response(account, database_payload, stale=True)
+    if payload:
+        return _catalogue_response(account, payload)
 
-        # The sync service is the single authoritative active_symbols reader
-        # and persists its normalized result. Use it for both explicit refreshes
-        # and a genuinely empty first-run database; never fetch the same feed
-        # again through a second adapter in this request.
-        synced_count = sync_active_symbols()
-        payload = _cached_database_catalogue()
-        if not payload:
-            raise RuntimeError("Deriv returned no active tradable instruments")
-        cache.set(CATALOGUE_CACHE, payload, timeout=30)
-        return _catalogue_response(account, payload, stale=not bool(synced_count))
-    except Exception as exc:
-        cached = _cached_database_catalogue()
-        if cached:
-            return _catalogue_response(account, cached, stale=True)
-        return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    # A persisted broker catalogue is immediately usable. A live refresh is
+    # coalesced in the background when explicitly requested; never make a page
+    # request wait on Deriv's public WebSocket.
+    database_payload = _cached_database_catalogue()
+    if database_payload and not force_refresh:
+        try:
+            cache.set(CATALOGUE_CACHE, database_payload, timeout=30)
+        except Exception:
+            pass
+        return _catalogue_response(account, database_payload, stale=True)
+
+    refreshing = _schedule_catalogue_sync()
+    database_payload = _cached_database_catalogue()
+    if database_payload:
+        return _catalogue_response(account, database_payload, stale=True, refreshing=refreshing)
+
+    return Response({
+        "status": "refreshing",
+        "code": "BROKER_CATALOGUE_REFRESHING",
+        "detail": "The authoritative Deriv market catalogue is refreshing in the background. Retry shortly.",
+        "source": "connected_broker",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "symbols": [],
+        "count": 0,
+        "supported_timeframes": BACKTEST_TIMEFRAMES,
+        "stale": False,
+        "refreshing": True,
+    }, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(["GET"])
