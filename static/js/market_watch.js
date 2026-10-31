@@ -227,12 +227,14 @@
           const symbol = String(tick.symbol || '');
           const price = tick.quote == null || tick.quote === '' ? NaN : Number(tick.quote);
           if (!symbol || !Number.isFinite(price)) return;
-          const bid = tick.bid == null || tick.bid === '' ? price : Number(tick.bid);
-          const ask = tick.ask == null || tick.ask === '' ? price : Number(tick.ask);
+          const bidValue = tick.bid == null || tick.bid === '' ? null : Number(tick.bid);
+          const askValue = tick.ask == null || tick.ask === '' ? null : Number(tick.ask);
+          const bid = Number.isFinite(bidValue) ? bidValue : null;
+          const ask = Number.isFinite(askValue) ? askValue : null;
           quotes.set(symbol, {
             price,
-            bid: Number.isFinite(bid) ? bid : price,
-            ask: Number.isFinite(ask) ? ask : price,
+            bid,
+            ask,
             state: 'live',
             receivedAt: Date.now()
           });
@@ -268,11 +270,11 @@
   };
 
   const loadSymbols = async () => {
-    const request = window.AlgoBotFrontendData?.request;
-    if (!request) throw new Error('AlgoBot market service is not ready.');
+    const catalogue = window.AlgoBotServices?.instruments?.list;
+    if (typeof catalogue !== 'function') throw new Error('AlgoBot shared instrument service is not ready.');
     const seq = ++loadSeq;
     const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
-    const data = await request('/api/market/broker-catalogue/', {}, 10000);
+    const data = await catalogue({ timeout: 7000 });
     const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
     if (seq !== loadSeq || requestedAccountId !== currentAccountId) return;
     rows = list(data?.symbols).filter(

@@ -43,6 +43,7 @@ class ConnectedBrokerHistoryPersistenceTests(TestCase):
         self.assertEqual(result["valid"], 2)
         self.assertEqual(result["rejected"], 1)
         self.assertEqual(Tick.objects.filter(symbol=self.symbol).count(), 2)
+        self.assertEqual(Tick.objects.filter(symbol=self.symbol, bid_ask_source="unavailable").count(), 2)
         self.assertEqual(Candle.objects.filter(symbol=self.symbol, timeframe="tick").count(), 1)
         tick_candle = Candle.objects.get(symbol=self.symbol, timeframe="tick")
         self.assertEqual(tick_candle.source, "connected_broker")

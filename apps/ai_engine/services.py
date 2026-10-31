@@ -29,10 +29,17 @@ class FeatureEngineeringService:
         c=context or {}; md=c.get('market_data',{}); ind=c.get('indicators',{}); sm=c.get('smart_money',{}); risk=c.get('risk',{}); strat=c.get('strategy',{}); o,h,l,cl=map(lambda k:_num(md.get(k)),('open','high','low','close')); volatility=_num(md.get('volatility'),abs(h-l)/(cl or 1)); velocity=_num(md.get('price_velocity'),cl-o)
         features={'open':o,'high':h,'low':l,'close':cl,'spread':_num(md.get('spread')),'volatility':volatility,'price_velocity':velocity,'price_acceleration':_num(md.get('price_acceleration')),'candle_body':abs(cl-o),'candle_range':abs(h-l),'rsi':_num(ind.get('rsi',50)),'macd':_num(ind.get('macd')),'ema':_num(ind.get('ema',cl)),'sma':_num(ind.get('sma',cl)),'atr':_num(ind.get('atr',volatility)),'adx':_num(ind.get('adx')),'bollinger_width':_num(ind.get('bollinger_width')),'supertrend':_num(ind.get('supertrend')),'ichimoku_bias':_num(ind.get('ichimoku_bias')),'bos':int(bool(sm.get('bos'))),'choch':int(bool(sm.get('choch'))),'mss':int(bool(sm.get('mss'))),'order_blocks':_num(sm.get('order_blocks')),'fvg':_num(sm.get('fvg')),'liquidity':_num(sm.get('liquidity')),'premium_discount':_num(sm.get('premium_discount')),'institutional_bias':_num(sm.get('institutional_bias')),'confluence_score':_num(sm.get('confluence_score')),'drawdown':_num(risk.get('drawdown')),'exposure':_num(risk.get('exposure')),'margin':_num(risk.get('margin')),'portfolio_risk':_num(risk.get('portfolio_risk')),'volatility_risk':_num(risk.get('volatility_risk')),'strategy_confidence':_num(strat.get('confidence')),'win_rate':_num(strat.get('win_rate')),'historical_performance':_num(strat.get('historical_performance'))}
         candles=c.get('candles') or md.get('candles')
-        if candles and len(candles)>=25:
-            try: features.update(extract_candlestick_features(candles[-60:]))
-            except Exception as exc: log.warning('Candlestick feature extraction failed',extra={'symbol':symbol,'error':str(exc)})
-        else: features.update({name:0.0 for name in FEATURE_NAMES})
+        features['_candlestick_features_available'] = False
+        if candles and len(candles)>=60:
+            try:
+                features.update(extract_candlestick_features(candles[-60:]))
+                features['_candlestick_features_available'] = True
+            except Exception as exc:
+                log.warning('Candlestick feature extraction failed',extra={'symbol':symbol,'error':str(exc)})
+        else:
+            # Keep the feature contract structurally complete, but mark these
+            # placeholders unavailable; PredictionService must fail closed.
+            features.update({name:0.0 for name in FEATURE_NAMES})
         return features
 
 class FeatureStoreService:
@@ -80,7 +87,7 @@ class InferenceService:
                     return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'invalid_ensemble_output','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'invalid_ensemble_output'}}
                 direction=_decision(result.get('direction'))
                 consensus={'decision':direction,'probability':round(prob,6),'confidence':round(confidence,2),'agreement':round(agreement,6),'disagreement':round(disagreement,6),'models_used':models_used,'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}
-                return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                return {'direction':direction,'probability':prob,'expected_return':0.0,'expected_return_available':False,'expected_return_source':'not_estimated_by_direction_classifier','risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
@@ -100,7 +107,33 @@ class PredictionService:
         feats['strategy_signal_confidence']=signal_confidence
         feats['strategy_signal_count']=float(signal_count)
         FeatureStoreService().store(symbol,timeframe,feats)
-        raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
+        # Training uses a complete 60-candle feature window. Refuse inference
+        # on shorter history rather than padding missing market observations
+        # with zeros and presenting the result as a genuine model prediction.
+        if len(candles) < 60 or not feats.get('_candlestick_features_available', False):
+            raw = {
+                'direction': 'AVOID',
+                'probability': 0.0,
+                'expected_return': 0.0,
+                'expected_return_available': False,
+                'expected_return_source': 'not_estimated_by_direction_classifier',
+                'risk_score': 1.0,
+                'models_used': 0,
+                'model_types': [],
+                'source': 'insufficient_market_history',
+                'consensus': {
+                    'decision': 'AVOID',
+                    'probability': 0.0,
+                    'confidence': 0.0,
+                    'models_used': 0,
+                    'reason': 'insufficient_market_history',
+                    'required_candles': 60,
+                    'available_candles': len(candles),
+                    'feature_extraction_available': bool(feats.get('_candlestick_features_available', False)),
+                },
+            }
+        else:
+            raw=InferenceService().infer(feats,ModelRegistry().champion(),symbol,timeframe)
         consensus=raw.get('consensus',{})
         consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
@@ -112,7 +145,7 @@ class PredictionService:
             payload={
                 'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
-                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
+                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,'expected_return_available':bool(raw.get('expected_return_available',False)),'expected_return_source':raw.get('expected_return_source','not_estimated_by_direction_classifier'),
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
                 'feature_values': feats,
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
@@ -139,7 +172,7 @@ class ExplainabilityService:
 class RecommendationService:
     MIN_CONFIDENCE=65.; MIN_MODELS=1; MIN_CONFLUENCE=.50; MAX_CHOP=.80
     def recommend(self,symbol,prediction,user=None):
-        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; price_action=payload.get('price_action') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); confidence=confidence*100.0 if 0.0 <= confidence <= 1.0 else confidence; models=int(consensus.get('models_used',payload.get('models_used',0)) or 0); confluence=_num(price_action.get('confluence_score')); chop=_num(price_action.get('chop_score')); alignment=_num(price_action.get('mtf_alignment'))
         blocked=chop>self.MAX_CHOP or confluence<self.MIN_CONFLUENCE or (alignment==0 and abs(_num(price_action.get('trend_score')))>0.15)
         actionable=decision in {'BUY','SELL'} and confidence>=self.MIN_CONFIDENCE and models>=self.MIN_MODELS and not blocked
         rec=decision if actionable else 'WAIT'; risk='high' if prediction.risk_score>.6 else 'medium' if prediction.risk_score>.3 else 'low'; evidence={**payload,'consensus':{**consensus,'decision':decision,'confidence':confidence,'actionable':actionable},'price_action_gate':{'confluence':confluence,'chop':chop,'mtf_alignment':alignment,'blocked':blocked}}
@@ -148,7 +181,7 @@ class RecommendationService:
 class ConsensusDecisionGate:
     MIN_CONFIDENCE=65.
     def validate(self,prediction,intended_direction=None):
-        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); models=int(consensus.get('models_used',0) or 0); pa=payload.get('price_action') or {}; confluence=_num(pa.get('confluence_score')); chop=_num(pa.get('chop_score'))
+        payload=prediction.payload or {}; consensus=payload.get('consensus') or {}; decision=_decision(consensus.get('decision',prediction.prediction)); confidence=float(consensus.get('confidence',prediction.confidence) or 0); confidence=confidence*100.0 if 0.0 <= confidence <= 1.0 else confidence; models=int(consensus.get('models_used',0) or 0); pa=payload.get('price_action') or {}; confluence=_num(pa.get('confluence_score')); chop=_num(pa.get('chop_score'))
         if decision not in {'BUY','SELL'}:return False,'Ensemble consensus is not actionable'
         if confidence<self.MIN_CONFIDENCE:return False,f'Ensemble confidence {confidence:.2f}% below {self.MIN_CONFIDENCE:.2f}% gate'
         if models<1:return False,'No trained ensemble models available'

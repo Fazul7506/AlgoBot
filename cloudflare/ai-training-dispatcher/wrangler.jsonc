@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "algobot-ai-training-dispatcher",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "vars": {
+    "ALGOBOT_TRAINING_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/ai-training/"
+  },
+  "queues": {
+    "producers": [
+      { "binding": "AI_TRAINING_QUEUE", "queue": "algobot-ai-training" }
+    ],
+    "consumers": [
+      {
+        "queue": "algobot-ai-training",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "dead_letter_queue": "algobot-ai-training-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["15 */6 * * *", "30 2 * * *"]
+  }
+}

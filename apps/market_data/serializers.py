@@ -47,7 +47,26 @@ class MarketSymbolSerializer(serializers.ModelSerializer):
 
 class TickSerializer(serializers.ModelSerializer):
     symbol = serializers.SlugRelatedField(slug_field='symbol', read_only=True)
-    class Meta: model = Tick; fields = '__all__'
+    bid = serializers.SerializerMethodField()
+    ask = serializers.SerializerMethodField()
+    spread = serializers.SerializerMethodField()
+    bid_ask_available = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tick
+        fields = ['id', 'symbol', 'bid', 'ask', 'quote', 'spread', 'bid_ask_source', 'bid_ask_available', 'epoch', 'volume', 'received_at', 'created_at']
+
+    def get_bid(self, obj):
+        return str(obj.bid) if obj.bid_ask_source in {'broker', 'partial'} and obj.bid is not None else None
+
+    def get_ask(self, obj):
+        return str(obj.ask) if obj.bid_ask_source in {'broker', 'partial'} and obj.ask is not None else None
+
+    def get_spread(self, obj):
+        return str(obj.spread) if obj.bid_ask_source == 'broker' and obj.bid is not None and obj.ask is not None else None
+
+    def get_bid_ask_available(self, obj):
+        return obj.bid_ask_source == 'broker' and obj.bid is not None and obj.ask is not None
 
 
 class CandleSerializer(serializers.ModelSerializer):
@@ -57,7 +76,26 @@ class CandleSerializer(serializers.ModelSerializer):
 
 class MarketSnapshotSerializer(serializers.ModelSerializer):
     symbol = serializers.SlugRelatedField(slug_field='symbol', read_only=True)
-    class Meta: model = MarketSnapshot; fields = '__all__'
+    bid = serializers.SerializerMethodField()
+    ask = serializers.SerializerMethodField()
+    spread = serializers.SerializerMethodField()
+    bid_ask_available = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MarketSnapshot
+        fields = ['id', 'symbol', 'last_price', 'bid', 'ask', 'spread', 'bid_ask_source', 'bid_ask_available', 'high', 'low', 'change', 'change_percent', 'volume', 'timestamp']
+
+    def get_bid(self, obj):
+        return str(obj.bid) if obj.bid_ask_source in {'broker', 'partial'} and obj.bid is not None else None
+
+    def get_ask(self, obj):
+        return str(obj.ask) if obj.bid_ask_source in {'broker', 'partial'} and obj.ask is not None else None
+
+    def get_spread(self, obj):
+        return str(obj.spread) if obj.bid_ask_source == 'broker' and obj.bid is not None and obj.ask is not None else None
+
+    def get_bid_ask_available(self, obj):
+        return obj.bid_ask_source == 'broker' and obj.bid is not None and obj.ask is not None
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -66,4 +104,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
 class MarketStatisticsSerializer(serializers.ModelSerializer):
     symbol = serializers.SlugRelatedField(slug_field='symbol', read_only=True)
-    class Meta: model = MarketStatistics; fields = '__all__'
+    average_spread = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MarketStatistics
+        fields = '__all__'
+
+    def get_average_spread(self, obj):
+        return str(obj.average_spread) if obj.spread_sample_count > 0 else None

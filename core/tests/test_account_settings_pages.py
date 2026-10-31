@@ -59,6 +59,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertContains(response, 'id="profile-edit-form"')
         self.assertContains(response, 'form="profile-edit-form"')
         self.assertContains(response, "data-avatar-editor")
+        html = response.content.decode("utf-8")
+        self.assertEqual(html.count("data-avatar-preview"), 1)
+        self.assertIn("profile-summary-card__avatar", html)
+        self.assertIn("data-profile-upload-progress", html)
+        self.assertNotIn("data-profile-picture-upload", html)
+        self.assertNotIn("profile-picture-upload", html)
 
 
     def test_complete_profile_has_crop_editor_before_image_submission(self):
@@ -129,6 +135,27 @@ class AccountSettingsPagesTests(TestCase):
         html = page_response.content.decode("utf-8")
         self.assertGreaterEqual(html.count(f'src="{reverse("profile_picture")}?v='), 3)
 
+
+    def test_profile_picture_ajax_upload_uses_django_messages_and_progress_response(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2), color=(30, 90, 160)).save(buffer, format="PNG")
+        upload = SimpleUploadedFile(
+            "avatar.png", buffer.getvalue(), content_type="image/png"
+        )
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor", "last_name": "Example", "country": "Kenya",
+                "timezone": "Africa/Nairobi", "phone": "", "bio": "",
+                "profile_picture": upload,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 204)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertTrue(profile.profile_picture_data)
+        self.assertEqual(profile.profile_picture_content_type, "image/webp")
+
     def test_profile_update_rolls_back_identity_if_profile_persistence_fails(self):
         original_first_name = self.user.first_name
         original_last_name = self.user.last_name
@@ -188,6 +215,32 @@ class AccountSettingsPagesTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "")
 
+    def test_preferences_page_uses_the_shared_session_bound_api_client(self):
+        settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
+        api_contract = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "frontend_data_contract.js").read_text()
+        self.assertIn("window.AlgoBotFrontendData", settings_template)
+        self.assertNotIn("fetch('/api/settings/'", settings_template)
+        self.assertIn("path==='/api/settings/'", api_contract)
+
+    def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
+        settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
+        profile_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "profile.html").read_text()
+        select_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "anchored_selects.js").read_text()
+        select_css = (Path(__file__).resolve().parents[2] / "static" / "css" / "anchored_selects.css").read_text()
+        self.assertIn('id="settings-timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', settings_template)
+        self.assertIn('data-country-select data-ab-searchable="true"', profile_template)
+        self.assertIn('id="profile-timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', profile_template)
+        self.assertIn("document.body.append(menu)", select_script)
+        self.assertIn("function positionMenu(root)", select_script)
+        self.assertIn("var(--ds-surface-1", select_css)
+        self.assertIn("var(--ds-surface-2", select_css)
+
+    def test_preferences_timezone_selector_contains_the_supported_iana_timezone_dataset(self):
+        response = self.client.get(reverse("settings_page"))
+        self.assertEqual(response.status_code, 200)
+        for zone in ("UTC", "Africa/Nairobi", "America/Los_Angeles", "Pacific/Apia"):
+            self.assertContains(response, f'<option value="{zone}">{zone}</option>')
+
     def test_global_theme_and_accent_contract_is_loaded_on_every_page(self):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
@@ -208,7 +261,9 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn('data-chart-panel', analysis_template)
         profile_template = (Path(__file__).resolve().parents[2] / "templates/core/profile.html").read_text()
         self.assertIn('profile-personal-fields', profile_template)
-        self.assertIn('profile-picture-upload', profile_template)
+        self.assertIn('profile-summary-card__avatar', profile_template)
+        self.assertIn('data-profile-upload-progress', profile_template)
+        self.assertNotIn('profile-picture-upload', profile_template)
         self.assertIn('profile-quick-action-list', profile_template)
         self.assertIn('profile-security-banner', profile_template)
         self.assertContains(response, 'name="layout"')
@@ -437,3 +492,17 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("Security reference layout: overview and MFA on the left", security_css)
         security_template = (Path(__file__).resolve().parents[2] / "templates/core/security_center.html").read_text()
         self.assertNotIn('account-state account-state--good">Protected</span>', security_template)
+
+    def test_security_dashboard_reflows_by_container_width_and_keeps_light_theme_text_readable(self):
+        response = self.client.get(reverse("security_center"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "20261030-security-consolidated1")
+        security_css = (Path(__file__).resolve().parents[2] / "static/css/security_center.css").read_text()
+        self.assertIn("container-name:security-page", security_css)
+        self.assertIn("@container security-page (max-width: 760px)", security_css)
+        self.assertIn("@container security-page (max-width: 520px)", security_css)
+        self.assertIn("writing-mode:horizontal-tb", security_css)
+        self.assertIn('html[data-theme="light"] [data-security-page] .security-status-banner', security_css)
+        self.assertIn("color:var(--text)", security_css)
+        self.assertIn("color:var(--muted)", security_css)
+

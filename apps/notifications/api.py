@@ -11,11 +11,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user).order_by("-created_at", "-id")
+        return Notification.objects.filter(user=self.request.user, channel="in_app").order_by("-created_at", "-id")
 
     @decorators.action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
-        count = Notification.objects.filter(user=request.user, read_at__isnull=True).count()
+        count = Notification.objects.filter(user=request.user, channel="in_app", read_at__isnull=True).count()
         return response.Response({"unread_count": count})
 
     @decorators.action(detail=True, methods=["post"], url_path="read")
@@ -31,7 +31,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @decorators.action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
         now = timezone.now()
-        updated = Notification.objects.filter(user=request.user, read_at__isnull=True).update(read_at=now, updated_at=now)
+        updated = Notification.objects.filter(user=request.user, channel="in_app", read_at__isnull=True).update(read_at=now, updated_at=now)
         return response.Response({"marked_read": updated, "read_at": now})
 
 

@@ -6,7 +6,7 @@
 <main class="account-page" data-account-settings data-profile-page>
   <header class="account-hero">
     <div class="account-hero__identity">
-      <label class="account-profile-avatar account-profile-avatar--editable" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U.u' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" form="profile-edit-form" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label>
+
       <div><p class="account-kicker">ACCOUNT MANAGEMENT</p><h1>Account Settings</h1><p class="account-subtitle">Manage your account settings, security, and preferences. Keep your account safe and personalized.</p></div>
     </div>
     <span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email verification pending{% endif %}</span>
@@ -17,7 +17,7 @@
     </nav>
     <div class="account-content profile-dashboard-content">
       <aside class="account-card profile-summary-card" aria-label="Profile summary">
-        <div class="profile-summary-card__identity"><div class="account-profile-avatar profile-summary-card__avatar" aria-hidden="true">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U.u' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}</div><div><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p>@{{ request.user.username }}</p></div></div>
+        <div class="profile-summary-card__identity"><label class="account-profile-avatar account-profile-avatar--editable profile-summary-card__avatar" data-avatar-preview for="profile-picture" title="Add or change profile picture" aria-label="Add or change profile picture" role="button" tabindex="0">{% if profile.profile_picture_data or profile.avatar_url %}<img src="{% url 'profile_picture' %}?v={{ profile.updated_at|date:'U.u' }}" alt="">{% else %}<span>{{ profile_initials }}</span>{% endif %}<span class="account-avatar-edit" aria-hidden="true">✎</span><input id="profile-picture" name="profile_picture" form="profile-edit-form" type="file" accept="image/jpeg,image/png,image/webp,image/gif" autocomplete="off" aria-label="Choose profile picture" hidden></label><div><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p>@{{ request.user.username }}</p></div></div>
         <div class="profile-summary-card__status"><span class="account-state {% if profile.email_verified %}account-state--good{% else %}account-state--warn{% endif %}">{% if profile.email_verified %}Email verified{% else %}Email not verified{% endif %}</span><span class="account-state {% if request.user.is_active %}account-state--good{% else %}account-state--bad{% endif %}">{% if request.user.is_active %}Account active{% else %}Account inactive{% endif %}</span></div>
         <div class="profile-completion"><div class="profile-completion__label"><strong>Profile completion</strong><span>{{ profile_completion_percent }}%</span></div><div class="profile-completion__track" role="progressbar" aria-label="Profile completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ profile_completion_percent }}"><span style="width:{{ profile_completion_percent }}%"></span></div><p class="account-help">Calculated from your name, login email, country, time zone, phone and profile picture.</p></div>
         <dl class="profile-summary-card__details"><div><dt>Username</dt><dd>{{ request.user.username }}</dd></div><div><dt>Login email</dt><dd>{{ request.user.email|default:"Not provided" }}</dd></div><div><dt>Country</dt><dd>{{ profile.country|default:"Not provided" }}</dd></div><div><dt>Time zone</dt><dd>{{ profile.timezone|default:"UTC" }}</dd></div></dl>
@@ -35,15 +35,7 @@
           <div class="profile-personal-field"><span>Time Zone</span><strong>{{ profile.timezone|default:"UTC" }}</strong></div>
         </div>
       </section>
-      <div class="profile-secondary-grid">
-        <section class="account-card profile-picture-card" aria-labelledby="profile-picture-title">
-          <div class="account-card__header"><div><h2 id="profile-picture-title">Profile Picture</h2><p class="account-card__hint">Upload a new profile picture.</p></div></div>
-          <label class="profile-picture-upload" data-profile-picture-upload for="profile-picture" tabindex="0">
-            <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
-            <strong>Click to upload or drag and drop</strong>
-            <small>JPEG, PNG, WEBP or GIF (Max 5 MB)</small>
-          </label>
-        </section>
+      <div class="profile-secondary-grid profile-secondary-grid--single">
         <section class="account-card profile-quick-actions-card" aria-labelledby="profile-quick-actions-title">
           <div class="account-card__header"><div><h2 id="profile-quick-actions-title">Quick Actions</h2><p class="account-card__hint">Jump to common account controls.</p></div></div>
           <div class="profile-quick-action-list">
@@ -65,6 +57,10 @@
 </section>
     </div><div class="profile-edit-modal" data-profile-edit-modal hidden role="dialog" aria-modal="true" aria-labelledby="profile-edit-title"><div class="profile-edit-modal__panel"><div class="profile-edit-modal__heading"><div><p class="account-kicker">ACCOUNT PROFILE</p><h2 id="profile-edit-title">Edit profile</h2><p class="account-help">Update your personal information below.</p></div><button type="button" class="account-btn" data-profile-edit-close aria-label="Close profile editor">Close</button></div><form id="profile-edit-form" class="account-content profile-edit-modal__form" method="post" enctype="multipart/form-data" action="{% url 'profile_page' %}">
       {% csrf_token %}
+      <div class="profile-upload-progress" data-profile-upload-progress hidden role="status" aria-live="polite">
+        <progress max="100" value="0" data-profile-upload-bar></progress>
+        <span data-profile-upload-label>Preparing profile picture upload…</span>
+      </div>
       {% for message in messages %}<p class="account-alert {% if message.tags == 'error' %}account-alert--error{% elif message.tags == 'success' %}account-alert--success{% endif %}" role="status">{{ message }}</p>{% endfor %}
       <section class="account-card">
         <div class="account-card__header"><div><h2>Personal information</h2><p class="account-card__hint">These details belong to your AlgoBot profile, not your broker account.</p></div><span class="account-state">Private</span></div>
@@ -74,8 +70,8 @@
           <div class="account-field"><label for="profile-username">Username</label><input id="profile-username" value="{{ request.user.username }}" readonly aria-readonly="true"><span class="account-help">Change username from Login &amp; Identity.</span></div>
           <div class="account-field"><label for="profile-email">Login email</label><input id="profile-email" value="{{ request.user.email }}" readonly aria-readonly="true"><span class="account-help">Email changes require verification.</span></div>
           
-          <div class="account-field"><label for="profile-country">Country</label><select id="profile-country" name="country" autocomplete="country-name" data-country-select data-current-country="{{ country|escape }}" required><option value="">Choose your country</option></select><span class="account-help">Select a country; flags and names are generated from standard region codes.</span></div>
-          <div class="account-field"><label for="profile-timezone">Time zone</label><select id="profile-timezone" name="timezone" autocomplete="off" required>{% for zone in timezone_choices %}<option value="{{ zone }}" {% if timezone_value == zone %}selected{% endif %}>{{ zone }}</option>{% endfor %}</select><span class="account-help">Choose the time zone used for timestamps and scheduling displays.</span></div>
+          <div class="account-field"><label for="profile-country">Country</label><select id="profile-country" name="country" autocomplete="country-name" data-country-select data-ab-searchable="true" data-current-country="{{ country|escape }}" required><option value="">Choose your country</option></select><span class="account-help">Select a country; flags and names are generated from standard region codes.</span></div>
+          <div class="account-field"><label for="profile-timezone">Time zone</label><select id="profile-timezone" name="timezone" autocomplete="off" data-ab-searchable="true" required>{% for zone in timezone_choices %}<option value="{{ zone }}" {% if timezone_value == zone %}selected{% endif %}>{{ zone }}</option>{% endfor %}</select><span class="account-help">Choose the time zone used for timestamps and scheduling displays.</span></div>
           <div class="account-field account-field--full"><label for="profile-phone">Phone (optional)</label><input id="profile-phone" name="phone" type="tel" value="{{ phone }}" maxlength="32" autocomplete="tel" placeholder="+254 7xx xxx xxx" inputmode="tel" aria-describedby="profile-phone-help"><span id="profile-phone-help" class="account-help">Use the international format. The phone number is saved to your AlgoBot profile.</span></div>
           <div class="account-field account-field--full"><label for="profile-bio">About you (optional)</label><textarea id="profile-bio" name="bio" maxlength="5000" rows="4" placeholder="A short introduction (optional)">{{ bio }}</textarea><span class="account-help">Maximum 5,000 characters.</span></div>
         </div>
@@ -122,24 +118,7 @@
     profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
     const avatarInput = document.querySelector('#profile-picture');
-    const pictureUpload = document.querySelector('[data-profile-picture-upload]');
-    if (pictureUpload && avatarInput) {
-      pictureUpload.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); avatarInput.click(); }
-      });
-      pictureUpload.addEventListener('dragover', event => { event.preventDefault(); pictureUpload.classList.add('is-dragging'); });
-      pictureUpload.addEventListener('dragleave', () => pictureUpload.classList.remove('is-dragging'));
-      pictureUpload.addEventListener('drop', event => {
-        event.preventDefault();
-        pictureUpload.classList.remove('is-dragging');
-        const file = event.dataTransfer?.files?.[0];
-        if (!file || typeof DataTransfer !== 'function') return;
-        const transfer = new DataTransfer(); transfer.items.add(file);
-        avatarInput.files = transfer.files;
-        avatarInput.dispatchEvent(new Event('change', {bubbles:true}));
-      });
-    }
-    const avatar = document.querySelector('[data-avatar-preview]');
+    const avatar = document.querySelector('.profile-summary-card__avatar');
     if (avatarInput && avatar) {
       const editor = document.querySelector('[data-avatar-editor]');
       const stage = document.querySelector('[data-avatar-stage]');
@@ -149,6 +128,58 @@
       const save = document.querySelector('[data-avatar-save]');
       const error = document.querySelector('[data-avatar-editor-error]');
       const profileForm = avatarInput.form || document.getElementById('profile-edit-form');
+      avatar.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); avatarInput.click(); }
+      });
+      const uploadProgress = document.querySelector('[data-profile-upload-progress]');
+      const uploadBar = document.querySelector('[data-profile-upload-bar]');
+      const uploadLabel = document.querySelector('[data-profile-upload-label]');
+      profileForm?.addEventListener('submit', event => {
+        if (event.defaultPrevented || !avatarInput.files?.length || typeof XMLHttpRequest !== 'function') return;
+        event.preventDefault();
+        const submit = profileForm.querySelector('button[type="submit"]');
+        const xhr = new XMLHttpRequest();
+        const target = profileForm.action || window.location.href;
+        if (uploadProgress) uploadProgress.hidden = false;
+        if (uploadBar) uploadBar.value = 0;
+        if (uploadLabel) uploadLabel.textContent = 'Uploading profile picture…';
+        if (submit) submit.disabled = true;
+        xhr.open('POST', target, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.upload.addEventListener('progress', progressEvent => {
+          if (!progressEvent.lengthComputable) return;
+          const percent = Math.min(100, Math.round(progressEvent.loaded / progressEvent.total * 100));
+          if (uploadBar) uploadBar.value = percent;
+          if (uploadLabel) uploadLabel.textContent = 'Uploading profile picture… ' + percent + '%';
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 400) {
+            if (uploadBar) uploadBar.value = 100;
+            if (uploadLabel) uploadLabel.textContent = 'Upload complete. Refreshing your profile…';
+            window.location.reload();
+            return;
+          }
+          if (xhr.status === 422 || xhr.status === 503) {
+            if (uploadLabel) uploadLabel.textContent = 'The server rejected the upload. Refreshing to show the saved validation message…';
+            window.location.reload();
+            return;
+          }
+          if (submit) submit.disabled = false;
+          if (uploadLabel) uploadLabel.textContent = 'The profile picture could not be saved. Please review the form and retry.';
+          if (uploadProgress) uploadProgress.hidden = false;
+        });
+        xhr.addEventListener('error', () => {
+          if (submit) submit.disabled = false;
+          if (uploadLabel) uploadLabel.textContent = 'Network error while uploading. Check your connection and retry.';
+          if (uploadProgress) uploadProgress.hidden = false;
+        });
+        xhr.addEventListener('abort', () => {
+          if (submit) submit.disabled = false;
+          if (uploadLabel) uploadLabel.textContent = 'Upload cancelled. You can retry when ready.';
+          if (uploadProgress) uploadProgress.hidden = false;
+        });
+        xhr.send(new FormData(profileForm));
+      });
       let sourceUrl = '', imageWidth = 0, imageHeight = 0, scale = 1, offsetX = 0, offsetY = 0, drag = null;
       const stageSize = () => stage.getBoundingClientRect().width;
       const drawPreview = () => {
@@ -165,7 +196,7 @@
         if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 5*1024*1024) { avatarInput.value=''; error.textContent='Choose a JPEG, PNG, WEBP or GIF image up to 5 MB.'; return; }
         if (sourceUrl) URL.revokeObjectURL(sourceUrl);
         sourceUrl = URL.createObjectURL(file); cropImage.onload = () => { imageWidth=cropImage.naturalWidth; imageHeight=cropImage.naturalHeight; scale=1; zoom.value='1'; editor.hidden=false; const size=stageSize(); const base=Math.max(size/imageWidth,size/imageHeight); offsetX=(size-imageWidth*base)/2; offsetY=(size-imageHeight*base)/2; drawPreview(); save.disabled=false; save.focus(); };
-        cropImage.onerror = () => { error.textContent='This image could not be opened. Choose another photo.'; closeEditor(); };
+        cropImage.onerror = () => { if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl='';cropImage.removeAttribute('src');editor.hidden=false;save.disabled=true;error.textContent='This image could not be opened. Choose another photo.'; };
         cropImage.src=sourceUrl;
       });
       zoom.addEventListener('input', () => { const size=stageSize(), oldBase=Math.max(size/imageWidth,size/imageHeight)*scale, centerX=(size/2-offsetX)/oldBase, centerY=(size/2-offsetY)/oldBase; scale=Number(zoom.value); const newBase=Math.max(size/imageWidth,size/imageHeight)*scale; offsetX=size/2-centerX*newBase; offsetY=size/2-centerY*newBase; drawPreview(); });
@@ -203,8 +234,8 @@
           let preview=avatar.querySelector('img'); if(!preview){preview=document.createElement('img');preview.alt='';const initials=avatar.querySelector(':scope > span:not(.account-avatar-edit)');if(initials)initials.remove();avatar.insertBefore(preview,avatar.querySelector('.account-avatar-edit'));}
           const previewUrl=URL.createObjectURL(blob); const oldUrl=preview.dataset.previewUrl; preview.src=previewUrl;preview.dataset.previewUrl=previewUrl;if(oldUrl)URL.revokeObjectURL(oldUrl);
           editor.hidden=true; if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl='';error.textContent='';
-          // The avatar picker is in the page header while the edit form lives in
-          // a separate modal. Reveal that form before native validation/submission.
+          // The avatar picker sits outside the edit form and is associated with it
+          // through the input's form attribute. Reveal the form before submit.
           const profileModal = document.querySelector('[data-profile-edit-modal]');
           if (profileModal && profileModal.hidden) profileModal.hidden = false;
           if (profileForm) profileForm.requestSubmit();

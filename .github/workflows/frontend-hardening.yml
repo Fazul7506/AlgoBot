@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version-file: ".python-version"
 
       - name: Run frontend hygiene audit
         run: python scripts/frontend_audit.py
@@ -32,6 +32,12 @@ jobs:
 
       - name: Validate official market icon registry contract
         run: node static/js/market_asset_registry.test.js
+      - name: Validate preferences runtime and WCAG theme contracts
+        run: node static/js/core/preferences_runtime.test.js
+      - name: Validate shared market-data stream and bid/ask provenance
+        run: node static/js/core/market_data_provenance.test.js
+      - name: Validate API request cancellation and bounded retries
+        run: node static/js/core/frontend_data_cancellation.test.js
 
       - name: Validate Django templates
         run: |

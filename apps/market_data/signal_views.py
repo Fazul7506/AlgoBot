@@ -17,7 +17,8 @@ from apps.strategies.models import StrategySignal
 from core.account_context import get_active_account
 from core.broker_onboarding import require_broker_onboarding
 
-from .models import MarketSnapshot, MarketSymbol
+from .models import MarketSnapshot
+from .services import MarketDataService
 from .deriv_sync import sync_active_symbols
 
 LIVE_TICK_MAX_AGE_SECONDS = 5
@@ -408,7 +409,9 @@ def _strategy_signals_impl(request):
         limit = min(max(int(request.GET.get("limit", 40)), 1), MAX_SCAN_SYMBOLS)
     except (TypeError, ValueError):
         limit = 40
-    symbols_qs = MarketSymbol.objects.filter(is_active=True, is_tradable=True, broker="deriv").order_by("market", "symbol")
+    symbols_qs = MarketDataService.symbols.catalogue(
+        broker="deriv", active=True, tradable=True
+    )
     if symbol_filter: symbols_qs = symbols_qs.filter(symbol=symbol_filter)
     markets = list(symbols_qs[:limit])
     if not markets:

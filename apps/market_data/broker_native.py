@@ -8,8 +8,11 @@ Actual order execution remains authenticated and broker/risk gated.
 from __future__ import annotations
 
 import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from django.core.cache import cache
+from django.db import close_old_connections
 from rest_framework.decorators import api_view, permission_classes
 from core.permissions import BrokerOnboardingRequired
 from rest_framework.permissions import IsAuthenticated
@@ -18,7 +21,8 @@ from rest_framework import status
 
 from core.account_context import get_active_account
 from .deriv_sync import _request, sync_active_symbols
-from .models import Candle, MarketSymbol, Tick
+from .models import Candle, Tick
+from .services import MarketDataService
 from .constants import TIMEFRAMES
 
 CATALOGUE_CACHE = "algobot:broker:deriv:active-symbols"
@@ -27,6 +31,9 @@ CAPABILITIES_STALE_PREFIX = "algobot:broker:deriv:contracts-for:stale:"
 CAPABILITIES_CACHE_SECONDS = 300
 CAPABILITIES_STALE_SECONDS = 86400
 BACKTEST_TIMEFRAMES = ["tick", "1m", "2m", "3m", "5m", "10m", "15m", "30m", "1h", "2h", "4h", "8h", "1d"]
+_CATALOGUE_SYNC_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="broker-catalogue-sync")
+_CATALOGUE_SYNC_LOCK = threading.Lock()
+_catalogue_sync_future = None
 
 
 def _with_available_timeframes(items):
@@ -52,59 +59,69 @@ def _account(user, request=None):
 
 
 def _public_deriv(payload):
-    return asyncio.run(_request(payload))
-
-
-def _normalise_symbol(item):
-    """Normalise current and legacy Deriv active_symbols payloads consistently."""
-    symbol = str(
-        item.get("underlying_symbol") or item.get("symbol") or item.get("code") or ""
-    ).strip()
-    return {
-        "symbol": symbol,
-        "display_name": str(
-            item.get("underlying_symbol_name")
-            or item.get("display_name")
-            or item.get("name")
-            or symbol
-        ).strip(),
-        "market": str(item.get("market") or item.get("market_name") or "").strip(),
-        "sub_market": str(
-            item.get("submarket") or item.get("sub_market") or item.get("subgroup") or ""
-        ).strip(),
-        "symbol_type": str(
-            item.get("underlying_symbol_type") or item.get("symbol_type") or ""
-        ).strip(),
-        "pip_size": item.get("pip_size"),
-        "is_active": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "is_tradable": bool(item.get("exchange_is_open", True)) and not bool(item.get("is_trading_suspended", False)),
-        "exchange_is_open": bool(item.get("exchange_is_open", True)),
-        "is_trading_suspended": bool(item.get("is_trading_suspended", False)),
-        "trade_count": item.get("trade_count"),
-        "supported_timeframes": BACKTEST_TIMEFRAMES,
-    }
+    return asyncio.run(asyncio.wait_for(_request(payload), timeout=6.0))
 
 
 def _cached_database_catalogue():
-    rows = MarketSymbol.objects.filter(
-        broker="deriv", is_active=True, is_tradable=True
-    ).order_by("market", "symbol")
-    return _with_available_timeframes([
+    rows = MarketDataService.symbols.catalogue(
+        broker="deriv", active=True, tradable=True
+    )
+    return [
         {
             "symbol": row.symbol,
             "display_name": row.display_name,
             "market": row.market,
             "sub_market": row.sub_market,
-            "symbol_type": "",
+            "symbol_type": None,
             "pip_size": row.pip_size,
             "is_active": row.is_active,
             "is_tradable": row.is_tradable,
-            "exchange_is_open": True,
-            "is_trading_suspended": False,
+            # These live exchange fields are not persisted in MarketSymbol.
+            # Never claim an exchange is open or unsuspended from a stale DB row.
+            "exchange_is_open": None,
+            "is_trading_suspended": None,
             "supported_timeframes": BACKTEST_TIMEFRAMES,
         }
         for row in rows
-    ])
+    ]
+def _run_catalogue_sync():
+    """Refresh the authoritative Deriv catalogue outside the request lifecycle."""
+    close_old_connections()
+    try:
+        return sync_active_symbols()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("broker_catalogue_background_refresh_failed", exc_info=True)
+        return 0
+    finally:
+        close_old_connections()
+
+
+def _schedule_catalogue_sync():
+    """Coalesce refreshes so slow Deriv responses never block catalogue requests."""
+    global _catalogue_sync_future
+    with _CATALOGUE_SYNC_LOCK:
+        if _catalogue_sync_future is not None and not _catalogue_sync_future.done():
+            return False
+        _catalogue_sync_future = _CATALOGUE_SYNC_EXECUTOR.submit(_run_catalogue_sync)
+        return True
+
+
+def _catalogue_response(account, payload, *, stale=False, refreshing=False):
+    payload = _with_available_timeframes(payload)
+    return Response({
+        "status": "refreshing" if refreshing and not payload else "stale" if stale else "ok",
+        "source": "cached_broker_catalogue" if stale else "connected_broker",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "symbols": payload,
+        "count": len(payload),
+        "supported_timeframes": BACKTEST_TIMEFRAMES,
+        "stale": stale,
+        "refreshing": refreshing,
+    })
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def catalogue(request):
@@ -113,41 +130,45 @@ def catalogue(request):
         return Response({"detail": "Connect a broker before loading its market catalogue."}, status=status.HTTP_409_CONFLICT)
     if account.broker.broker_type != "deriv":
         return Response({"detail": f"Live market catalogue is not implemented for {account.broker.name} yet."}, status=status.HTTP_409_CONFLICT)
+
+    force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
     try:
-        force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
         payload = None if force_refresh else cache.get(CATALOGUE_CACHE)
-        if force_refresh:
-            # Refresh the durable DB catalogue through the same authoritative
-            # Deriv active_symbols parser used by the market-data worker. This
-            # also repairs persisted Boom/Crash/Volatility classifications.
-            sync_active_symbols()
-            payload = None
-        if payload is None:
-            response = _public_deriv({"active_symbols": "brief"})
-            raw = response.get("active_symbols") or []
-            payload = [_normalise_symbol(item) for item in raw if isinstance(item, dict) and item.get("underlying_symbol")]
-            payload = [item for item in payload if item["is_active"]]
-            if payload:
-                cache.set(CATALOGUE_CACHE, payload, timeout=30)
-        if payload:
-            payload = _with_available_timeframes(payload)
-            if force_refresh:
-                payload = [
-                    {
-                        **item,
-                        "market": row.market,
-                        "sub_market": row.sub_market,
-                    }
-                    for item in payload
-                    for row in MarketSymbol.objects.filter(symbol=item["symbol"]).only("market","sub_market")
-                ] or payload
-            return Response({"status":"ok","source":"connected_broker","broker":account.broker.name,"account_id":account.account_id,"symbols":payload,"count":len(payload),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":False})
-        raise RuntimeError("Deriv returned no active tradable instruments")
-    except Exception as exc:
-        cached = _cached_database_catalogue()
-        if cached:
-            return Response({"status":"stale","source":"cached_broker_catalogue","broker":account.broker.name,"account_id":account.account_id,"symbols":cached,"count":len(cached),"supported_timeframes":BACKTEST_TIMEFRAMES,"stale":True,"detail":"Live broker catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
-        return Response({"status":"error","code":"BROKER_CATALOGUE_UNAVAILABLE","detail":str(exc),"source":"connected_broker"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception:
+        payload = None
+
+    if payload:
+        return _catalogue_response(account, payload)
+
+    # A persisted broker catalogue is immediately usable. A live refresh is
+    # coalesced in the background when explicitly requested; never make a page
+    # request wait on Deriv's public WebSocket.
+    database_payload = _cached_database_catalogue()
+    if database_payload and not force_refresh:
+        try:
+            cache.set(CATALOGUE_CACHE, database_payload, timeout=30)
+        except Exception:
+            pass
+        return _catalogue_response(account, database_payload, stale=True)
+
+    refreshing = _schedule_catalogue_sync()
+    database_payload = _cached_database_catalogue()
+    if database_payload:
+        return _catalogue_response(account, database_payload, stale=True, refreshing=refreshing)
+
+    return Response({
+        "status": "refreshing",
+        "code": "BROKER_CATALOGUE_REFRESHING",
+        "detail": "The authoritative Deriv market catalogue is refreshing in the background. Retry shortly.",
+        "source": "connected_broker",
+        "broker": account.broker.name,
+        "account_id": account.account_id,
+        "symbols": [],
+        "count": 0,
+        "supported_timeframes": BACKTEST_TIMEFRAMES,
+        "stale": False,
+        "refreshing": True,
+    }, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(["GET"])

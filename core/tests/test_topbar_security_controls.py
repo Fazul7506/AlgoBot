@@ -13,6 +13,7 @@ class TopbarSecurityControlsContractTests(TestCase):
         self.assertContains(response, "data-topbar-account-trigger")
         self.assertContains(response, "data-notification-trigger")
         self.assertContains(response, "data-profile-trigger")
+        self.assertContains(response, "20261031-topbar-notification-align1")
 
     def test_authenticated_shell_uses_existing_profile_and_broker_routes(self):
         user = get_user_model().objects.create_user(username="topbar-user", password="password")

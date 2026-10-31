@@ -2,7 +2,8 @@ import json
 from django.core.cache import cache
 
 class MarketCacheService:
-    prefix = "market_data"
+    # Version bump invalidates legacy snapshots that treated last quote as bid/ask.
+    prefix = "market_data:v2"
     def key(self, *parts): return ":".join([self.prefix, *map(str, parts)])
     def set_latest_tick(self, symbol, data): cache.set(self.key("tick", symbol), data, 300)
     def latest_tick(self, symbol): return cache.get(self.key("tick", symbol))

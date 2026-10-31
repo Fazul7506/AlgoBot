@@ -33,11 +33,12 @@
     select.getAttribute('aria-hidden') === 'true' || select.classList.contains('mc-visually-hidden') ||
     (select.dataset.nativeSelect === 'true' && (select.offsetParent === null || getComputedStyle(select).display === 'none'));
   let openRoot = null;
+  const menuFor = root => root?.__abSelectMenu || root?.querySelector('.ab-select-menu') || null;
 
   function close(root, restoreFocus = false) {
     if (!root) return;
     const button = root.querySelector('.ab-select-trigger');
-    const menu = root.querySelector('.ab-select-menu');
+    const menu = menuFor(root);
     if (menu) menu.hidden = true;
     if (button) button.setAttribute('aria-expanded', 'false');
     root.classList.remove('is-open');
@@ -56,6 +57,7 @@
     const current = selectedOption(select);
     const label = root.querySelector('.ab-select-value');
     const icon = root.querySelector('.ab-select-current-icon');
+    const menu = menuFor(root);
     if (label) {
       if (select.id === 'phone_country_code' && current) {
         const iso = current.dataset.iso || '';
@@ -68,25 +70,24 @@
     if (icon) icon.innerHTML = select.id === 'phone_country_code' ? '' : iconFor(select, current);
     if (button) {
       button.disabled = select.disabled;
-      button.setAttribute('aria-expanded', String(!root.querySelector('.ab-select-menu').hidden));
+      button.setAttribute('aria-expanded', String(menu ? !menu.hidden : false));
       button.setAttribute('aria-required', String(select.dataset.abRequired === 'true'));
       button.setAttribute('aria-invalid', select.dataset.abInvalid === 'true' ? 'true' : 'false');
       button.title = current ? optionLabel(current) : '';
     }
-    const menu = root.querySelector('.ab-select-menu');
-    const search = root.querySelector('.ab-select-search');
+    const search = menu?.querySelector('.ab-select-search');
     const keepSearch = search?.value || '';
     if (!menu) return;
     const options = [...select.options];
     // Search is opt-in, not automatically injected into every long dropdown.
     // Keep it for instruments and explicitly searchable country/phone selectors.
-    const hasSearch = !isCountryOrPhoneSelect(select) && (select.dataset.abSearchable === 'true' || isInstrumentSelect(select));
+    const hasSearch = select.dataset.abSearchable === 'true' || isInstrumentSelect(select);
     if (search) {
       search.hidden = !hasSearch;
       if (!hasSearch) search.value = '';
       else search.value = keepSearch;
     }
-    const list = root.querySelector('.ab-select-options');
+    const list = menu.querySelector('.ab-select-options');
     list.innerHTML = '';
     let currentGroup = null;
     options.forEach((option, index) => {
@@ -105,10 +106,10 @@
       item.setAttribute('role', 'option');
       item.dataset.value = option.value;
       item.dataset.index = String(index);
-      item.setAttribute('aria-selected', String(option.value === select.value));
+      item.setAttribute('aria-selected', String(index === select.selectedIndex));
       item.disabled = option.disabled || option.parentElement?.disabled || select.disabled;
       item.innerHTML = iconFor(select, option) + '<span class="ab-select-option-label">' + esc(optionLabel(option)) + '</span>' +
-        (option.value === select.value ? '<span class="material-symbols-rounded ab-select-check" aria-hidden="true">check</span>' : '');
+        (index === select.selectedIndex ? '<span class="material-symbols-rounded ab-select-check" aria-hidden="true">check</span>' : '');
       item.addEventListener('click', () => choose(select, option));
       item.addEventListener('keydown', event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -125,10 +126,10 @@
 
   function filterOptions(root, query) {
     const q = String(query || '').trim().toLocaleLowerCase();
-    root.querySelectorAll('.ab-select-option').forEach(item => {
+    menuFor(root)?.querySelectorAll('.ab-select-option').forEach(item => {
       item.hidden = !!q && !item.textContent.toLocaleLowerCase().includes(q);
     });
-    root.querySelectorAll('.ab-select-group-label').forEach(group => {
+    menuFor(root)?.querySelectorAll('.ab-select-group-label').forEach(group => {
       let next = group.nextElementSibling;
       let any = false;
       while (next && !next.classList.contains('ab-select-group-label')) {
@@ -141,10 +142,14 @@
 
   function choose(select, option) {
     if (!option || option.disabled || select.disabled) return;
-    const previous = select.value;
-    select.value = option.value;
+    const previousIndex = select.selectedIndex;
+    const nextIndex = [...select.options].indexOf(option);
+    if (nextIndex < 0) return;
+    // Select by option identity/index, not value: country calling codes can repeat
+    // (for example +1 for both the US and Canada).
+    select.selectedIndex = nextIndex;
     select.dataset.abInvalid = 'false';
-    if (previous !== select.value) {
+    if (previousIndex !== nextIndex) {
       select.dispatchEvent(new Event('input', {bubbles:true}));
       select.dispatchEvent(new Event('change', {bubbles:true}));
     }
@@ -153,26 +158,47 @@
     select.__abSelectRoot?.querySelector('.ab-select-trigger')?.focus();
   }
 
+  function positionMenu(root) {
+    const menu = menuFor(root);
+    const button = root.querySelector('.ab-select-trigger');
+    if (!menu || !button) return;
+    const rect = button.getBoundingClientRect();
+    const margin = 12;
+    const viewportWidth = window.innerWidth;
+    const wide = root.classList.contains('ab-select-root--country-phone');
+    const desiredWidth = Math.max(rect.width, wide ? 280 : rect.width);
+    const width = Math.min(desiredWidth, Math.max(160, viewportWidth - margin * 2));
+    const left = Math.max(margin, Math.min(rect.left, viewportWidth - width - margin));
+    const below = Math.max(0, window.innerHeight - rect.bottom - margin);
+    const above = Math.max(0, rect.top - margin);
+    const placeAbove = below < Math.min(260, above) && above > below;
+    const available = placeAbove ? above : below;
+    const maxHeight = Math.max(80, Math.min(360, Math.floor(window.innerHeight * 0.62), Math.floor(available - 6)));
+    menu.style.position = 'fixed';
+    menu.style.left = left + 'px';
+    menu.style.width = width + 'px';
+    menu.style.maxHeight = maxHeight + 'px';
+    menu.style.top = placeAbove ? 'auto' : Math.max(margin, rect.bottom + 5) + 'px';
+    menu.style.bottom = placeAbove ? Math.max(margin, window.innerHeight - rect.top + 5) + 'px' : 'auto';
+    menu.classList.toggle('ab-select-menu--up', placeAbove);
+  }
+
   function open(root) {
     if (root.querySelector('.ab-select-trigger')?.disabled) return;
     if (openRoot && openRoot !== root) close(openRoot);
-    const menu = root.querySelector('.ab-select-menu');
+    const menu = menuFor(root);
     const button = root.querySelector('.ab-select-trigger');
     if (!menu || !button) return;
-    menu.classList.remove('ab-select-menu--up');
-    const rect = root.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    if (spaceBelow < 260 && spaceAbove > spaceBelow) menu.classList.add('ab-select-menu--up');
     menu.hidden = false;
     root.classList.add('is-open');
     button.setAttribute('aria-expanded', 'true');
     openRoot = root;
-    const search = root.querySelector('.ab-select-search');
+    positionMenu(root);
+    const search = menu.querySelector('.ab-select-search');
     if (search && !search.hidden) { search.focus(); search.select(); }
     else {
-      const active = root.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') ||
-        root.querySelector('.ab-select-option:not(:disabled)');
+      const active = menu.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') ||
+        menu.querySelector('.ab-select-option:not(:disabled)');
       active?.scrollIntoView({block:'nearest'});
       button.focus();
     }
@@ -216,7 +242,7 @@
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'ab-select-search';
-    search.placeholder = instrumentSelect ? 'Search instruments…' : 'Search options…';
+    search.placeholder = isWideCountryMenu(select) ? 'Search countries…' : (instrumentSelect ? 'Search instruments…' : 'Search options…');
     search.setAttribute('aria-label', isWideCountryMenu(select) ? 'Search countries' : search.placeholder);
     search.hidden = true;
     const list = document.createElement('div');
@@ -228,7 +254,9 @@
     select.classList.add('ab-select-native');
     select.tabIndex = -1;
     select.insertAdjacentElement('beforebegin', root);
-    root.append(button, menu, select);
+    root.append(button, select);
+    root.__abSelectMenu = menu;
+    document.body.append(menu);
     select.__abSelectRoot = root;
     button.addEventListener('click', () => menu.hidden ? open(root) : close(root));
     [...(select.labels || [])].forEach(label => label.addEventListener('click', event => {
@@ -240,14 +268,14 @@
     button.addEventListener('keydown', event => {
       if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); open(root);
-        const active = root.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') || root.querySelector('.ab-select-option:not(:disabled)');
+        const active = menuFor(root)?.querySelector('.ab-select-option[aria-selected="true"]:not(:disabled)') || menuFor(root)?.querySelector('.ab-select-option:not(:disabled)');
         active?.focus();
       } else if (event.key === 'Escape') close(root);
     });
     search.addEventListener('input', () => filterOptions(root, search.value));
     search.addEventListener('keydown', event => {
       if (event.key === 'Escape') { event.preventDefault(); close(root, true); }
-      if (event.key === 'ArrowDown') { event.preventDefault(); root.querySelector('.ab-select-option:not(:disabled):not([hidden])')?.focus(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); menuFor(root)?.querySelector('.ab-select-option:not(:disabled):not([hidden])')?.focus(); }
     });
     select.addEventListener('change', () => refresh(select));
     select.addEventListener('input', () => refresh(select));
@@ -259,11 +287,14 @@
   }
 
   document.addEventListener('click', event => {
-    if (openRoot && !openRoot.contains(event.target)) close(openRoot);
+    if (openRoot && !openRoot.contains(event.target) && !menuFor(openRoot)?.contains(event.target)) close(openRoot);
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && openRoot) close(openRoot, true);
   });
+  const repositionOpenMenu = () => { if (openRoot) positionMenu(openRoot); };
+  window.addEventListener('resize', repositionOpenMenu);
+  window.addEventListener('scroll', repositionOpenMenu, true);
   document.addEventListener('submit', event => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;

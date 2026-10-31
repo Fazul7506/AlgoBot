@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import MarketSymbol, Tick, Candle, MarketSnapshot, MarketStatistics
+from .models import Tick, Candle, MarketSnapshot, MarketStatistics
 from .serializers import MarketSymbolSerializer, TickSerializer, CandleSerializer, MarketSnapshotSerializer, MarketStatisticsSerializer
 from .deriv_sync import fetch_tick, sync_active_symbols
 from .services import MarketDataService
@@ -50,8 +50,9 @@ def markets(request):
     if not account:
         return Response({"detail": "Connect a broker before loading markets."}, status=status.HTTP_409_CONFLICT)
     values = (
-        MarketSymbol.objects
-        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
+        MarketDataService.symbols.catalogue(
+            broker=account.broker.broker_type, active=True, tradable=True
+        )
         .values_list("market", flat=True)
         .distinct()
         .order_by("market")
@@ -69,10 +70,8 @@ def symbols(request):
     account = _connected_account(request.user, request=request)
     if not account:
         return Response({"detail": "Connect a broker before loading its market universe."}, status=status.HTTP_409_CONFLICT)
-    queryset = (
-        MarketSymbol.objects
-        .filter(broker=account.broker.broker_type, is_active=True, is_tradable=True)
-        .order_by("market", "symbol")
+    queryset = MarketDataService.symbols.catalogue(
+        broker=account.broker.broker_type, active=True, tradable=True
     )
     data = MarketSymbolSerializer(queryset[:_limit(request, default=100, maximum=500)], many=True).data
     return Response({
@@ -97,10 +96,10 @@ def symbol_detail(request, symbol):
     if not account:
         return Response({"detail": "Connect a broker before loading symbol details."}, status=status.HTTP_409_CONFLICT)
     row = get_object_or_404(
-        MarketSymbol,
+        MarketDataService.symbols.catalogue(
+            broker=account.broker.broker_type, active=True, tradable=None
+        ),
         symbol=symbol,
-        broker=account.broker.broker_type,
-        is_active=True,
     )
     return Response(MarketSymbolSerializer(row).data)
 
@@ -150,7 +149,7 @@ def sync_symbols(request):
     try:
         count = sync_active_symbols(); return Response({"status":"ok","symbols":count,"broker":account.broker.name,"account_id":account.account_id,"source":"deriv_active_symbols","stale":False})
     except Exception:
-        cached_count = MarketSymbol.objects.filter(broker="deriv", is_active=True).count()
+        cached_count = MarketDataService.symbols.catalogue(broker="deriv", active=True, tradable=None).count()
         if cached_count: return Response({"status":"stale","symbols":cached_count,"broker":account.broker.name,"account_id":account.account_id,"source":"cached_deriv_active_symbols","stale":True,"detail":"Live broker market catalogue refresh is temporarily unavailable; serving the last known broker catalogue."})
         return Response({"status":"error","code":"BROKER_MARKET_SYNC_FAILED","detail":"Live broker market catalogue is temporarily unavailable and no cached catalogue exists."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -161,7 +160,9 @@ def broker_tick(request):
     if not symbol: return Response({"detail":"symbol is required"}, status=status.HTTP_400_BAD_REQUEST)
     account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before requesting live broker quotes."}, status=status.HTTP_409_CONFLICT)
-    if not MarketSymbol.objects.filter(symbol=symbol, is_active=True).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
+    if not MarketDataService.symbols.catalogue(
+        broker=account.broker.broker_type, active=True, tradable=None, symbol=symbol
+    ).exists(): return Response({"detail":"The requested symbol is not in the current broker market catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
         if account.broker.broker_type == "deriv": data = fetch_tick(symbol)
         else: data = asyncio.run(_bounded_market_data(BrokerRegistry().adapter(account.broker, account), symbol))
@@ -205,7 +206,9 @@ def broker_chart_history(request):
     account = _connected_account(request.user, request=request)
     if not account: return Response({"detail":"Connect a broker before loading live chart history."}, status=status.HTTP_409_CONFLICT)
     broker_code = str(getattr(account.broker, "broker_type", "") or account.broker.name).strip().lower()
-    market_symbol = MarketSymbol.objects.filter(symbol=symbol, broker__iexact=broker_code, is_active=True, is_tradable=True).first()
+    market_symbol = MarketDataService.symbols.catalogue(
+        broker=broker_code, active=True, tradable=True, symbol=symbol
+    ).first()
     if not market_symbol: return Response({"detail":"This instrument is not available or tradable through your selected broker account. Choose an instrument from that broker catalogue."}, status=status.HTTP_404_NOT_FOUND)
     try:
         adapter = BrokerRegistry().adapter(account.broker, account)

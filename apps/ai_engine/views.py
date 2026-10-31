@@ -11,7 +11,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.brokers.models import BrokerAccount
 from apps.brokers.services import BrokerRegistry
-from apps.market_data.models import Candle, MarketSnapshot, MarketSymbol, Tick
+from apps.market_data.models import Candle, MarketSnapshot, Tick
+from apps.market_data.services import MarketDataService
 from core.account_context import get_active_account
 from core.permissions import BrokerOnboardingRequired
 from .models import AIModel, AIRecommendation, AnomalyEvent, FeatureVector, MarketRegime, ModelVersion, Prediction, PredictionOutcome, TrainingJob
@@ -170,10 +171,14 @@ def train(request):
 def _discover_symbol(request):
     symbol = str(request.data.get("symbol") or "").strip()
     if symbol:
-        if not MarketSymbol.objects.filter(symbol=symbol, is_active=True, is_tradable=True).exists():
+        if not MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).exists():
             raise ValueError("The selected symbol is not an active broker instrument.")
         return symbol
-    return MarketSymbol.objects.filter(is_active=True, is_tradable=True).values_list("symbol", flat=True).first()
+    return MarketDataService.symbols.catalogue(
+        active=True, tradable=True
+    ).values_list("symbol", flat=True).first()
 
 
 def _connected_account(user, request=None):

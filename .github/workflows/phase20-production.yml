@@ -37,7 +37,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version-file: ".python-version"
           cache: pip
           cache-dependency-path: requirements/base.txt
 
@@ -54,6 +54,18 @@ jobs:
 
       - name: Validate frontend structure
         run: python scripts/validate_frontend_structure.py
+
+      - name: Generate tracked-file reference audit
+        run: python scripts/repository_file_audit.py
+
+      - name: Upload tracked-file reference audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-file-reference-audit-${{ github.run_number }}
+          path: audit-output/repository-file-reference-audit.csv
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Compile every Django template
         run: python scripts/validate_templates.py
@@ -121,7 +133,7 @@ jobs:
           DJANGO_TESTING=true USE_REDIS=false python manage.py test --noinput --parallel 1 2>&1 | tee /tmp/django-tests.txt
 
       - name: Upload Django test failure log
-        if: steps.tests.outcome == 'failure'
+        if: ${{ always() && steps.tests.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: django-test-failure-log-${{ github.run_id }}
@@ -130,7 +142,7 @@ jobs:
           retention-days: 7
 
       - name: Stop validation after Django test failure
-        if: steps.tests.outcome == 'failure'
+        if: ${{ always() && steps.tests.outcome == 'failure' }}
         run: exit 1
 
       - name: Validate static assets

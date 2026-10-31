@@ -107,7 +107,7 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
 
         layer = type("Layer", (), {"group_send": AsyncMock()})()
         with patch("apps.market_data.management.commands.run_market_stream.sync_active_symbols"), \
-            patch("apps.market_data.management.commands.run_market_stream.MarketSymbol.objects.filter") as markets, \
+            patch("apps.market_data.management.commands.run_market_stream.MarketDataService.symbols.catalogue") as markets, \
             patch("apps.market_data.management.commands.run_market_stream.sync_to_async", side_effect=fake_sync_to_async), \
             patch("apps.market_data.management.commands.run_market_stream.websockets.connect", side_effect=lambda *args, **kwargs: sockets.pop(0)) as connect, \
             patch("apps.market_data.management.commands.run_market_stream.get_channel_layer", return_value=layer), \

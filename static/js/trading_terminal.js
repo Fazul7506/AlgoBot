@@ -77,7 +77,7 @@
      if(cached?.symbols){
        const cachedValue=paintSymbols(s,cached.symbols,previous);
        if(cachedValue&&Date.now()-Number(cached.at||0)<300000){
-         void api('/api/market/catalogue/',{notifyOnError:false},7000).then(p=>{
+         void window.AlgoBotServices.instruments.list({timeout:7000,notifyOnError:false}).then(p=>{
            if(!isCurrent())return;
            const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
            if(rows.length){if(p?.stale!==true&&String(p?.status||'').toLowerCase()!=='stale')writeCatalogueCache(rows);else result('Broker market catalogue is stale. Instrument availability will be rechecked before order preview.','warning');paintSymbols(s,rows,s.value)}
@@ -86,7 +86,7 @@
        }
      }
      try{
-       const p=await api('/api/market/catalogue/',{notifyOnError:false},7000);
+       const p=await window.AlgoBotServices.instruments.list({timeout:7000,notifyOnError:false});
        if(!isCurrent())return'';
        const rows=list(p?.symbols??p).filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);
        if(!rows.length)throw new Error('No active tradable broker instruments are available');

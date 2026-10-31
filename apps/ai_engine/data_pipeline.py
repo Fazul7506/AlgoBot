@@ -11,7 +11,8 @@ from typing import Any
 
 from django.utils import timezone
 
-from apps.market_data.models import MarketSymbol, Tick
+from apps.market_data.models import Tick
+from apps.market_data.services import MarketDataService
 from apps.market_data.historical import normalize_timeframe
 from apps.market_data.research_data import ResearchDataService
 
@@ -41,7 +42,9 @@ class AIDataPipeline:
             ]
 
         rows = []
-        for market in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
+        for market in MarketDataService.symbols.catalogue(
+            active=True, tradable=True
+        ).iterator():
             try:
                 candles = self.research_data.candles(
                     market.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch
@@ -60,7 +63,9 @@ class AIDataPipeline:
         timeframe = normalize_timeframe(timeframe)
         cutoff_epoch = int((timezone.now() - timedelta(hours=1)).timestamp())
         result = []
-        for item in MarketSymbol.objects.filter(is_active=True, is_tradable=True).iterator():
+        for item in MarketDataService.symbols.catalogue(
+            active=True, tradable=True
+        ).iterator():
             try:
                 candles = self.research_data.candles(
                     item.symbol, timeframe, limit=10000, start_epoch=cutoff_epoch

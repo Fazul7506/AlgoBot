@@ -1,0 +1,66 @@
+name: Chromium Visual Smoke
+
+# Browser smoke coverage runs against the Render Service Preview for each PR.
+# Manual runs remain available from the Actions tab for a configured base URL.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: chromium-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Remove previous screenshot artifacts for this PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("algobot-chromium-screenshots-")) | select(.workflow_run.head_branch == env.GITHUB_HEAD_REF) | .id' \
+            | while IFS= read -r artifact_id; do
+                [ -n "$artifact_id" ] || continue
+                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+              done
+
+      - name: Capture desktop, tablet, and mobile screenshots
+        env:
+          # Only the web application URL belongs here. The API hostname is a
+          # separate service and must not be used as the browser base URL.
+          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && (vars.ALGOBOT_VISUAL_BASE_URL || format('https://algobot-pr-{0}-wavg.onrender.com', github.event.pull_request.number)) || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
+          ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
+          ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
+          ALGOBOT_VISUAL_TOTP_SECRET: ${{ secrets.ALGOBOT_VISUAL_TOTP_SECRET }}
+          ALGOBOT_VISUAL_PATHS: ${{ format('{0},/profile/,/settings/,/account/identity/', vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/') }}
+        run: node scripts/visual_smoke.mjs
+
+      - name: Upload Chromium screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: algobot-chromium-screenshots-${{ github.run_number }}
+          path: artifacts/chromium/
+          if-no-files-found: warn
+          retention-days: 14

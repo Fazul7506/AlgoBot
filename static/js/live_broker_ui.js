@@ -2,7 +2,7 @@
   if (window.__algoBotLiveBrokerUI) return;
   window.__algoBotLiveBrokerUI = true;
   const $ = (s, r = document) => r.querySelector(s);
-  const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
+  const list = v => Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : [])));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const money = (v, currency = 'USD') => { if (v == null || v === '' || Number.isNaN(Number(v))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(v, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:8})}`; };
   let accounts = [], terminalSyncBusy = false;
@@ -11,7 +11,7 @@
     document.documentElement.classList.add('material-symbols-ready');
   }
 
-  const canonicalRequest = (url, options = {}, timeout = 5000) => {
+  const canonicalRequest = (url, options = {}, timeout = 7000) => {
     const request = window.AlgoBotFrontendData?.request;
     if (typeof request !== 'function') {
       return Promise.reject(Object.assign(new Error('Canonical frontend transport is not ready.'), {
@@ -149,7 +149,9 @@
   }
 
   function discoverSymbol() {
-    return canonicalRequest('/api/markets/symbols/', {}, 5000).then(list).then(rows => {
+    const catalogue = window.AlgoBotServices?.instruments?.list;
+    if (typeof catalogue !== 'function') return Promise.reject(new Error('Shared instrument service is unavailable.'));
+    return catalogue({ timeout: 7000 }).then(list).then(rows => {
       const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
       const s = $('[data-symbol]');
       const requested = new URLSearchParams(window.location.search).get('symbol');

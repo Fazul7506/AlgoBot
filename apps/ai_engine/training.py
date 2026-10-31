@@ -15,6 +15,7 @@ from .models import AIModel, ModelVersion, TrainingJob
 from .training_dataset import build_direction_dataset, MODEL_FEATURE_NAMES
 from .validation import walk_forward_validate
 from .candlestick_features import FEATURE_NAMES
+from .artifact_storage import upload_model_artifacts, schema_document
 
 logger = logging.getLogger(__name__)
 FEATURES = tuple(MODEL_FEATURE_NAMES)
@@ -97,15 +98,15 @@ class MarketModelTrainer:
         if best_validation["aggregate"]["expectancy"] <= 0 and best_validation["aggregate"]["total_return"] <= 0:
             raise ValueError(f"No profitable candidate passed validation for {symbol}/{timeframe}")
 
-        model_dir = _model_dir()
+        model_dir = Path(tempfile.mkdtemp(prefix="algobot-model-training-"))
         with transaction.atomic():
             job = TrainingJob.objects.create(status="running", started_at=timezone.now())
             model = best_factory()
             model.fit(X, y)
-            path = model_dir / f"{symbol}_{timeframe}_{best_algorithm}.pkl"
+            version = timezone.now().strftime("%Y%m%d%H%M%S")
+            path = model_dir / f"{symbol}_{timeframe}_{best_algorithm}_{version}.pkl"
             _atomic_dump(model, path)
             aggregate = best_validation["aggregate"]
-            version = timezone.now().strftime("%Y%m%d%H%M%S")
             metrics = {
                 "accuracy": aggregate["accuracy"], "precision": aggregate["precision"], "recall": aggregate["recall"],
                 "f1": aggregate["f1"], "auc": aggregate["auc"], "expectancy": aggregate["expectancy"],
@@ -115,7 +116,21 @@ class MarketModelTrainer:
                 "walk_forward_folds": best_validation["folds"], "promotion_score": best_score,
             }
             name = f"{symbol}-{timeframe}-{best_algorithm}"
-            metadata = {"features": list(FEATURES), "artifact": str(path), "validation": metrics, "dataset": dataset.metadata, "knowledge_source": "canonical_market_data_and_prediction_outcomes", "training_target": "next_candle_direction", "selection": "walk_forward_champion_challenger"}
+            model_metadata = {
+                "features": list(FEATURES),
+                "feature_schema": schema_document(FEATURES),
+                "validation": metrics,
+                "dataset": dataset.metadata,
+                "knowledge_source": "canonical_market_data_and_prediction_outcomes",
+                "training_target": "next_candle_direction",
+                "selection": "walk_forward_champion_challenger",
+            }
+            stored = upload_model_artifacts(
+                path, model_metadata,
+                f"{symbol}_{timeframe}_{best_algorithm}_{version}",
+            )
+            path.unlink(missing_ok=True)
+            metadata = {**model_metadata, **stored}
             ai_model = AIModel.objects.create(name=name, version=version, algorithm=best_algorithm, framework="sklearn", status="experimental", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
             ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES), "provenance": dataset.metadata}, hyperparameters={"algorithm": best_algorithm, "selection_score": best_score})
 
@@ -138,10 +153,12 @@ class MarketModelTrainer:
         return job.metrics
 
     def train_active_symbols(self, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
-        from apps.market_data.models import MarketSymbol
+        from apps.market_data.services import MarketDataService
         timeframe = normalize_timeframe(timeframe)
         results = {}
-        for symbol in MarketSymbol.objects.filter(is_active=True, is_tradable=True).values_list("symbol", flat=True):
+        for symbol in MarketDataService.symbols.catalogue(
+            active=True, tradable=True
+        ).values_list("symbol", flat=True):
             try:
                 results[symbol] = self.train_symbol(symbol, timeframe, min_accuracy)
             except Exception as exc:

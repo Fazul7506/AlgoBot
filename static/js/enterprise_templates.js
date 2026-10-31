@@ -2,7 +2,14 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-  const json = async (url, opts = {}) => window.AlgoBotFrontendData.request(url, opts, 10000);
+  const json = async (url, opts = {}) => {
+    if (url === '/api/market/catalogue/') {
+      const catalogue = window.AlgoBotServices?.instruments?.list;
+      if (typeof catalogue !== 'function') throw new Error('Shared instrument catalogue is not ready.');
+      return catalogue({ timeout: 10000, notifyOnError: false });
+    }
+    return window.AlgoBotFrontendData.request(url, opts, 10000);
+  };
 
   const csrf = () => {
     const cookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
@@ -38,7 +45,7 @@
 
   const endpointMap = {
     trading: ['/api/orders/', '/api/positions/open/', '/api/dashboard/signals/'],
-    markets: ['/api/market/symbols/', '/api/market/snapshots/all_snapshots/', '/api/market/stats/'],
+    markets: ['/api/market/catalogue/', '/api/market/snapshots/all_snapshots/', '/api/market/stats/'],
     strategies: ['/api/strategies/', '/api/strategies/signals/', '/api/strategies/performance/'],
     backtesting: ['/api/backtests/', '/api/statistics/', '/api/optimization/results/'],
     ai: ['/api/ai/models/', '/api/ai/predictions/', '/api/ai/recommendations/', '/api/ai/training-jobs/'],
@@ -125,7 +132,7 @@
   }
 
   const moduleLinks = {
-    markets: [['/markets/', 'Market workspace'], ['/api/market/symbols/', 'Symbol universe']],
+    markets: [['/markets/', 'Market workspace'], ['/api/market/catalogue/', 'Symbol universe']],
     strategies: [['/strategies/', 'Strategy manager'], ['/api/strategies/', 'Strategy API']],
     backtesting: [['/backtesting/', 'Backtest lab'], ['/api/backtests/', 'Backtest records']],
     ai: [['/predictions/', 'Prediction center'], ['/api/ai/models/', 'Model registry']],

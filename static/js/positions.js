@@ -4,7 +4,7 @@
   window.__algoBotPositionsPage = true;
   const $ = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, accountId: null, loadSeq: 0 };
+  const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, reconnectTimer: null, accountId: null, loadSeq: 0 };
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const money = (value, currency = '') => {
     if (value == null || value === '') return 'Unavailable';
@@ -93,15 +93,20 @@
     }
   }
   function schedule(){ clearTimeout(state.timer); state.timer=setTimeout(load,250); }
+  function reconnect() {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+    const previous = state.socket;
+    state.socket = null;
+    if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(4001, 'account context changed');
+    connect();
+  }
   function connect() {
+    if (state.socket && (state.socket.readyState === WebSocket.CONNECTING || state.socket.readyState === WebSocket.OPEN)) return;
     const protocol=location.protocol === 'https:' ? 'wss' : 'ws';
     const socket=new WebSocket(protocol + '://' + location.host + '/ws/broker/');
     state.socket=socket;
-    socket.onopen=() => {
-      state.retry=0;
-      const id=accountId();
-      if(id) socket.send(JSON.stringify({action:'account.switch',account_id:id}));
-    };
+    socket.onopen=() => { state.retry=0; };
     socket.onmessage=event => {
       try {
         const message=JSON.parse(event.data), payload=message.payload || {}, eventAccount=payload.account_id == null ? null : String(payload.account_id), current=accountId();
@@ -112,7 +117,7 @@
     socket.onclose=() => {
       if(state.socket !== socket) return;
       const delay=Math.min(30000,1000 * Math.pow(2,Math.min(state.retry++,5)));
-      setTimeout(connect,delay);
+      state.reconnectTimer=setTimeout(() => { state.reconnectTimer=null; connect(); },delay);
     };
   }
   function boot() {
@@ -121,6 +126,7 @@
     $('[data-position-order]')?.addEventListener('change',render);
     $('[data-position-refresh]')?.addEventListener('click',load);
     $('[data-position-detail-close]')?.addEventListener('click',() => { $('[data-position-detail]').hidden=true; });
+    state.accountId=accountId();
     window.AlgoBotBrokerState?.subscribe?.(() => {
       const next=accountId();
       if(next !== state.accountId) {
@@ -129,10 +135,17 @@
         state.rows=[]; state.meta=null;
         setState('loading','Account changed — loading its broker positions…'); summary(); render();
         schedule();
-        if(state.socket?.readyState === WebSocket.OPEN && next) state.socket.send(JSON.stringify({action:'account.switch',account_id:next}));
+        reconnect();
       }
     });
-    state.accountId=accountId(); load(); connect();
+    window.addEventListener('pagehide', () => {
+      clearTimeout(state.timer);
+      clearTimeout(state.reconnectTimer);
+      const socket = state.socket;
+      state.socket = null;
+      if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'page hidden');
+    });
+    load(); connect();
   }
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded',boot,{once:true}) : boot();
 })();

@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 def _trading_metrics(y_true: np.ndarray, y_pred: np.ndarray, returns: np.ndarray) -> dict[str, float]:
-    # Long/short proxy: long on class 1, short on class 0.
+    # Gross directional research metrics from observed candle returns.
     signed = np.where(y_pred.astype(int) == 1, returns, -returns)
     wins = signed[signed > 0]
     losses = signed[signed < 0]
@@ -73,4 +73,5 @@ def walk_forward_validate(model_factory, X: np.ndarray, y: np.ndarray, returns: 
         raise ValueError("Unable to construct walk-forward validation folds")
     keys = ["accuracy", "precision", "recall", "f1", "auc", "expectancy", "win_rate", "profit_factor", "max_drawdown", "sharpe", "sortino", "total_return"]
     aggregate = {key: float(np.mean([m[key] for m in fold_metrics])) for key in keys}
+    aggregate["profit_factor"] = float(np.mean([min(m["profit_factor"], 10.0) for m in fold_metrics]))
     return {"folds": fold_metrics, "aggregate": aggregate}

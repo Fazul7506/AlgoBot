@@ -363,3 +363,62 @@
 
 .topbar-profile-unverified{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:3px 7px;border:1px solid #795b2b;border-radius:6px;background:#3b2b16;color:#ffd27a;font-size:9px;font-weight:800}
 .topbar-profile-unverified .material-symbols-rounded{font-size:12px;color:inherit}
+
+
+/* Viewport-anchored mobile menus avoid clipping by the header's flex/overflow context. */
+@media (max-width: 700px) {
+  .topbar-notification-menu, .topbar-account-menu, .topbar-profile-menu {
+    position: fixed !important;
+    left: auto !important;
+    right: max(10px, env(safe-area-inset-right)) !important;
+    width: min(410px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 90px) !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+    z-index: 1200;
+  }
+  .topbar-notification-item { min-width: 0; }
+  .topbar-notification-copy { min-width: 0; overflow-wrap: anywhere; }
+  .topbar-notification-copy p { overflow-wrap: anywhere; word-break: normal; }
+}
+
+
+/* Final mobile topbar alignment: centre the notification bell between the
+   broker selector and profile control, with its unread badge corner-anchored. */
+.topbar-actions { display:flex; align-items:center; align-self:stretch; min-height:54px; }
+.topbar-notifications {
+  display:flex; flex:0 0 42px; width:42px; min-width:42px; height:42px;
+  align-items:center; justify-content:center; align-self:center; margin:0; padding:0;
+  position:relative;
+}
+.topbar-notifications .topbar-icon-button {
+  display:grid; flex:0 0 40px; width:40px; height:40px; min-width:40px;
+  margin:0; padding:0; place-items:center; line-height:1;
+}
+.topbar-notifications .topbar-icon-button > .material-symbols-rounded {
+  display:block; line-height:1; transform:none;
+}
+.topbar-notifications .topbar-notification-count {
+  top:-3px; right:-3px; transform:none; z-index:2;
+}
+.topbar-profile { align-self:center; }
+@media (max-width:700px) {
+  .topbar { align-items:center; min-height:58px; }
+  .topbar-actions { align-items:center; align-self:center; min-height:42px; height:42px; overflow:visible; }
+  .topbar-account-control, .topbar-notifications, .topbar-profile {
+    display:flex; align-items:center; align-self:center;
+  }
+  .topbar-notifications { flex:0 0 38px; width:38px; min-width:38px; height:38px; }
+  .topbar-notifications .topbar-icon-button {
+    flex-basis:36px; width:36px; height:36px; min-width:36px;
+  }
+  .topbar-notifications .topbar-notification-count { top:-3px; right:-3px; }
+}
+@media (max-width:390px) {
+  .topbar-notifications { flex-basis:34px; width:34px; min-width:34px; height:36px; }
+  .topbar-notifications .topbar-icon-button { flex-basis:32px; width:32px; height:32px; min-width:32px; }
+}

@@ -6,6 +6,7 @@ also copied into the structured monitoring audit stream for the Audit Log UI.
 """
 import json
 import logging
+import re
 import uuid
 
 from django.contrib import messages
@@ -85,24 +86,18 @@ class AuditMiddleware(MiddlewareMixin):
         """
         path = request.path.lower()
         if (
-            path.startswith(("/notifications/", "/api/notifications/", "/static/", "/media/"))
+            path.startswith((
+                "/notifications/", "/api/notifications/", "/static/", "/media/",
+                "/login/", "/register/", "/logout/", "/auth/", "/api/auth/",
+            ))
             or "webhook" in path
             or path.endswith("/callback/")
         ):
             return
         try:
             module = cls._module_for_path(request.path)
-            critical_markers = (
-                "security", "risk", "password", "credential", "two-factor",
-                "two_factor", "2fa", "mfa", "authentication",
-            )
-            is_critical = any(marker in path for marker in critical_markers)
-            category = "security" if is_critical else module[:40]
-            title = "Security alert" if is_critical else "Activity completed"
-            message = (
-                "A security-related account action was completed successfully."
-                if is_critical
-                else f"Your {module.replace('_', ' ')} action was completed successfully."
+            title, message, category, priority = cls._notification_details(
+                request.path, request.method, module
             )
             from apps.notifications.services import NotificationEngine
             NotificationEngine().publish(
@@ -110,11 +105,82 @@ class AuditMiddleware(MiddlewareMixin):
                 title=title,
                 message=message,
                 category=category,
-                priority="critical" if is_critical else "info",
+                priority=priority,
             )
         except Exception:
             # Notifications are best-effort and must never break the action.
             audit_logger.exception("Could not publish in-app activity notification")
+
+
+    @classmethod
+    def _notification_details(cls, request_path, method, module):
+        """Describe a successful mutation using route semantics, never request data."""
+        path = "/" + request_path.lower().strip("/") + "/"
+        rules = (
+            (r"(?:two[-_]factor|two_factor|2fa|mfa).*(?:setup|enrol|enroll|begin)", "Two-factor setup started", "An authenticator setup was started. Finish verification to enable two-factor protection."),
+            (r"(?:two[-_]factor|two_factor|2fa|mfa).*(?:verify|confirm|enable|activate)", "Two-factor authentication updated", "Your authenticator verification was accepted and the two-factor setting was updated."),
+            (r"(?:two[-_]factor|two_factor|2fa|mfa).*(?:disable|deactivate)", "Two-factor authentication disabled", "Two-factor authentication was turned off for your account."),
+            (r"(?:recovery[-_]codes|recovery_codes).*(?:regenerate|rotate|refresh)", "Recovery codes regenerated", "A new set of single-use recovery codes was generated. Store them safely; older codes may no longer work."),
+            (r"trusted[-_]?devices?.*(?:trust|register|create|add)", "Trusted device added", "This browser was added to your trusted devices after the security check."),
+            (r"trusted[-_]?devices?.*(?:revoke|remove|delete|untrust)", "Trusted device removed", "A trusted device was removed from your account."),
+            (r"(?:password|credentials?).*(?:change|update|reset|set)|(?:change|update|reset|set)[-_]?password", "Password updated", "Your account password was updated successfully."),
+            (r"(?:email[-_]?verification|verify[-_]?email|email/verify)", "Email verification updated", "Your email-verification action was completed."),
+            (r"(?:login|log[-_]?in|sign[-_]?in)", "Sign-in completed", "A successful sign-in to your account was recorded."),
+            (r"(?:logout|log[-_]?out|session[-_]?revoke|revoke[-_]?session)", "Session ended", "A sign-out or session-revocation action was completed."),
+            (r"(?:broker|deriv).*(?:disconnect|unlink|deauthorize)", "Broker disconnected", "A broker connection was disconnected from your account."),
+            (r"(?:broker|deriv).*(?:connect|link|authorize)", "Broker connection updated", "Your broker connection or authorization setting was updated."),
+            (r"(?:notification|preferences?).*(?:preference|settings?|update|save)", "Notification preferences saved", "Your notification preferences were saved."),
+        )
+        for pattern, title, message in rules:
+            if re.search(pattern, path):
+                security = any(word in path for word in (
+                    "security", "password", "credential", "two-factor", "two_factor",
+                    "2fa", "mfa", "trusted-device", "trusted_device", "recovery-code",
+                    "recovery_code", "authentication",
+                ))
+                return title, message, ("security" if security else module[:40]), ("critical" if security else "info")
+
+        critical_markers = (
+            "security", "risk", "password", "credential", "two-factor",
+            "two_factor", "2fa", "mfa", "authentication",
+        )
+        is_critical = any(marker in path for marker in critical_markers)
+        parts = [part for part in path.strip("/").split("/") if part and part != "api"]
+        ignored = {"api", "v1", "v2", "actions", "action", "submit", "confirm", "complete", "execute"}
+        candidates = [
+            part.replace("_", " ").replace("-", " ").strip()
+            for part in parts
+            if part not in ignored and not part.isdigit() and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f-]{27,}", part)
+        ]
+        resource = candidates[-1] if candidates else module.replace("_", " ")
+        resource = re.sub(r"[^a-z0-9 ]", "", resource).strip()[:60] or module.replace("_", " ")
+        verb = (parts[-1] if parts else "").replace("-", "_")
+        past_tense = {
+            "activate": "activated", "deactivate": "deactivated", "connect": "connected",
+            "disconnect": "disconnected", "link": "linked", "unlink": "unlinked",
+            "create": "created", "register": "registered", "update": "updated",
+            "save": "saved", "delete": "deleted", "remove": "removed",
+            "revoke": "revoked", "enable": "enabled", "disable": "disabled",
+            "start": "started", "stop": "stopped", "cancel": "cancelled",
+            "approve": "approved", "reject": "rejected", "verify": "verified",
+            "refresh": "refreshed", "sync": "synchronized", "run": "started",
+        }
+        if verb in past_tense and len(candidates) > 1:
+            resource = candidates[-2]
+            resource = {
+                "strategies": "strategy", "brokers": "broker", "accounts": "account",
+                "settings": "setting", "preferences": "preference", "credentials": "credential",
+                "notifications": "notification", "sessions": "session", "devices": "device",
+                "orders": "order", "positions": "position", "recovery codes": "recovery code",
+            }.get(resource, resource)
+            action = past_tense[verb]
+            message = f"Your {resource} was {action} successfully."
+            title = f"{resource.title()} {action.title()}"
+        else:
+            action = "updated" if method.upper() in {"PUT", "PATCH"} else "removed" if method.upper() == "DELETE" else "saved"
+            title = f"{resource.title()} {action}"
+            message = f"Your {resource} change was {action} successfully."
+        return title[:80], message[:240], ("security" if is_critical else module[:40]), ("critical" if is_critical else "info")
 
     @staticmethod
     def _module_for_path(path):
@@ -141,6 +207,11 @@ class AuditMiddleware(MiddlewareMixin):
         if getattr(response, "streaming", False):
             return
         if not (request.path.startswith("/api/") or request.path.startswith("/data/")):
+            return
+        # Browser-token bootstrap is expected to return 401 before a user has
+        # signed in. Bridging that machine-auth response into Django's flash
+        # message queue creates stale duplicate error banners on the login page.
+        if request.path.rstrip("/") == "/api/auth/browser-token" and response.status_code == 401:
             return
         if "application/json" not in str(response.headers.get("Content-Type", "")).lower():
             return
