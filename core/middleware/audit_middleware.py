@@ -208,6 +208,11 @@ class AuditMiddleware(MiddlewareMixin):
             return
         if not (request.path.startswith("/api/") or request.path.startswith("/data/")):
             return
+        # Browser-token bootstrap is expected to return 401 before a user has
+        # signed in. Bridging that machine-auth response into Django's flash
+        # message queue creates stale duplicate error banners on the login page.
+        if request.path.rstrip("/") == "/api/auth/browser-token" and response.status_code == 401:
+            return
         if "application/json" not in str(response.headers.get("Content-Type", "")).lower():
             return
         try:
