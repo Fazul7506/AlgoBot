@@ -21,6 +21,8 @@ def cloudflare_training_dispatch(request):
         payload = json.loads(request.body or b"{}")
     except (TypeError, ValueError, UnicodeDecodeError):
         return JsonResponse({"status": "invalid_json"}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"status": "invalid_payload"}, status=400)
     timeframe = str(payload.get("timeframe", "M1"))
     try:
         min_accuracy = float(payload.get("min_accuracy", 0.52))
