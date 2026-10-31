@@ -60,8 +60,8 @@ def _public_url(request, path):
 
 def _send_account_email(subject, body, email, *, metadata=None):
     try:
-        # Reuse AlgoBot's configured transactional delivery path (Brevo when
-        # configured, Django email backend otherwise) for auth/security mail.
+        # Reuse AlgoBot's configured transactional delivery path. Production
+        # settings require Brevo; local/test settings may use Django's backend.
         from apps.notifications.services import send_transactional_email
         provider = send_transactional_email(
             recipient=email, subject=subject, message=body,
