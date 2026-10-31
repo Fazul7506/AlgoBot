@@ -360,7 +360,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn('>{{ row.symbol }}<', performance_template)
         self.assertNotIn('>{{ t.symbol }}<', postmortem_template)
 
-    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):        from pathlib import Path
+    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
+        from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         self.assertIn("sameOriginFallbackPath", client)
         self.assertIn("/api/ai/predict/", client)
