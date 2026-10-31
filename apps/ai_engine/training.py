@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AIModel, ModelVersion, TrainingJob
-from .training_dataset import build_direction_dataset, MODEL_FEATURE_NAMES
+from .training_dataset import build_direction_dataset, MODEL_FEATURE_NAMES, transaction_cost_rate
 from .validation import walk_forward_validate
 from .candlestick_features import FEATURE_NAMES
 
@@ -81,8 +81,9 @@ class MarketModelTrainer:
 
         candidates = _candidate_factories()
         results = []
+        cost_rate = transaction_cost_rate()
         for algorithm, factory in candidates:
-            validation = walk_forward_validate(factory, X, y, returns, folds=5)
+            validation = walk_forward_validate(factory, X, y, returns, folds=5, cost_rate=cost_rate)
             aggregate = validation["aggregate"]
             if aggregate["accuracy"] < min_accuracy:
                 logger.info("Candidate failed accuracy gate", extra={"symbol": symbol, "algorithm": algorithm, "accuracy": aggregate["accuracy"]})
@@ -102,7 +103,7 @@ class MarketModelTrainer:
             job = TrainingJob.objects.create(status="running", started_at=timezone.now())
             model = best_factory()
             model.fit(X, y)
-            path = model_dir / f"{symbol}_{timeframe}_{best_algorithm}.pkl"
+            path = model_dir / f"{symbol}_{timeframe}_{best_algorithm}_{version}.pkl"
             _atomic_dump(model, path)
             aggregate = best_validation["aggregate"]
             version = timezone.now().strftime("%Y%m%d%H%M%S")
@@ -115,7 +116,7 @@ class MarketModelTrainer:
                 "walk_forward_folds": best_validation["folds"], "promotion_score": best_score,
             }
             name = f"{symbol}-{timeframe}-{best_algorithm}"
-            metadata = {"features": list(FEATURES), "artifact": str(path), "validation": metrics, "dataset": dataset.metadata, "knowledge_source": "canonical_market_data_and_prediction_outcomes", "training_target": "next_candle_direction", "selection": "walk_forward_champion_challenger"}
+            metadata = {"features": list(FEATURES), "artifact": str(path), "validation": metrics, "dataset": dataset.metadata, "knowledge_source": "canonical_market_data_and_prediction_outcomes", "training_target": "next_candle_direction_after_transaction_cost_gate", "transaction_cost_bps": round(cost_rate * 10000.0, 4), "selection": "walk_forward_champion_challenger"}
             ai_model = AIModel.objects.create(name=name, version=version, algorithm=best_algorithm, framework="sklearn", status="experimental", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
             ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES), "provenance": dataset.metadata}, hyperparameters={"algorithm": best_algorithm, "selection_score": best_score})
 
