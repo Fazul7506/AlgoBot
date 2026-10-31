@@ -47,11 +47,34 @@ const failures = [];
 
 try {
   if (!expectedCommit) throw new Error('ALGOBOT_EXPECTED_COMMIT is required; refusing to test an unverified deployment.');
-  const healthResponse = await page.request.get(`${baseURL}/health/`, { timeout: 15000 });
-  if (!healthResponse.ok()) throw new Error(`Preview health endpoint returned HTTP ${healthResponse.status()}.`);
-  const healthPayload = await healthResponse.json();
-  if (healthPayload.commit !== expectedCommit) {
-    throw new Error(`Stale preview deployment: expected commit ${expectedCommit}, but /health/ reports ${healthPayload.commit || 'no commit metadata'}. No page screenshots were evaluated.`);
+  // Render deploys asynchronously after the PR push. Wait for the preview
+  // service to become healthy on the exact expected commit before taking
+  // screenshots; otherwise CI can race the previous live deploy or a rollout.
+  const healthDeadline = Date.now() + 10 * 60 * 1000;
+  const healthRetryIntervalMs = 15000;
+  let healthPayload = null;
+  let lastHealthError = 'Preview has not reported a healthy response yet.';
+  while (Date.now() < healthDeadline) {
+    try {
+      const healthResponse = await page.request.get(`${baseURL}/health/`, { timeout: 15000 });
+      if (!healthResponse.ok()) {
+        lastHealthError = `HTTP ${healthResponse.status()}`;
+      } else {
+        const payload = await healthResponse.json();
+        if (payload.commit === expectedCommit) {
+          healthPayload = payload;
+          break;
+        }
+        lastHealthError = `expected commit ${expectedCommit}, received ${payload.commit || 'no commit metadata'}`;
+      }
+    } catch (error) {
+      lastHealthError = error instanceof Error ? error.message : String(error);
+    }
+    if (Date.now() + healthRetryIntervalMs >= healthDeadline) break;
+    await new Promise(resolve => setTimeout(resolve, healthRetryIntervalMs));
+  }
+  if (!healthPayload) {
+    throw new Error(`Preview did not become healthy on expected commit ${expectedCommit} within 10 minutes. Last health result: ${lastHealthError}. No page screenshots were evaluated.`);
   }
   const loginResponse = await page.goto(`${baseURL}/login/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (!loginResponse || loginResponse.status() >= 400) {
