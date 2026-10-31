@@ -43,6 +43,16 @@ app.conf.beat_schedule = {
         # logically singleton even though the general worker handles other jobs.
         "options": {"queue": "celery", "expires": 25},
     },
+    "ai-sentiment-ingestion-every-15-minutes": {
+        "task": "apps.ai_engine.tasks.ingest_market_sentiment",
+        "schedule": crontab(minute="*/15"),
+        "options": {"queue": "celery"},
+    },
+    "ai-orderbook-ingestion-every-minute": {
+        "task": "apps.ai_engine.tasks.ingest_orderbook_depth",
+        "schedule": crontab(minute="*"),
+        "options": {"queue": "celery"},
+    },
     "ai-data-health-every-15-minutes": {
         "task": "apps.ai_engine.tasks.check_ai_data_health",
         "schedule": crontab(minute="*/15"),
