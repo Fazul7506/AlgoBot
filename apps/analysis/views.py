@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 
@@ -34,6 +35,9 @@ ANALYSIS_MARKETS_CACHE_SECONDS = 60
 ANALYSIS_CACHE_SECONDS = 15
 ANALYSIS_CONTRACT_TIMEOUT_SECONDS = 2.5
 _ANALYSIS_CONTRACT_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="analysis-contracts")
+_ANALYSIS_MARKET_SYNC_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis-market-sync")
+_ANALYSIS_MARKET_SYNC_LOCK = threading.Lock()
+_analysis_market_sync_future = None
 STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 
 logger = logging.getLogger(__name__)
@@ -750,30 +754,64 @@ def _analysis_markets(force_refresh=False):
     return markets
 
 
+def _run_analysis_market_catalogue_sync():
+    """Refresh Deriv's catalogue off-request so an upstream timeout cannot stall Analysis."""
+    from django.db import close_old_connections
+
+    close_old_connections()
+    try:
+        synced = sync_active_symbols()
+        logger.info("analysis_market_catalogue_sync_completed", extra={"symbols_synced": synced})
+        return synced
+    except Exception:
+        logger.warning("analysis_market_catalogue_sync_failed", exc_info=True)
+        return 0
+    finally:
+        close_old_connections()
+
+
+def _schedule_analysis_market_catalogue_sync():
+    """Coalesce refresh requests into one bounded in-process background task."""
+    global _analysis_market_sync_future
+    with _ANALYSIS_MARKET_SYNC_LOCK:
+        if _analysis_market_sync_future is not None and not _analysis_market_sync_future.done():
+            return False
+        _analysis_market_sync_future = _ANALYSIS_MARKET_SYNC_EXECUTOR.submit(
+            _run_analysis_market_catalogue_sync
+        )
+        return True
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_markets(request):
     force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
     markets = _analysis_markets(force_refresh=force_refresh)
-    # A fresh install, delayed worker, or restored database can have no local
-    # symbols yet. Recover from Deriv's authoritative active_symbols feed instead
-    # of permanently rendering an empty selector. Sync is idempotent and writes
-    # the existing catalogue rows; it does not touch account or trading data.
+    refresh_scheduled = False
     if force_refresh or not markets:
-        try:
-            sync_active_symbols()
-        except Exception:
-            logger.warning("Analysis market catalogue refresh failed", exc_info=True)
-        markets = _analysis_markets(force_refresh=True)
+        # Never perform a remote Deriv WebSocket request inside an HTTP request.
+        # The browser receives the last authoritative catalogue immediately;
+        # the next poll reads the database after this coalesced refresh completes.
+        refresh_scheduled = _schedule_analysis_market_catalogue_sync()
+        if markets:
+            markets = _analysis_markets(force_refresh=True)
     payload = {"markets": markets}
     if not markets:
         payload.update({
             "status": "unavailable",
             "code": "MARKET_CATALOGUE_UNAVAILABLE",
-            "detail": "No tradable markets are cached and the live Deriv catalogue could not be loaded. Check the broker connection and retry.",
+            "refreshing": refresh_scheduled,
+            "detail": (
+                "The live Deriv catalogue refresh is running in the background. "
+                "Retry shortly; no placeholder instruments have been added."
+            ),
         })
     else:
-        payload.update({"status": "ok", "count": len(markets)})
+        payload.update({
+            "status": "ok",
+            "count": len(markets),
+            "refreshing": refresh_scheduled,
+        })
     return JsonResponse(payload)
 
 
