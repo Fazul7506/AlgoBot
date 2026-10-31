@@ -29,10 +29,17 @@ class FeatureEngineeringService:
         c=context or {}; md=c.get('market_data',{}); ind=c.get('indicators',{}); sm=c.get('smart_money',{}); risk=c.get('risk',{}); strat=c.get('strategy',{}); o,h,l,cl=map(lambda k:_num(md.get(k)),('open','high','low','close')); volatility=_num(md.get('volatility'),abs(h-l)/(cl or 1)); velocity=_num(md.get('price_velocity'),cl-o)
         features={'open':o,'high':h,'low':l,'close':cl,'spread':_num(md.get('spread')),'volatility':volatility,'price_velocity':velocity,'price_acceleration':_num(md.get('price_acceleration')),'candle_body':abs(cl-o),'candle_range':abs(h-l),'rsi':_num(ind.get('rsi',50)),'macd':_num(ind.get('macd')),'ema':_num(ind.get('ema',cl)),'sma':_num(ind.get('sma',cl)),'atr':_num(ind.get('atr',volatility)),'adx':_num(ind.get('adx')),'bollinger_width':_num(ind.get('bollinger_width')),'supertrend':_num(ind.get('supertrend')),'ichimoku_bias':_num(ind.get('ichimoku_bias')),'bos':int(bool(sm.get('bos'))),'choch':int(bool(sm.get('choch'))),'mss':int(bool(sm.get('mss'))),'order_blocks':_num(sm.get('order_blocks')),'fvg':_num(sm.get('fvg')),'liquidity':_num(sm.get('liquidity')),'premium_discount':_num(sm.get('premium_discount')),'institutional_bias':_num(sm.get('institutional_bias')),'confluence_score':_num(sm.get('confluence_score')),'drawdown':_num(risk.get('drawdown')),'exposure':_num(risk.get('exposure')),'margin':_num(risk.get('margin')),'portfolio_risk':_num(risk.get('portfolio_risk')),'volatility_risk':_num(risk.get('volatility_risk')),'strategy_confidence':_num(strat.get('confidence')),'win_rate':_num(strat.get('win_rate')),'historical_performance':_num(strat.get('historical_performance'))}
         candles=c.get('candles') or md.get('candles')
-        if candles and len(candles)>=25:
-            try: features.update(extract_candlestick_features(candles[-60:]))
-            except Exception as exc: log.warning('Candlestick feature extraction failed',extra={'symbol':symbol,'error':str(exc)})
-        else: features.update({name:0.0 for name in FEATURE_NAMES})
+        features['_candlestick_features_available'] = False
+        if candles and len(candles)>=60:
+            try:
+                features.update(extract_candlestick_features(candles[-60:]))
+                features['_candlestick_features_available'] = True
+            except Exception as exc:
+                log.warning('Candlestick feature extraction failed',extra={'symbol':symbol,'error':str(exc)})
+        else:
+            # Keep the feature contract structurally complete, but mark these
+            # placeholders unavailable; PredictionService must fail closed.
+            features.update({name:0.0 for name in FEATURE_NAMES})
         return features
 
 class FeatureStoreService:
@@ -103,7 +110,7 @@ class PredictionService:
         # Training uses a complete 60-candle feature window. Refuse inference
         # on shorter history rather than padding missing market observations
         # with zeros and presenting the result as a genuine model prediction.
-        if len(candles) < 60:
+        if len(candles) < 60 or not feats.get('_candlestick_features_available', False):
             raw = {
                 'direction': 'AVOID',
                 'probability': 0.0,
@@ -122,6 +129,7 @@ class PredictionService:
                     'reason': 'insufficient_market_history',
                     'required_candles': 60,
                     'available_candles': len(candles),
+                    'feature_extraction_available': bool(feats.get('_candlestick_features_available', False)),
                 },
             }
         else:
