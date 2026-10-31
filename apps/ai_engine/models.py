@@ -137,3 +137,38 @@ class AnomalyEvent(models.Model):
     class Meta:
         ordering = ["-timestamp"]
         indexes = [models.Index(fields=["user", "symbol", "-timestamp"], name="ai_anom_user_sym_time")]
+
+
+class SentimentObservation(models.Model):
+    """A timestamped sentiment observation suitable for leakage-safe as-of joins."""
+    symbol = models.CharField(max_length=40, db_index=True)
+    source = models.CharField(max_length=500)
+    source_url = models.URLField(max_length=1000, blank=True)
+    content_hash = models.CharField(max_length=64)
+    published_at = models.DateTimeField(db_index=True)
+    compound = models.FloatField()
+    positive = models.FloatField()
+    neutral = models.FloatField()
+    negative = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-published_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["symbol", "content_hash"], name="ai_sentiment_symbol_content_uniq")
+        ]
+        indexes = [models.Index(fields=["symbol", "-published_at"], name="ai_sentiment_sym_time_idx")]
+
+
+class OrderBookSnapshot(models.Model):
+    """Verified provider-supplied Level-2 depth; never inferred from candle volume."""
+    symbol = models.CharField(max_length=40, db_index=True)
+    observed_at = models.DateTimeField(db_index=True)
+    bid_volume = models.FloatField()
+    ask_volume = models.FloatField()
+    imbalance = models.FloatField()
+    spread_bps = models.FloatField()
+
+    class Meta:
+        ordering = ["-observed_at"]
+        indexes = [models.Index(fields=["symbol", "-observed_at"], name="ai_orderbook_sym_time_idx")]

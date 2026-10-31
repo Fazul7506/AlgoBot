@@ -42,14 +42,14 @@ jobs:
             --jq '.artifacts[] | select(.name | startswith("algobot-chromium-screenshots-")) | select(.workflow_run.head_branch == env.GITHUB_HEAD_REF) | .id' \
             | while IFS= read -r artifact_id; do
                 [ -n "$artifact_id" ] || continue
-                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/$artifact_id"
               done
 
       - name: Capture desktop, tablet, and mobile screenshots
         env:
-          # Only the web application URL belongs here. The API hostname is a
-          # separate service and must not be used as the browser base URL.
-          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && (vars.ALGOBOT_VISUAL_BASE_URL || format('https://algobot-pr-{0}-wavg.onrender.com', github.event.pull_request.number)) || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
+          # Render created this service for PR #464 after the render-preview
+          # label was applied. Override with a repository variable if the URL changes.
+          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && (vars.ALGOBOT_VISUAL_BASE_URL || format('https://algobot-pr-{0}.onrender.com', github.event.pull_request.number)) || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
           ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
           ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
           ALGOBOT_VISUAL_TOTP_SECRET: ${{ secrets.ALGOBOT_VISUAL_TOTP_SECRET }}

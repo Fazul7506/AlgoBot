@@ -13,7 +13,7 @@ Created in the connected Cloudflare account:
 
 The Worker has a secret binding named `AI_TRAINING_WEBHOOK_TOKEN`. Never put this value in source control.
 
-The intended schedules are `15 */6 * * *` (every six hours) and `30 2 * * *` (daily at 02:30 UTC). They are deliberately **not active yet**. The current production API is still on `main`, while the authenticated webhook route exists on PR #461. Enabling the schedules before the production release would dispatch to a route that is not deployed. Activate the two schedules only after the production release, R2 setup, and worker verification.
+The Worker configuration contains four schedules: `15 */6 * * *` (model training every six hours), `30 2 * * *` (daily training at 02:30 UTC), `*/15 * * * *` (RSS sentiment ingestion every 15 minutes), and `* * * * *` (Level-2 snapshot polling every minute). Cloudflare schedules are the external scheduler; AI-related schedules are not duplicated in Celery Beat. The live Cloudflare schedules remain disabled until the webhook is deployed and verified. The repository configuration alone does not activate a deployed Worker.
 
 ## Render webhook configuration
 
@@ -23,7 +23,7 @@ The webhook route added by PR #461 is:
 
 `POST /api/internal/cloudflare/ai-training/`
 
-It accepts only the bearer secret and a small JSON payload. It validates the timeframe and accuracy threshold and enqueues `scheduled_ai_training` on Celery's `celery` queue.
+It accepts only the bearer secret and a small JSON payload. It routes `scheduled_ai_training`, `ingest_sentiment`, and `ingest_orderbook` messages to their respective Celery tasks on the `celery` queue.
 
 ## Cloudflare R2 model storage
 
@@ -36,7 +36,7 @@ The application expects these Render environment variables:
 - `AI_MODEL_SIGNING_KEY`
 - Optional prefix: `AI_MODEL_PREFIX` (defaults to `algobot/models`)
 
-R2 is not enabled on the connected Cloudflare account yet. The Cloudflare API returned error 10042 asking for R2 to be enabled in the Dashboard. Enable R2, create a **private** bucket, and create bucket-scoped S3 API credentials before adding these values to Render. Use a separate, high-entropy signing key for `AI_MODEL_SIGNING_KEY`; do not reuse the webhook token.
+The private bucket `algobot-model-artifacts` exists in the connected Cloudflare account and was verified empty at the last check. Create or confirm bucket-scoped S3 API credentials with Object Read & Write permissions and add the access key and secret to Render. Use a separate, high-entropy signing key for `AI_MODEL_SIGNING_KEY`; do not reuse the webhook token.
 
 Model files are uploaded and downloaded with chunked streaming. Each artifact has a signed JSON manifest containing the exact ordered feature schema and installed package versions. SHA-256 and HMAC checks cover both the artifact bytes and manifest; verification happens before `joblib.load`.
 
@@ -44,8 +44,28 @@ Model files are uploaded and downloaded with chunked streaming. Each artifact ha
 
 Cloudflare Queues and Cron Triggers provide external scheduling and dispatch. Python model training remains on the existing Render Celery worker because a Cloudflare Worker is not a drop-in host for this Django/Python/scikit-learn training stack.
 
-The Render supervisor in this branch starts Daphne, a Celery worker, Celery Beat, and the Deriv market stream in the same service. AI retraining schedules are intentionally removed from Celery Beat to avoid duplicate scheduling.
+The Render supervisor in this branch starts Daphne, a Celery worker, Celery Beat, and the Deriv market stream in the same service. Cloudflare owns the external schedules and queue dispatch; the Celery worker executes Python tasks. Cloudflare Workers cannot execute this repository's Django/Python/scikit-learn training runtime. AI training and external-signal ingestion schedules are intentionally absent from Celery Beat to avoid duplicate scheduling.
 
 The Blueprint is pinned to Render's existing free plan to avoid an automatic paid-plan upgrade. Free Render web services can spin down when idle and do not provide an always-on worker guarantee. This is suitable for a low-cost prototype/periodic wake-up design, but it is not a fully reliable 24/7 trading runtime. Do not claim continuous retraining or live stream uptime until the runtime's availability and broker-feed monitoring are proven.
 
 Do not activate live retraining until R2 is enabled, the R2 variables/signing key are set, the webhook route is deployed to production, and the Celery broker/worker can be verified. Missing storage configuration intentionally causes training to fail closed rather than storing a champion model on ephemeral disk.
+
+
+## External sentiment source configuration
+
+Configure these Render variables:
+
+- `AI_SENTIMENT_RSS_URLS`: comma-separated HTTPS RSS/Atom feed URLs.
+- `AI_SENTIMENT_SYMBOL_KEYWORDS_JSON`: JSON object mapping exact AlgoBot market symbols to arrays of matching terms, for example `{"EURUSD":["EUR/USD","EURUSD"],"BTCUSD":["Bitcoin","BTC/USD"]}`.
+
+RSS entries are scored with VADER and stored with their publication timestamp. Training uses only observations published at or before each candle timestamp; live inference uses recent persisted observations. No keyword mapping means no sentiment feature observations are invented.
+
+## Level-2 order-book provider contract
+
+Deriv tick/candle streams do not provide bid/ask depth quantities for the relevant instruments. `proposal_open_contract` is not an order-book endpoint. To calculate true depth imbalance, configure a provider that supports the same instruments and set:
+
+- `ORDER_BOOK_API_URL`: HTTPS endpoint template containing `{symbol}`.
+- `ORDER_BOOK_API_TOKEN`: optional bearer token.
+- `ORDER_BOOK_SYMBOLS`: comma-separated AlgoBot symbols actually supported by that provider. Set this explicitly; otherwise AlgoBot will attempt every active/tradable symbol.
+
+The endpoint must return JSON with non-empty `bids` and `asks` arrays, each containing `[price, quantity]` levels. AlgoBot validates the top ten levels, persists snapshots, and computes `(bid_volume - ask_volume) / (bid_volume + ask_volume)`. No candle-volume or quote-only substitute is used. Do not enable this feature for symbols unsupported by the chosen provider.

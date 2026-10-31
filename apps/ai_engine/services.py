@@ -7,6 +7,7 @@ from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJo
 from .constants import CONFIDENCE_LABELS
 from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
 from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES
+from .external_signals import current_external_signal_features
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -106,6 +107,7 @@ class PredictionService:
         feats['strategy_signal_bias']=signal_bias
         feats['strategy_signal_confidence']=signal_confidence
         feats['strategy_signal_count']=float(signal_count)
+        feats.update(current_external_signal_features(symbol, before_epoch))
         FeatureStoreService().store(symbol,timeframe,feats)
         # Training uses a complete 60-candle feature window. Refuse inference
         # on shorter history rather than padding missing market observations
