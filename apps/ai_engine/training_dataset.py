@@ -24,11 +24,29 @@ class FeatureDataset:
     metadata: dict[str, Any]
 
 
+def _timeframe_storage_aliases(timeframe: str) -> tuple[str, ...]:
+    """Match canonical candle intervals and legacy AI/API interval labels."""
+    value = str(timeframe or "M1").strip()
+    aliases = {
+        "1s": ("1s", "S1"), "5s": ("5s", "S5"), "15s": ("15s", "S15"),
+        "30s": ("30s", "S30"), "1m": ("1m", "M1"), "2m": ("2m", "M2"),
+        "5m": ("5m", "M5"), "10m": ("10m", "M10"), "15m": ("15m", "M15"),
+        "30m": ("30m", "M30"), "1h": ("1h", "H1"), "4h": ("4h", "H4"),
+        "1d": ("1d", "D1"),
+    }
+    canonical = value.lower()
+    if canonical in aliases:
+        return aliases[canonical]
+    legacy = value.upper()
+    reverse = {alias: values for values in aliases.values() for alias in values}
+    return reverse.get(legacy, (value,))
+
+
 def _historical_ai_feedback(symbol: str, timeframe: str, before_epoch: int) -> tuple[float, float, int]:
     before = datetime.fromtimestamp(int(before_epoch), tz=dt_timezone.utc)
     outcomes = PredictionOutcome.objects.filter(
         prediction__symbol=symbol,
-        prediction__timeframe=timeframe,
+        prediction__timeframe__in=_timeframe_storage_aliases(timeframe),
         resolved_at__isnull=False,
         resolved_at__lte=before,
     ).filter(Q(correct=True) | Q(correct=False)).order_by("-resolved_at")[:100]
@@ -45,7 +63,7 @@ def current_ai_feedback(symbol: str, timeframe: str, before_epoch: int | None = 
     cutoff = datetime.now(tz=dt_timezone.utc) if before_epoch is None else datetime.fromtimestamp(int(before_epoch), tz=dt_timezone.utc)
     outcomes = PredictionOutcome.objects.filter(
         prediction__symbol=symbol,
-        prediction__timeframe=timeframe,
+        prediction__timeframe__in=_timeframe_storage_aliases(timeframe),
         resolved_at__isnull=False,
         resolved_at__lte=cutoff,
     ).filter(Q(correct=True) | Q(correct=False)).order_by("-resolved_at")[:100]
@@ -65,7 +83,7 @@ def current_strategy_signal_features(symbol: str, timeframe: str, before_epoch: 
     signals = StrategySignal.objects.filter(
         symbol=symbol,
         timestamp__lte=cutoff,
-        configuration__timeframe__in=(timeframe, timeframe.upper()),
+        configuration__timeframe__in=_timeframe_storage_aliases(timeframe),
     ).order_by("-timestamp")[:100]
     rows = list(signals.values_list("signal", "confidence"))
     if not rows:
