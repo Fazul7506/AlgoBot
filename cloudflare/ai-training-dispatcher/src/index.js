@@ -25,10 +25,11 @@ export default {
         });
         if (response.ok) {
           message.ack();
-        } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-          console.error("AlgoBot training webhook rejected message", response.status);
+        } else if ([400, 404, 422].includes(response.status)) {
+          console.error("AlgoBot training webhook rejected an invalid request", response.status);
           message.ack();
         } else {
+          // Auth, throttling, deployment and server failures are retryable.
           message.retry({ delaySeconds: 60 });
         }
       } catch (error) {
