@@ -89,7 +89,7 @@ def send_transactional_email(*, recipient: str, subject: str, message: str, cate
     action_url = metadata.get("action_url")
     action_label = metadata.get("action_label", "Open AlgoBot")
     if isinstance(action_url, str) and action_url.startswith("https://"):
-        text_body = f"{text_body.rstrip()}\\n\\n{action_label}: {action_url}".strip()
+        text_body = f"{text_body.rstrip()}\n\n{action_label}: {action_url}".strip()
 
     email = EmailMultiAlternatives(
         subject=subject,
