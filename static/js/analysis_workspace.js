@@ -10,10 +10,12 @@
   const money = (v,c) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : (c ? c+" " : "")+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
-  const A = {markets:[],data:null,contract:null,timer:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
+  const A = {markets:[],data:null,contract:null,timer:null,requestController:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
 
-  async function request(path, options={}) {
-    return window.AlgoBotFrontendData.request(path, options, 12000);
+  async function request(path, options={}, timeout=15000) {
+    const transport=window.AlgoBotFrontendData?.request;
+    if(typeof transport!=="function") throw new Error("Authenticated AlgoBot API transport is not ready.");
+    return transport(path, options, timeout);
   }
   function set(id,v){const e=$(id);if(e)e.textContent=v==null||v===""?"—":v}
   function marketName(row){
@@ -186,16 +188,19 @@
   }
 
   async function load(options={}){
+    A.requestController?.abort();
+    const controller=new AbortController();
+    A.requestController=controller;
     const generation=++A.loadGeneration;
     const symbol=$("symbol").value, tf=$("timeframe").value, limit=$("limit").value;
-    if(!symbol){$("loadState").textContent="No active market is available.";return}
+    if(!symbol){$("loadState").textContent="No active market is available.";if(A.requestController===controller)A.requestController=null;return}
     if(A.data&&String(A.data.symbol||"")!==String(symbol)&&!A.cachedData){A.data=null;resetUnavailable();}
     $("loadState").textContent="Loading available market analysis…";
     const refreshAccount=options.refreshAccount===true;
     const refreshMarket=options.refreshMarket===true;
     const endpoint="/analysis/data/?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&limit="+limit+"&refresh="+(refreshMarket?"1":"0")+"&refresh_account="+(refreshAccount?"1":"0");
     try{
-      const d=await request(endpoint);
+      const d=await request(endpoint,{signal:controller.signal});
       if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
       if(d.status==="error")throw new Error(d.message||"Analysis unavailable");
       render(d);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(d));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();
@@ -209,7 +214,7 @@
       if(!refreshMarket&&!options.backgroundRefresh&&!A.cachedData&&Number(e?.status)===503){
         $("loadState").textContent="No saved candles yet · requesting broker-authoritative market data…";
         try{
-          const refreshed=await request(endpoint.replace("&refresh=0","&refresh=1"));
+          const refreshed=await request(endpoint.replace("&refresh=0","&refresh=1"),{signal:controller.signal});
           if(generation!==A.loadGeneration||symbol!==$("symbol").value||tf!==$("timeframe").value||limit!==$("limit").value)return;
           if(refreshed.status==="error")throw new Error(refreshed.message||"Broker candle refresh unavailable");
           render(refreshed);A.cachedData=null;try{sessionStorage.setItem(cacheKey(symbol,tf,limit),JSON.stringify(refreshed));}catch(_){}$("loadState").textContent="Updated "+new Date().toLocaleTimeString();return;
@@ -229,19 +234,45 @@
       set("keyCurrentPrice","—");set("resistance1","—");set("resistance2","—");set("support1","—");set("support2","—");
       set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
       drawChart([]); drawIndicators([]);
+    } finally {
+      if(A.requestController===controller)A.requestController=null;
     }
   }
-  async function markets(){
+  async function markets(options={}) {
     const select=$("symbol");
-    try{const node=$("analysis-markets-data");const bootstrapped=node?JSON.parse(node.textContent||"[]"):[];if(Array.isArray(bootstrapped)&&bootstrapped.length)A.markets=bootstrapped;}catch(_){}
-    if(!A.markets.length){try{const d=await request("/analysis/markets/");A.markets=Array.isArray(d.markets)?d.markets:[];}catch(e){$("loadState").textContent=e.message||"Markets unavailable";}}
+    const status=$("loadState"), visibleStatus=$("marketCatalogueStatus");
+    const showCatalogueStatus=message=>{if(status)status.textContent=message;if(visibleStatus){visibleStatus.textContent=message;visibleStatus.hidden=!message;}};
     if(!select)return;
-    select.innerHTML=A.markets.map(m=>'<option value="'+esc(m.symbol)+'">'+esc(marketName(m))+'</option>').join("");
-    if(!A.markets.length){select.innerHTML='<option value="">No markets available</option>';$("loadState").textContent="No active markets are available.";setHealth(false,"UNAVAILABLE");return;}
-    const requested=new URLSearchParams(location.search).get("symbol");const preferred=[requested,A.markets[0].symbol].find(value=>A.markets.some(m=>m.symbol===value));select.value=preferred||A.markets[0].symbol;updateSelectedMarketIcon();
-    const tf=$("timeframe").value,limit=$("limit").value;const restored=restoreCached(select.value,tf,limit);
-    // Start the broker refresh immediately when a saved snapshot is already visible.
-    void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
+    const previous=select.value;
+    select.disabled=true;
+    select.innerHTML='<option value="">Loading broker instruments…</option>';
+    showCatalogueStatus("");
+    try {
+      // The Terminal owns the canonical connected-broker instrument API.
+      // Analysis consumes that same endpoint and response, not a second
+      // DB-backed catalogue or a separate Deriv sync request.
+      const catalogue = window.AlgoBotServices?.instruments?.list;
+      if (typeof catalogue !== 'function') throw new Error("The shared instrument catalogue is not ready.");
+      const payload = await catalogue({ forceRefresh: Boolean(options.forceRefresh), timeout: 7000 });
+      const rows=Array.isArray(payload?.symbols)?payload.symbols:[];
+      A.markets=rows.filter(row=>row&&String(row.symbol||"").trim()&&row.is_active!==false&&row.is_tradable!==false);
+      if(!A.markets.length)throw new Error(payload?.detail||"The connected broker returned no active tradable instruments.");
+      select.innerHTML=A.markets.map(row=>'<option value="'+esc(row.symbol)+'">'+esc(marketName(row))+'</option>').join("");
+      const requested=new URLSearchParams(location.search).get("symbol");
+      select.value=[previous,requested,A.markets[0].symbol].find(value=>A.markets.some(row=>row.symbol===value))||A.markets[0].symbol;
+      select.disabled=false;
+      updateSelectedMarketIcon();
+      const tf=$("timeframe").value,limit=$("limit").value,restored=restoreCached(select.value,tf,limit);
+      showCatalogueStatus(payload?.stale===true?"Showing the last known broker catalogue; live refresh is unavailable.":"");
+      void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
+    } catch(error) {
+      A.markets=[];
+      select.innerHTML='<option value="">Instruments unavailable — retry</option>';
+      select.disabled=false;
+      showCatalogueStatus((error?.message||"The connected broker instrument catalogue is unavailable.")+" Use Refresh to retry.");
+      setHealth(false,"UNAVAILABLE");
+      set("heroFeedState","Market catalogue unavailable");
+    }
   }
   async function prepare(){
     if(!A.data)return;
@@ -251,9 +282,11 @@
   }
   function boot(){
     ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
-    $("refresh")?.addEventListener("click",()=>load({refreshAccount:true,refreshMarket:true}));$("prepare")?.addEventListener("click",prepare);
+    $("refresh")?.addEventListener("click",()=>{if(!A.markets.length){void markets({forceRefresh:true});return;}void load({refreshAccount:false,refreshMarket:true});});$("prepare")?.addEventListener("click",prepare);
     const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
-    window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});markets();
+    window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});
+    window.addEventListener("pagehide",()=>{A.loadGeneration+=1;A.requestController?.abort();A.requestController=null;clearInterval(A.timer);},{once:true});
+    markets();
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();

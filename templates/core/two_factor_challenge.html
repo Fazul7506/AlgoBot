@@ -4,18 +4,18 @@
 {% block content %}
 <main class="two-factor-page">
   <section class="two-factor-card" aria-labelledby="verify-signin-title">
-    <p class="two-factor-eyebrow">Account security</p>
-    <h1 id="verify-signin-title">Verify sign-in</h1>
-    <p class="two-factor-intro">Enter the current code from your authenticator app or an unused recovery code to securely finish signing in.</p>
+    <p class="two-factor-eyebrow">Your trading workspace, secured</p>
+    <h1 id="verify-signin-title">Verify it’s you</h1>
+    <p class="two-factor-intro">Your sign-in details were accepted. Enter your authenticator code or one of your unused recovery codes to complete sign-in.</p>
     {% if error %}<p class="account-alert account-alert--error" role="alert">{{ error }}</p>{% endif %}
     <form method="post">
       {% csrf_token %}
       <div class="two-factor-field">
         <label for="two-factor-code">Authenticator or recovery code</label>
-        <input id="two-factor-code" name="two_factor_code" autocomplete="one-time-code" inputmode="text" maxlength="32" required autofocus>
+        <input id="two-factor-code" name="two_factor_code" autocomplete="one-time-code" inputmode="numeric" maxlength="32" aria-describedby="two-factor-help" required autofocus>
       </div>
-      <div class="two-factor-actions"><button class="account-btn account-btn--primary" type="submit">Verify and continue</button><a class="account-btn" href="{% url 'login_page' %}">Cancel</a></div>
-      <p class="two-factor-note">Your verification code is used only to complete this sign-in. Never share it with anyone.</p>
+      <p class="two-factor-note" id="two-factor-help">Use the current six-digit code from your authenticator app, or enter an unused recovery code. You do not need to enter your password again.</p>
+      <div class="two-factor-actions"><button class="account-btn account-btn--primary" type="submit">Verify and sign in</button><a class="account-btn" href="{% url 'two_factor_challenge_page' %}?cancel=1">Cancel sign-in</a></div>
     </form>
   </section>
 </main>

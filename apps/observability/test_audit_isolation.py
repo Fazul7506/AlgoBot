@@ -59,6 +59,19 @@ class AuditApiIsolationTests(TestCase):
         self.assertIn("order_submitted", actions)
         self.assertNotIn("credential_rotated", actions)
 
+    def test_browser_token_unauthenticated_response_is_not_bridged_as_a_flash_message(self):
+        from unittest.mock import patch
+        from django.http import JsonResponse
+
+        request = RequestFactory().get("/api/auth/browser-token/")
+        response = JsonResponse(
+            {"detail": "Authentication credentials were not provided.", "code": "not_authenticated"},
+            status=401,
+        )
+        with patch("core.middleware.audit_middleware.messages.add_message") as add_message:
+            AuditMiddleware._bridge_message(request, response)
+        add_message.assert_not_called()
+
     def test_mutating_request_is_recorded_without_storing_request_body(self):
         factory = RequestFactory()
         request = factory.post("/api/orders/submit/", data='{"token":"do-not-store"}', content_type="application/json")

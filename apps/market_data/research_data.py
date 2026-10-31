@@ -11,6 +11,7 @@ from typing import Any
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.historical import normalize_timeframe
 from apps.market_data.models import Candle, MarketSymbol
+from apps.market_data.services import MarketDataService
 
 
 class ResearchDataService:
@@ -27,10 +28,8 @@ class ResearchDataService:
 
     def market(self, symbol: str) -> MarketSymbol:
         value = str(symbol or "").strip().upper()
-        market = MarketSymbol.objects.filter(
-            symbol=value,
-            is_active=True,
-            is_tradable=True,
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=value
         ).first()
         if not market:
             raise ValueError(f"Unknown active tradable market symbol: {value}")

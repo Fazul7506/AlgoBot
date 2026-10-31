@@ -138,10 +138,12 @@ class MarketModelTrainer:
         return job.metrics
 
     def train_active_symbols(self, timeframe: str = "M1", min_accuracy: float = 0.52) -> dict[str, Any]:
-        from apps.market_data.models import MarketSymbol
+        from apps.market_data.services import MarketDataService
         timeframe = normalize_timeframe(timeframe)
         results = {}
-        for symbol in MarketSymbol.objects.filter(is_active=True, is_tradable=True).values_list("symbol", flat=True):
+        for symbol in MarketDataService.symbols.catalogue(
+            active=True, tradable=True
+        ).values_list("symbol", flat=True):
             try:
                 results[symbol] = self.train_symbol(symbol, timeframe, min_accuracy)
             except Exception as exc:

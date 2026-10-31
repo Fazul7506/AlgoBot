@@ -3,7 +3,7 @@
   if (!page) return;
   const esc = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
-  const getJSON = async url => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},25000); };
+  const getJSON = async (url, timeout=12000) => { const request=window.AlgoBotFrontendData?.request; if(typeof request!=='function') throw new Error('Authenticated API transport is not ready. Refresh the page and try again.'); return request(url,{headers:{Accept:'application/json'}},timeout); };
   const marketAssetIcon = (raw, market, displayName) => {
     const assets = window.AlgoBotMarketAssets;
     const resolved = assets?.resolve?.({symbol:raw, market, display_name:displayName});
@@ -145,23 +145,20 @@
         select.addEventListener('change',()=>{const selected=select.selectedOptions?.[0];const symbol=selected?.value||'';const label=selected?.textContent||symbol;icon.innerHTML=symbol?marketAssetIcon(symbol, label, label):'';});
       }
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
-      const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Instrument catalogue request timed out')),12000));
       try {
-        let d;
-        try {
-          d=await Promise.race([getJSON('/api/market/broker-catalogue/?limit=500'),timeout]);
-        } catch (primaryError) {
-          // Keep the connected-broker endpoint authoritative; the public symbol
-          // endpoint is a bounded fallback for deployments where broker catalogue
-          // routing is temporarily unavailable.
-          d=await Promise.race([getJSON('/api/market/symbols/?limit=500'),timeout]);
-          if (!d || (!Array.isArray(d.symbols) && !Array.isArray(d.results) && !Array.isArray(d.data))) throw primaryError;
-        }
+        // Match the Terminal's single canonical connected-broker catalogue API.
+        // Pass the timeout to the shared transport so the underlying fetch is
+        // aborted too; do not race an orphaned request or fall back to a second API.
+        const catalogue = window.AlgoBotServices?.instruments?.list;
+        if (typeof catalogue !== 'function') throw new Error('Shared instrument catalogue is not ready.');
+        const d = await catalogue({ timeout: 7000 });
         const rows=Array.isArray(d?.symbols)?d.symbols:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.data)?d.data:[]));
         if (!rows.length) throw new Error(d?.detail || 'Market API returned no active instruments');
-        const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)).map(x=>{const symbol=String(x.symbol||x.underlying_symbol||x.code);const supplied=String(x.display_name||x.name||x.underlying_symbol_name||'');return {...x,symbol,display_name:marketDisplayName(symbol,supplied)};});
+        const instruments=rows.filter(x=>x && (x.symbol || x.underlying_symbol || x.code)
+          && x.is_active !== false && x.is_tradable !== false
+          && x.active !== false && x.tradable !== false).map(x=>{const symbol=String(x.symbol||x.underlying_symbol||x.code);const supplied=String(x.display_name||x.name||x.underlying_symbol_name||'');return {...x,symbol,display_name:marketDisplayName(symbol,supplied)};});
         const current=select.value;
-        select.innerHTML='<option value=\"\">Choose a market</option>'+instruments.map(x=>'<option value=\"'+esc(x.symbol)+'\">'+esc(x.display_name||'Market instrument')+'</option>').join('');
+        select.innerHTML='<option value="">Choose a market</option>'+instruments.map(x=>'<option value="'+esc(x.symbol)+'">'+esc(x.display_name||'Market instrument')+'</option>').join('');
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
         else if(instruments.length)select.selectedIndex=1;
         if(!instruments.length) throw new Error('Connected broker returned zero active instruments');
@@ -304,6 +301,54 @@
       }
     });
   };
-  const run = async () => { const root=mount(); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} bind(root); };
+  const injectThemeStyle = () => {
+    const id = 'algobot-ai-predictions-theme-contract';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab { color:var(--ds-text)!important; background:transparent!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-hero { background:var(--ds-surface-1)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-hero h1,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card h2,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card h3,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-value,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table td,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row strong,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight { color:var(--ds-text)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-hero p,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-note,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-empty,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-stat-label,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row span,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight>span:first-child,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-label { color:var(--ds-muted)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-card,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-model,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-result,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-footer,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-market-option { background:var(--ds-surface-1)!important; border-color:var(--ds-border)!important; color:var(--ds-text)!important; box-shadow:none!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-tile { background:var(--ds-surface-2)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-tile strong { color:var(--ds-text)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-performance-tile small,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-market-option small { color:var(--ds-muted)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-empty,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-note { background:var(--ds-surface-2)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table tbody tr:hover { background:var(--ds-surface-2)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-controls input,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-controls select { background:var(--ds-surface-2)!important; color:var(--ds-text)!important; border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table th { background:var(--ds-surface-2)!important; color:var(--ds-muted)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table td,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row,
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight { border-color:var(--ds-border)!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-chart { background:#04152b!important; color:#dbeafe!important; }
+      body:has([data-page="core-predictions"]) .ai-lab button:focus-visible,
+      body:has([data-page="core-predictions"]) .ai-lab input:focus-visible,
+      body:has([data-page="core-predictions"]) .ai-lab select:focus-visible { outline:2px solid var(--ds-info)!important; outline-offset:2px!important; }
+    `;
+    document.head.appendChild(style);
+  };
+  const run = async () => { const root=mount(); injectThemeStyle(); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} bind(root); };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true}); else run();
 })();

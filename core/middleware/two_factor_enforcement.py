@@ -3,6 +3,7 @@ from django.contrib.auth import logout
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import UserProfile
 
@@ -43,6 +44,8 @@ class TwoFactorEnforcementMiddleware:
                 pending_user_id = user.pk
                 logout(request)
                 request.session["algobot_pending_2fa_user_id"] = pending_user_id
+                request.session["algobot_pending_2fa_started"] = int(timezone.now().timestamp())
+                request.session["algobot_pending_2fa_destination"] = path
                 if path.startswith("/api/"):
                     return JsonResponse({
                         "status": "challenge_required",

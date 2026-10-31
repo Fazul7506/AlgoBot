@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version-file: ".python-version"
           cache: pip
           cache-dependency-path: requirements/base.txt
       - name: Validate slug, draft and reviewed sandbox evidence

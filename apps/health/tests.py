@@ -18,6 +18,18 @@ class HealthEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["service"], "algobot")
 
+    @patch.dict("os.environ", {"RENDER_GIT_COMMIT": "a" * 40})
+    def test_render_health_exposes_only_the_deployed_commit_identifier(self):
+        response = self.client.get(reverse("health:health"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["commit"], "a" * 40)
+
+    @patch.dict("os.environ", {"RENDER_GIT_COMMIT": "not-a-commit-secret"})
+    def test_render_health_omits_invalid_deploy_metadata(self):
+        response = self.client.get(reverse("health:health"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("commit", response.json())
+
     def test_health_endpoints_are_exempt_from_api_throttling(self):
         for endpoint in (views.health, views.liveness, views.readiness):
             self.assertEqual(endpoint.cls.throttle_classes, [])

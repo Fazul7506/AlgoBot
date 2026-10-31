@@ -265,3 +265,175 @@ body:has(.analysis-hero){background:#041326}
 .analysis-dashboard .reference-table{width:100%;min-width:420px}
 @media(max-width:760px){.analysis-market-picker{width:100%}.analysis-market-icon{width:28px;height:28px;flex-basis:28px}.reference-chart-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%}.reference-chart-controls label{width:100%}.reference-chart-controls select{width:100%}.analysis-dashboard .analysis-main-grid,.analysis-dashboard .analysis-secondary-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:380px){.reference-chart-controls{grid-template-columns:minmax(0,1fr)}.analysis-dashboard .reference-table{min-width:390px}}
+
+
+/* Analysis layout guard: keep grid children shrinkable and all page content inside the
+   available app-content width after the responsive sidebar has been accounted for. */
+.analysis-dashboard { width: 100%; max-width: 1600px; min-width: 0; margin-inline: auto; box-sizing: border-box; }
+.analysis-dashboard > *, .analysis-dashboard .reference-main-grid,
+.analysis-dashboard .reference-main-grid > *, .analysis-dashboard .reference-right-column,
+.analysis-dashboard .analysis-secondary-grid, .analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-kpis, .analysis-dashboard .analysis-kpi,
+.analysis-dashboard .panel, .analysis-dashboard .section-head,
+.analysis-dashboard .reference-heading-copy, .analysis-dashboard .reference-live-card { min-width: 0; }
+.analysis-dashboard .reference-page-heading { flex-wrap: wrap; }
+.analysis-dashboard .reference-heading-copy { overflow-wrap: anywhere; }
+.analysis-dashboard .reference-live-card { max-width: 100%; box-sizing: border-box; }
+.analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1.62fr) minmax(0, .98fr); }
+.analysis-dashboard .reference-main-grid > *, .analysis-dashboard .reference-right-column > * { min-width: 0; }
+.analysis-dashboard .reference-chart-controls { min-width: 0; max-width: 100%; }
+.analysis-dashboard .reference-chart-controls select { max-width: 100%; }
+.analysis-dashboard .table-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+@media (max-width: 900px) {
+  .analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1fr); }
+  .analysis-dashboard .reference-right-column { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .analysis-dashboard { padding-inline: 12px; }
+  .analysis-dashboard .reference-page-heading { display: flex; align-items: flex-start; }
+  .analysis-dashboard .reference-live-card { flex: 1 1 100%; }
+  .analysis-dashboard .reference-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analysis-dashboard .reference-main-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 390px) {
+  .analysis-dashboard { padding-inline: 8px; }
+  .analysis-dashboard .reference-kpis { grid-template-columns: minmax(0, 1fr); }
+}
+
+
+/* Visible, accessible recovery message for the Analysis market catalogue. */
+.analysis-market-status {
+  margin: 0 18px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, rgba(148, 163, 184, .24));
+  border-radius: 12px;
+  color: var(--text-secondary, #aab8cc);
+  background: var(--surface-muted, rgba(15, 31, 51, .78));
+  font-size: .875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.analysis-market-status[hidden] { display: none !important; }
+@media (max-width: 760px) { .analysis-market-status { margin: 0 12px 12px; } }
+
+
+/* Analysis layout hard reset: neutralize inherited RTL/right-alignment and
+   constrained flex/grid sizing that can collapse the dashboard into a column. */
+html:has(.analysis-dashboard) { direction: ltr; }
+body:has(.analysis-dashboard) { direction: ltr; text-align: left; }
+body:has(.analysis-dashboard) #main-content.analysis-dashboard {
+  display: grid !important;
+  direction: ltr !important;
+  text-align: left !important;
+  width: 100% !important;
+  max-width: 1680px !important;
+  min-width: 0 !important;
+  margin: 0 auto !important;
+  padding: 22px clamp(12px, 2vw, 28px) 32px !important;
+  box-sizing: border-box !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  justify-content: stretch !important;
+  align-content: start !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 16px !important;
+}
+.analysis-dashboard,
+.analysis-dashboard * {
+  box-sizing: border-box;
+  direction: ltr;
+}
+.analysis-dashboard > *,
+.analysis-dashboard .reference-page-heading,
+.analysis-dashboard .reference-kpis,
+.analysis-dashboard .reference-main-grid,
+.analysis-dashboard .analysis-secondary-grid,
+.analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-operations-grid {
+  min-width: 0;
+  max-width: 100%;
+}
+.analysis-dashboard > * { justify-self: stretch; }
+.analysis-dashboard :is(h1,h2,h3,h4,p,label,span,div,button,a,select,option,small,strong,em,li) {
+  text-align: left;
+}
+.analysis-dashboard .reference-page-heading { width: 100%; }
+.analysis-dashboard .reference-heading-copy { min-width: 0; flex: 1 1 auto; }
+.analysis-dashboard .reference-kpis { width: 100%; }
+.analysis-dashboard .reference-main-grid,
+.analysis-dashboard .analysis-secondary-grid,
+.analysis-dashboard .analysis-detail-grid,
+.analysis-dashboard .analysis-operations-grid {
+  width: 100%;
+}
+.analysis-dashboard .reference-table tbody td { text-align: right; }
+.analysis-dashboard .reference-table .empty,
+.analysis-dashboard .analysis-chart-footer,
+.analysis-dashboard .indicator-chart-wrap .empty { text-align: center; }
+@media (max-width: 760px) {
+  body:has(.analysis-dashboard) #main-content.analysis-dashboard {
+    padding: 12px 10px 24px !important;
+    gap: 12px !important;
+  }
+  .analysis-dashboard .reference-page-heading { align-items: flex-start; }
+  .analysis-dashboard .reference-kpis,
+  .analysis-dashboard .reference-main-grid,
+  .analysis-dashboard .analysis-secondary-grid,
+  .analysis-dashboard .analysis-detail-grid,
+  .analysis-dashboard .analysis-operations-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+
+/* Final shell-width safeguard: keep Analysis in the full app-content column.
+   Some shared shell layouts use grid/flex sizing; min-width:0 alone is not
+   enough when a child track has an intrinsic width. */
+body:has(#main-content.analysis-dashboard) .app-shell,
+body:has(#main-content.analysis-dashboard) .app-content {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+body:has(#main-content.analysis-dashboard) .app-content {
+  display: block !important;
+  overflow-x: clip;
+}
+body:has(#main-content.analysis-dashboard) #main-content.analysis-dashboard {
+  float: none !important;
+  position: relative;
+  inset-inline: auto !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  place-self: stretch !important;
+  width: 100% !important;
+  max-width: 1680px !important;
+  min-width: 0 !important;
+  margin-inline: auto !important;
+}
+.analysis-dashboard :is(.reference-page-heading,.reference-kpis,.reference-main-grid,.analysis-secondary-grid,.analysis-detail-grid,.analysis-operations-grid,.panel,.analysis-kpi) {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+.analysis-dashboard .reference-main-grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+}
+.analysis-dashboard .reference-right-column {
+  min-width: 0;
+}
+.analysis-dashboard :is(.reference-chart-controls,.analysis-toolbar,.toolbar) {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 1000px) {
+  .analysis-dashboard .reference-main-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+
+/* Analysis headings stay left-aligned inside inherited flex/grid shells. */
+.workspace .panel > .section-head{display:flex!important;justify-content:flex-start!important;align-items:flex-start!important;text-align:left!important}
+.workspace .panel > .section-head h2{display:flex!important;justify-content:flex-start!important;text-align:left!important;margin:0 auto 0 0!important}
+.workspace .panel > .section-head > a{margin-left:auto;flex:0 0 auto}
+.workspace .reference-insights > .section-head{flex-direction:row!important;align-items:center!important}

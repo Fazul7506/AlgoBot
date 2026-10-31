@@ -5,7 +5,7 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 
 from .broker_events import BrokerEventConsumer
-from .account_context import get_active_account
+from .account_context import get_active_account_for_session
 
 
 class PortfolioBrokerEventConsumer(BrokerEventConsumer):
@@ -13,11 +13,13 @@ class PortfolioBrokerEventConsumer(BrokerEventConsumer):
 
     async def connect(self):
         await super().connect()
+        if not getattr(self, "_broker_connection_accepted", False):
+            return
         await self.send_json({"type": "portfolio.snapshot", **await self.portfolio_snapshot()})
 
     @database_sync_to_async
     def portfolio_snapshot(self):
-        account = get_active_account(self.scope["user"], request=None)
+        account = get_active_account_for_session(self.scope["user"], self.scope.get("session"))
         if not account:
             return {"status": "empty", "balance": None, "equity": None, "unrealized_pnl": None}
         realtime = dict((account.credentials or {}).get("realtime") or {})
@@ -39,6 +41,8 @@ class NotificationBrokerEventConsumer(BrokerEventConsumer):
 
     async def connect(self):
         await super().connect()
+        if not getattr(self, "_broker_connection_accepted", False):
+            return
         await self.send_json({"type": "notification.snapshot", "notifications": await self.latest_notifications()})
 
     @database_sync_to_async

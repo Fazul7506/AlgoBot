@@ -8,7 +8,7 @@
   const inflight=new Map(),cache=new Map(),GET_CACHE_MS=1200;
   const getCacheTtl=url=>{
     const path=new URL(resolveUrl(url),window.location.origin).pathname;
-    if (/^\/api\/(?:strategies\/available|market\/broker-catalogue|market\/broker-capabilities)\/$/.test(path)) return 15000;
+    if (/^\/api\/(?:strategies\/available|market\/(?:catalogue|broker-catalogue)|market\/broker-capabilities)\/$/.test(path)) return 15000;
     if (/^\/api\/brokers\/accounts\/$/.test(path)) return 2500;
     return GET_CACHE_MS;
   };
@@ -68,9 +68,9 @@
   };
   const normalizeEndpoint=url=>url==='/api/market/snapshots/all_snapshots/'?'/api/market/snapshots/?page_size=8':url;
   const isSessionAccountSelectUrl=url=>{const path=new URL(resolveUrl(url),window.location.origin).pathname.split('/').filter(Boolean);return path.length===5&&path[0]==='api'&&path[1]==='brokers'&&path[2]==='accounts'&&Boolean(path[3])&&path[4]==='select';};
-  // Account list and active-context reads must carry the same-site Django session
-  // cookie; otherwise the API falls back to a default account and can undo a switch.
-  const isSessionAccountContextUrl=url=>{const path=new URL(resolveUrl(url),window.location.origin).pathname;return path==='/api/brokers/accounts/'||path==='/api/brokers/accounts/active/'||isSessionAccountSelectUrl(url);};
+  // Session-backed account, preference and active-context APIs must carry the
+  // same-site Django session cookie while the bearer token authorizes the API request.
+  const isSessionAccountContextUrl=url=>{const path=new URL(resolveUrl(url),window.location.origin).pathname;return path==='/api/settings/'||path==='/api/brokers/accounts/'||path==='/api/brokers/accounts/active/'||isSessionAccountSelectUrl(url);};
   const isCloudflareChallenge=(response,text)=>{if(!response)return false;const mitigated=String(response.headers?.get('cf-mitigated')||'').toLowerCase();if(mitigated==='challenge')return true;if(!text)return false;const body=String(text).toLowerCase();return[400,403,429,503,520,521,522,524].includes(response.status)&&(body.includes('just a moment')||body.includes('challenge-platform')||body.includes('cf_chl_opt')||body.includes('cf_chl-')||body.includes('challenges.cloudflare.com')||body.includes('enable javascript and cookies to continue')||(body.includes('cloudflare')&&String(response.headers?.get('content-type')||'').toLowerCase().includes('text/html')))};
   const parseDjangoResponse=(response,text)=>{const ct=String(response?.headers?.get('content-type')||'').toLowerCase();if(!ct.includes('text/html')||!text)return null;try{const doc=new DOMParser().parseFromString(text,'text/html'),env=doc.querySelector('[data-django-response]');if(!env)return null;const payloadNode=doc.querySelector('#django-response-payload'),messageNode=doc.querySelector('[data-response-message], [data-django-message]');let payload={};if(payloadNode?.textContent)payload=JSON.parse(payloadNode.textContent);return{django:true,status:Number(env.dataset.status||response.status||200),kind:env.dataset.kind||'info',message:messageNode?.textContent?.trim()||'',payload}}catch(_){return null}};
   const parsePayload=(response,text)=>{const django=parseDjangoResponse(response,text);if(django)return django;try{return text?JSON.parse(text):{}}catch(_){if(isCloudflareChallenge(response,text))return{detail:'Dedicated API edge challenge encountered.',code:'EDGE_CHALLENGE'};const ct=String(response?.headers?.get('content-type')||'').toLowerCase();return{detail:ct.includes('text/html')?`API returned an unexpected HTML response (${response.status}).`:String(text||`HTTP ${response?.status||'unknown'} request failure`)}}};
@@ -125,9 +125,22 @@
     return{response,text:await response.text()};
   }
 
+  function linkExternalAbortSignal(externalSignal, controller) {
+    if (!externalSignal) return () => {};
+    if (externalSignal.aborted) {
+      controller.abort();
+      return () => {};
+    }
+    const abort = () => controller.abort();
+    externalSignal.addEventListener('abort', abort, {once: true});
+    return () => externalSignal.removeEventListener('abort', abort);
+  }
+
   const protectedPublicPaths = /^\/api\/(?:brokers\/|orders(?:\/|$)|positions(?:\/|$)|dashboard(?:\/|$)|ai(?:\/|$)|predictions(?:\/|$)|automation(?:\/|$)|portfolio(?:\/|$)|backtesting(?:\/|$)|settings(?:\/|$)|tenants(?:\/|$))/;
   async function request(rawUrl,options={},timeout=25000){
     const url=normalizeEndpoint(rawUrl),method=(options.method||'GET').toUpperCase();
+    const externalSignal=options.signal,cancellable=Boolean(externalSignal);
+    if(externalSignal?.aborted){const aborted=new Error('Request aborted');aborted.name='AbortError';throw aborted;}
     const sessionAccountContext=isSessionAccountContextUrl(url);
     if (document.body?.dataset.authenticated !== 'true' && protectedPublicPaths.test(url)) {
       const error=new Error('Sign in to access your workspace data.');
@@ -141,16 +154,17 @@
     const selectedId=brokerState()?.get?.()?.account?.id||'';
     const key=`${method} ${url} account=${selectedId}`;
     if(method==='GET'){
-      if(inflight.has(key))return inflight.get(key);
+      if(!cancellable&&inflight.has(key))return inflight.get(key);
       const recent=cache.get(key);if(recent&&Date.now()-recent.at<=getCacheTtl(url))return recent.payload;
     }
     const retry=()=>request(rawUrl,{...options,notifyOnError:true},timeout);
     const sameOriginPath=sameOriginRetryPath(url,method,false);
     const promise=(async()=>{
-      let controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
+      let controller=new AbortController(),cleanupExternal=linkExternalAbortSignal(externalSignal,controller),timer=setTimeout(()=>controller.abort(),Math.max(1000,timeout)),result,firstError=null;
       try{
         try{result=await fetchOnce(url,options,controller)}catch(error){
           firstError=error;
+          if(externalSignal?.aborted)throw error;
           if(!result){
             const e=new Error(firstError?.name==='AbortError'?'Backend request timed out':(firstError?.message||'Network request failed'));
             e.code=firstError?.name==='AbortError'?'API_TIMEOUT':'NETWORK_ERROR';e.status=0;e.retryable=safeMethods.has(method);
@@ -158,19 +172,22 @@
             throw e;
           }
         }
-      }finally{clearTimeout(timer)}
+      }finally{clearTimeout(timer);cleanupExternal()}
       const{response,text}=result;
       if(response.status===401&&apiAccessToken){
         apiAccessToken=null;
-        try{
-          controller=new AbortController();
+        controller=new AbortController();
+        cleanupExternal=linkExternalAbortSignal(externalSignal,controller);
+        const retryTimer=setTimeout(()=>controller.abort(),Math.max(1000,timeout));
+        try {
           const retryToken=await ensureApiAccessToken(controller,true);
           const retryHeaders=new Headers({Accept:'application/json',...(options.headers||{})});
           retryHeaders.set('Authorization','Bearer '+retryToken);
           const retryResponse=await nativeFetch(resolveUrl(url),{credentials:sessionAccountContext?'include':'omit',...options,headers:retryHeaders,cache:'no-store',signal:controller.signal});
           const retryText=await retryResponse.text();
           result={response:retryResponse,text:retryText};
-        }catch(_){ }
+        }catch(retryError){if(externalSignal?.aborted)throw retryError;}
+        finally{clearTimeout(retryTimer);cleanupExternal()}
       }
       const finalResponse=result.response, finalText=result.text;
       const finalParsed=parsePayload(finalResponse,finalText),finalPayload=finalParsed?.django?finalParsed.payload:finalParsed;
@@ -178,8 +195,8 @@
       if(method==='GET')cache.set(key,{payload:finalPayload,at:Date.now()});
       return finalPayload;
     })();
-    if(method==='GET')inflight.set(key,promise);
-    try{return await promise}finally{if(inflight.get(key)===promise)inflight.delete(key)}
+    if(method==='GET'&&!cancellable)inflight.set(key,promise);
+    try{return await promise}finally{if(method==='GET'&&!cancellable&&inflight.get(key)===promise)inflight.delete(key)}
   }
 
   function cached(url,maxAge=120000){const selectedId=brokerState()?.get?.()?.account?.id||'';const item=cache.get(`${'GET'} ${normalizeEndpoint(url)} account=${selectedId}`);return item&&Date.now()-item.at<=maxAge?item.payload:null}

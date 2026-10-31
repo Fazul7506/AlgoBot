@@ -6,7 +6,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Candle, MarketSymbol, Tick
+from .models import Candle, Tick
+from .services import MarketDataService
 
 
 @api_view(["GET"])
@@ -15,7 +16,9 @@ def quality(request):
     """Read-only data inventory and freshness telemetry for the research Data Center."""
     now = timezone.now()
     stale_after = now - timedelta(minutes=5)
-    symbols = MarketSymbol.objects.filter(is_active=True).order_by("market", "symbol")
+    symbols = MarketDataService.symbols.catalogue(
+        active=True, tradable=None
+    )
     rows = []
     for symbol in symbols:
         ticks = Tick.objects.filter(symbol=symbol).aggregate(

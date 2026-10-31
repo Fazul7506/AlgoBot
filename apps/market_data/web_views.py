@@ -3,7 +3,7 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
-from .models import MarketSymbol
+from .services import MarketDataService
 from .serializers import MarketSymbolSerializer
 
 
@@ -29,8 +29,8 @@ def market_catalogue(request):
     if cached is not None:
         return JsonResponse(cached)
 
-    queryset = MarketSymbol.objects.filter(
-        broker="deriv", is_active=True, is_tradable=True
+    queryset = MarketDataService.symbols.catalogue(
+        broker="deriv", active=True, tradable=True
     ).order_by("market", "symbol")
     symbols = MarketSymbolSerializer(queryset, many=True).data
     payload = {

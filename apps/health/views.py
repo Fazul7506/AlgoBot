@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from django.core.cache import cache
 from django.db import connections
 from django.db.utils import OperationalError
@@ -55,4 +57,10 @@ def health(request):
     # Dependency readiness remains available at /health/ready/.
     if (response := _empty_head_response(request)) is not None:
         return response
-    return Response({"status": "ok", "service": "algobot"})
+    payload = {"status": "ok", "service": "algobot"}
+    # Render exposes the deployed Git revision. Returning only a validated public
+    # commit SHA lets browser smoke tests reject stale preview deployments.
+    commit = os.getenv("RENDER_GIT_COMMIT", "").strip().lower()
+    if 7 <= len(commit) <= 64 and all(character in "0123456789abcdef" for character in commit):
+        payload["commit"] = commit
+    return Response(payload)

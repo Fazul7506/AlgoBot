@@ -1,7 +1,7 @@
 /* AlgoBot workspace performance layer.
- * Keeps broker-backed GET data warm across same-tab page navigation without
- * inventing data. Cached values are account-scoped and short-lived; network
- * revalidation is always performed in the background after a cache hit.
+ * Keeps selected broker-backed GET data warm across same-tab page navigation
+ * without inventing data. Cached values are account-scoped and expire at the
+ * declared TTL; instrument catalogues stay on the canonical API cache.
  */
 (() => {
   'use strict';
@@ -11,10 +11,9 @@
   const data = () => window.AlgoBotFrontendData;
   const accountId = () => window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id || 'none';
   const keyFor = url => `algobot:workspace-cache:v1:${accountId()}:${url}`;
-  const safeGet = /^\/api\/(brokers\/accounts(?:\/|$)|market\/(?:catalogue|broker-capabilities|ticks\/broker|snapshots)|ticks\/latest|positions\/open|orders\/|dashboard\/(?:account_overview|signals)|signals\/|strategies\/)/;
+  const safeGet = /^\/api\/(brokers\/accounts(?:\/|$)|market\/(?:ticks\/broker|snapshots)|ticks\/latest|positions\/open|orders\/|dashboard\/(?:account_overview|signals)|signals\/|strategies\/)/;
   const ttlFor = url => {
     if (/ticks\/broker|ticks\/latest/.test(url)) return 3000;
-    if (/market\/catalogue|broker-capabilities/.test(url)) return 120000;
     if (/orders\/|positions\/open|signals\//.test(url)) return 10000;
     return 30000;
   };

@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 
@@ -20,8 +21,9 @@ from apps.analysis.broker_intelligence import build_account_risk_context
 from apps.brokers.services import BrokerRegistry, SynchronizationService
 from core.account_context import get_active_account
 from apps.market_data.models import MarketSnapshot, MarketSymbol
+from apps.market_data.services import MarketDataService
 from apps.strategies.models import StrategySignal
-from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick
+from apps.market_data.deriv_sync import fetch_contracts_for, fetch_tick, sync_active_symbols
 from apps.market_data.historical import persist_broker_chart_history, persist_broker_tick_history
 from apps.market_data.constants import TIMEFRAMES
 from apps.market_data.research_data import ResearchDataService
@@ -33,6 +35,9 @@ ANALYSIS_MARKETS_CACHE_SECONDS = 60
 ANALYSIS_CACHE_SECONDS = 15
 ANALYSIS_CONTRACT_TIMEOUT_SECONDS = 2.5
 _ANALYSIS_CONTRACT_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="analysis-contracts")
+_ANALYSIS_MARKET_SYNC_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analysis-market-sync")
+_ANALYSIS_MARKET_SYNC_LOCK = threading.Lock()
+_analysis_market_sync_future = None
 STRATEGY_BASELINE_MAX_AGE_SECONDS = 300
 
 logger = logging.getLogger(__name__)
@@ -329,7 +334,7 @@ def analysis_data(request):
                     last = broker_data["items"][-1]
                     live_tick = {"quote": last.get("close"), "epoch": last.get("epoch"), "symbol": market.symbol}
             try:
-                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=5.0))
+                latest = asyncio.run(asyncio.wait_for(adapter.get_live_signal_tick(market.symbol), timeout=1.5))
                 if latest and latest.get("price") is not None and latest.get("epoch") is not None:
                     live_tick = {
                         "symbol": market.symbol,
@@ -732,23 +737,82 @@ def analysis_data(request):
     return JsonResponse(result)
 
 
-def _analysis_markets():
-    cached = _safe_cache_get("algobot:analysis:markets:v1")
-    if cached is not None:
+def _analysis_markets(force_refresh=False):
+    # Do not treat an empty cached list as a valid catalogue: an earlier
+    # startup before the market stream synced must not hide newly synced symbols.
+    cache_key = "algobot:analysis:markets:v2"
+    cached = None if force_refresh else _safe_cache_get(cache_key)
+    if cached:
         return cached
     markets = list(
-        MarketSymbol.objects.filter(is_active=True, is_tradable=True)
-        .values("symbol", "display_name", "market", "sub_market")
-        .order_by("market", "symbol")
+        MarketDataService.symbols.catalogue(
+            broker="deriv", active=True, tradable=True
+        ).values("symbol", "display_name", "market", "sub_market")
     )
-    _safe_cache_set("algobot:analysis:markets:v1", markets, ANALYSIS_MARKETS_CACHE_SECONDS)
+    if markets:
+        _safe_cache_set(cache_key, markets, ANALYSIS_MARKETS_CACHE_SECONDS)
     return markets
+
+
+def _run_analysis_market_catalogue_sync():
+    """Refresh Deriv's catalogue off-request so an upstream timeout cannot stall Analysis."""
+    from django.db import close_old_connections
+
+    close_old_connections()
+    try:
+        synced = sync_active_symbols()
+        logger.info("analysis_market_catalogue_sync_completed", extra={"symbols_synced": synced})
+        return synced
+    except Exception:
+        logger.warning("analysis_market_catalogue_sync_failed", exc_info=True)
+        return 0
+    finally:
+        close_old_connections()
+
+
+def _schedule_analysis_market_catalogue_sync():
+    """Coalesce refresh requests into one bounded in-process background task."""
+    global _analysis_market_sync_future
+    with _ANALYSIS_MARKET_SYNC_LOCK:
+        if _analysis_market_sync_future is not None and not _analysis_market_sync_future.done():
+            return False
+        _analysis_market_sync_future = _ANALYSIS_MARKET_SYNC_EXECUTOR.submit(
+            _run_analysis_market_catalogue_sync
+        )
+        return True
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, BrokerOnboardingRequired])
 def analysis_markets(request):
-    return JsonResponse({"markets": _analysis_markets()})
+    force_refresh = str(request.query_params.get("refresh") or "").lower() in {"1", "true", "yes"}
+    markets = _analysis_markets(force_refresh=force_refresh)
+    refresh_scheduled = False
+    if force_refresh or not markets:
+        # Never perform a remote Deriv WebSocket request inside an HTTP request.
+        # The browser receives the last authoritative catalogue immediately;
+        # the next poll reads the database after this coalesced refresh completes.
+        refresh_scheduled = _schedule_analysis_market_catalogue_sync()
+        if markets:
+            markets = _analysis_markets(force_refresh=True)
+    payload = {"markets": markets}
+    if not markets:
+        payload.update({
+            "status": "unavailable",
+            "code": "MARKET_CATALOGUE_UNAVAILABLE",
+            "refreshing": refresh_scheduled,
+            "detail": (
+                "The live Deriv catalogue refresh is running in the background. "
+                "Retry shortly; no placeholder instruments have been added."
+            ),
+        })
+    else:
+        payload.update({
+            "status": "ok",
+            "count": len(markets),
+            "refreshing": refresh_scheduled,
+        })
+    return JsonResponse(payload)
 
 
 @api_view(["GET"])
@@ -758,7 +822,9 @@ def analysis_contracts(request):
     if not symbol:
         return JsonResponse({"status": "error", "code": "SYMBOL_REQUIRED", "message": "A market symbol is required."}, status=400)
     try:
-        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).get()
     except MarketSymbol.DoesNotExist:
         return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
     account = get_active_account(request.user, request=request)
@@ -889,7 +955,9 @@ def broker_proposal(request):
         return JsonResponse({"status": "error", "code": "UNSUPPORTED_PROPOSAL_BASIS", "message": "Risk-capped proposals currently support stake basis only."}, status=422)
 
     try:
-        market = MarketSymbol.objects.get(symbol=symbol, is_active=True, is_tradable=True)
+        market = MarketDataService.symbols.catalogue(
+            active=True, tradable=True, symbol=symbol
+        ).get()
     except MarketSymbol.DoesNotExist:
         return JsonResponse({"status": "error", "code": "MARKET_UNAVAILABLE", "message": "The selected market is not currently available from the broker catalogue."}, status=404)
 

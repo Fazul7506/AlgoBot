@@ -30,6 +30,38 @@ class TopbarNotificationActionTests(TestCase):
         self.other = get_user_model().objects.create_user(username="other-notification-user", password="password")
         self.client.force_login(self.user)
 
+    def test_notification_api_feed_and_unread_count_only_include_in_app_deliveries(self):
+        self.client.force_login(self.user)
+        in_app = Notification.objects.create(
+            user=self.user, title="Sign-in completed", message="Successful sign-in",
+            channel="in_app", status="delivered",
+        )
+        Notification.objects.create(
+            user=self.user, title="Sign-in completed", message="Successful sign-in",
+            channel="gmail", status="sent",
+        )
+        response = self.client.get(reverse("enterprise-notifications-list"))
+        self.assertEqual(response.status_code, 200)
+        rows = response.json().get("results", response.json())
+        self.assertEqual([row["id"] for row in rows], [in_app.pk])
+        unread = self.client.get(reverse("enterprise-notifications-unread-count"))
+        self.assertEqual(unread.json()["unread_count"], 1)
+
+    def test_mark_all_read_only_marks_in_app_delivery_rows(self):
+        self.client.force_login(self.user)
+        in_app = Notification.objects.create(
+            user=self.user, title="In-app", message="Visible", channel="in_app"
+        )
+        email = Notification.objects.create(
+            user=self.user, title="Email", message="External channel", channel="gmail"
+        )
+        response = self.client.post(reverse("enterprise-notifications-mark-all-read"))
+        self.assertEqual(response.status_code, 200)
+        in_app.refresh_from_db()
+        email.refresh_from_db()
+        self.assertIsNotNone(in_app.read_at)
+        self.assertIsNone(email.read_at)
+
     def test_mark_read_only_updates_the_authenticated_users_notification(self):
         notice = Notification.objects.create(user=self.user, title="Private alert", message="Only for this user")
         response = self.client.post(reverse("enterprise-notifications-mark-read", args=[notice.pk]))

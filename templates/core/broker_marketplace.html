@@ -124,6 +124,11 @@
 <script>
 (function(){
  const root=document.querySelector("[data-broker-marketplace]");if(!root||root.dataset.initialized==="true")return;root.dataset.initialized="true";
+ const apiRequest=(url,options={})=>{
+   const client=window.AlgoBotFrontendData;
+   if(!client?.request)throw new Error("The shared API client is unavailable. Refresh the page and try again.");
+   return client.request(url,{...options,credentials:"include"},15000);
+ };
  const cards=Array.from(root.querySelectorAll("[data-broker-card]")),search=root.querySelector("[data-broker-search]");
  const categoryButtons=Array.from(root.querySelectorAll("[data-broker-filter]")),statusButtons=Array.from(root.querySelectorAll("[data-broker-status-filter]"));
  let activeCategory="all",activeStatus="all";
@@ -168,9 +173,7 @@
      if(!provider){requestFeedback.textContent="Enter the broker name.";return;}
      submitButton.disabled=true;requestButton.disabled=true;submitButton.textContent="Submitting…";requestFeedback.textContent="Submitting your broker request securely…";
      try{
-       const response=await fetch("/api/broker-integration-requests/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrf,"Accept":"application/json"},body:JSON.stringify({provider_name:provider})});
-       const data=await response.json().catch(()=>({}));
-       if(!response.ok)throw new Error(data.detail||data.message||"Unable to save the broker request.");
+       const data=await apiRequest("/api/broker-integration-requests/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_name:provider})});
        requestFeedback.textContent="Request #"+data.request_id+" submitted for "+provider+". The AlgoBot team can now review it.";
        requestFeedback.classList.add("is-success");requestForm.reset();requestForm.hidden=true;requestButton.setAttribute("aria-expanded","false");requestButton.textContent="Request Submitted";requestButton.disabled=true;
      }catch(error){requestFeedback.textContent=error.message||"Unable to save the broker request. Please try again.";requestFeedback.classList.remove("is-success");}
@@ -194,11 +197,9 @@
    if(!window.confirm("Disconnect this broker account? AlgoBot will disable the local connection."))return;
    if(button){button.disabled=true;button.textContent="Disconnecting…";}
    try{
-     const token=form.querySelector("[name=csrfmiddlewaretoken]")?.value||"";
-     const response=await fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":token,"Accept":"application/json"}});
-     const data=await response.json().catch(()=>({}));
-     if(!response.ok||data.status==="error")throw new Error(data.message||"Disconnect failed");
-     window.location.reload();
+     const data=await apiRequest(form.action,{method:"POST"});
+      if(data.status==="error")throw new Error(data.message||"Disconnect failed");
+      window.location.reload();
    }catch(error){if(button){button.disabled=false;button.textContent="Disconnect";}window.alert(error.message||"Could not disconnect broker.");}
  });
 })();
