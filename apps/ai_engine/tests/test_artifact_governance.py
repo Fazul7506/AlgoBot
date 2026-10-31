@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
-from apps.ai_engine.artifact_storage import _signature, schema_document
+from apps.ai_engine.artifact_storage import _hash_file, _signature, schema_document
 
 
 class ModelArtifactGovernanceTests(unittest.TestCase):
@@ -30,3 +32,13 @@ class ModelArtifactGovernanceTests(unittest.TestCase):
         digest_b, signature_b = _signature(b"model-b", "test-key")
         self.assertNotEqual(digest_a, digest_b)
         self.assertNotEqual(signature_a, signature_b)
+
+    def test_streaming_file_signature_matches_in_memory_signature(self):
+        payload = (b"algobot-model-artifact-" * 100_000) + b"end"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.joblib"
+            path.write_bytes(payload)
+            self.assertEqual(
+                _hash_file(path, "streaming-test-key"),
+                _signature(payload, "streaming-test-key"),
+            )
