@@ -79,7 +79,10 @@ class CustomTokenRefreshView(TokenRefreshView):
     serializer_class = CustomTokenRefreshSerializer
 
 
+from apps.ai_engine.cloudflare_hooks import cloudflare_training_dispatch
+
 urlpatterns = [
+    path("api/internal/cloudflare/ai-training/", cloudflare_training_dispatch, name="cloudflare-ai-training-dispatch"),
     path("health/", include("apps.health.urls")),
     path("admin/", admin.site.urls),
     path("", home, name="home"),
