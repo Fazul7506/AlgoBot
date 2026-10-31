@@ -88,6 +88,18 @@ services:
         value: "true"
       - key: CSRF_COOKIE_SAMESITE
         value: Lax
+      - key: AI_MODEL_PREFIX
+        value: algobot/models
+      - key: CLOUDFLARE_R2_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_R2_BUCKET
+        sync: false
+      - key: AI_MODEL_SIGNING_KEY
+        sync: false
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
     # Run database migrations before the new web instance receives traffic.
     # Keep network-dependent Telegram registration out of the web start path so
