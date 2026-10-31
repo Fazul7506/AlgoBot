@@ -6,7 +6,7 @@
   <section class="two-factor-card" aria-labelledby="verify-signin-title">
     <p class="two-factor-eyebrow">Your trading workspace, secured</p>
     <h1 id="verify-signin-title">Verify it’s you</h1>
-    <p class="two-factor-intro">Your password or Google sign-in was accepted. Enter your authenticator code or one of your unused recovery codes to complete sign-in.</p>
+    <p class="two-factor-intro">Your sign-in details were accepted. Enter your authenticator code or one of your unused recovery codes to complete sign-in.</p>
     {% if error %}<p class="account-alert account-alert--error" role="alert">{{ error }}</p>{% endif %}
     <form method="post">
       {% csrf_token %}
