@@ -80,7 +80,7 @@ class InferenceService:
                     return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'invalid_ensemble_output','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'invalid_ensemble_output'}}
                 direction=_decision(result.get('direction'))
                 consensus={'decision':direction,'probability':round(prob,6),'confidence':round(confidence,2),'agreement':round(agreement,6),'disagreement':round(disagreement,6),'models_used':models_used,'model_types':result.get('model_types',[]),'method':result.get('method','weighted_average'),'model_outputs':result.get('model_outputs',result.get('predictions',[]))}
-                return {'direction':direction,'probability':prob,'expected_return':(prob-.5)/10,'risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
+                return {'direction':direction,'probability':prob,'expected_return':0.0,'expected_return_available':False,'expected_return_source':'not_estimated_by_direction_classifier','risk_score':max(0,min(1,_num(features.get('portfolio_risk'))+_num(features.get('drawdown')))),'models_used':consensus['models_used'],'model_types':consensus['model_types'],'consensus':consensus,'source':'trained_ensemble'}
             except Exception as exc:log.exception('AI ensemble inference failed',extra={'symbol':symbol}); return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'error':str(exc),'source':'trained_ensemble','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'ensemble_inference_error'}}
         return {'direction':'AVOID','probability':0.0,'expected_return':0.0,'risk_score':1.0,'models_used':0,'model_types':[],'source':'no_trained_model','consensus':{'decision':'AVOID','probability':0.0,'confidence':0.0,'models_used':0,'reason':'no_trained_model'}}
 
@@ -112,7 +112,7 @@ class PredictionService:
             payload={
                 'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
-                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,
+                'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,'expected_return_available':bool(raw.get('expected_return_available',False)),'expected_return_source':raw.get('expected_return_source','not_estimated_by_direction_classifier'),
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
                 'feature_values': feats,
                 'ai_feedback':{'accuracy':feedback_accuracy,'mean_return':feedback_return,'sample_count':feedback_count},
