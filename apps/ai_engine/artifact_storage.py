@@ -139,7 +139,7 @@ def download_verified_artifact(uri: str, expected_features: list[str] | tuple[st
     # incompatible sklearn/XGBoost/LightGBM runtime is not safe or reproducible.
     installed = package_versions()
     recorded = sidecar.get("packages", {})
-    for package in ("scikit-learn", "joblib", "xgboost", "lightgbm"):
+    for package in ("numpy", "scikit-learn", "joblib", "xgboost", "lightgbm"):
         if recorded.get(package) not in (None, "not-installed") and installed.get(package) != recorded.get(package):
             raise RuntimeError(f"Model dependency mismatch for {package}: trained={recorded[package]}, runtime={installed.get(package)}")
     handle = tempfile.NamedTemporaryFile(prefix="algobot-verified-model-", suffix=".joblib", delete=False)
