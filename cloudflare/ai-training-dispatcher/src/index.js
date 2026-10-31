@@ -1,7 +1,8 @@
-const trainingMessage = {
-  kind: "scheduled_ai_training",
-  timeframe: "M1",
-  min_accuracy: 0.52,
+const cronMessages = {
+  "15 */6 * * *": { kind: "scheduled_ai_training", timeframe: "M1", min_accuracy: 0.52 },
+  "30 2 * * *": { kind: "scheduled_ai_training", timeframe: "M1", min_accuracy: 0.52 },
+  "*/15 * * * *": { kind: "ingest_sentiment" },
+  "* * * * *": { kind: "ingest_orderbook" },
 };
 
 const RETRY_DELAY_SECONDS = 60;
@@ -12,8 +13,13 @@ export default {
     // Keep cron events as queue producers only. Python model training runs in
     // AlgoBot's Celery runtime; Cloudflare Workers must never pretend to run
     // scikit-learn/XGBoost jobs themselves.
+    const message = cronMessages[controller.cron];
+    if (!message) {
+      console.error("Unrecognized AlgoBot cron trigger; no job dispatched", controller.cron);
+      return;
+    }
     ctx.waitUntil(env.AI_TRAINING_QUEUE.send({
-      ...trainingMessage,
+      ...message,
       requested_at: new Date(controller.scheduledTime || Date.now()).toISOString(),
       cron: controller.cron || null,
     }));
