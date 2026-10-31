@@ -25,7 +25,7 @@ def notification_channels_page(request):
     channels = connection_status(request.user)
     if request.method == "POST" and "mark_all_read" in request.POST:
         now = timezone.now()
-        updated = Notification.objects.filter(user=request.user, read_at__isnull=True).update(
+        updated = Notification.objects.filter(user=request.user, channel="in_app", read_at__isnull=True).update(
             read_at=now, updated_at=now
         )
         messages.success(request, f"Marked {updated} notification(s) as read.")
@@ -57,7 +57,7 @@ def notification_channels_page(request):
         "telegram": saved_preferences.get("telegram", bool(channels["telegram"].get("connected"))),
     }
     # All notification rows and summary values are scoped to the authenticated user.
-    all_notifications = Notification.objects.filter(user=request.user).order_by("-created_at", "-id")
+    all_notifications = Notification.objects.filter(user=request.user, channel="in_app").order_by("-created_at", "-id")
     total = all_notifications.count()
     unread_count = all_notifications.filter(read_at__isnull=True).count()
     priorities = {
