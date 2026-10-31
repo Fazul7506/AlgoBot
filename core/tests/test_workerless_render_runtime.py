@@ -23,6 +23,7 @@ class WorkerlessRenderRuntimeContractTests(SimpleTestCase):
             with self.subTest(command=command):
                 self.assertIn(command, script)
         self.assertIn("trap stop_children EXIT INT TERM", script)
+        self.assertIn("wait -n -p exited_pid", script)
         self.assertIn("start_worker", script)
         self.assertIn("start_beat", script)
         self.assertIn("start_market_stream", script)
