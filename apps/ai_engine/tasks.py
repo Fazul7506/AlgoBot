@@ -16,6 +16,7 @@ from .services import (
     PredictionService,
 )
 from .training import MarketModelTrainer
+from .training_dataset import _timeframe_storage_aliases
 
 
 @app.task
@@ -90,7 +91,7 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
     seconds = max(1, int(TIMEFRAMES[canonical_timeframe]))
     cutoff = timezone.now() - timedelta(seconds=seconds * max(1, int(horizon_candles)))
     pending = Prediction.objects.filter(
-        timeframe=canonical_timeframe,
+        timeframe__in=_timeframe_storage_aliases(canonical_timeframe),
         created_at__lte=cutoff,
     ).exclude(outcome__isnull=False).order_by("created_at")[:batch_size]
     resolved = 0
