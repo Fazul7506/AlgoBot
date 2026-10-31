@@ -85,6 +85,10 @@ def upload_model_artifacts(local_path: str | Path, metadata: dict[str, Any], obj
         "packages": package_versions(),
         "model_metadata": metadata,
     }
+    manifest_bytes = json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    envelope["manifest_hmac_sha256"] = hmac.new(
+        signing_key.encode("utf-8"), manifest_bytes, hashlib.sha256
+    ).hexdigest()
     client.put_object(
         Bucket=bucket, Key=key, Body=payload,
         ContentType="application/octet-stream",
@@ -109,6 +113,13 @@ def download_verified_artifact(uri: str, expected_features: list[str] | tuple[st
     key = parsed.path.lstrip("/")
     sidecar_key = f"{key}.json"
     sidecar = json.loads(client.get_object(Bucket=bucket, Key=sidecar_key)["Body"].read())
+    supplied_manifest_mac = str(sidecar.pop("manifest_hmac_sha256", ""))
+    manifest_bytes = json.dumps(sidecar, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    expected_manifest_mac = hmac.new(
+        signing_key.encode("utf-8"), manifest_bytes, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(supplied_manifest_mac, expected_manifest_mac):
+        raise ValueError("Model artifact metadata manifest HMAC verification failed")
     expected_schema = schema_document(expected_features)
     expected_schema_hash = hashlib.sha256(
         json.dumps(expected_schema, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -124,8 +135,6 @@ def download_verified_artifact(uri: str, expected_features: list[str] | tuple[st
         raise ValueError("Model artifact SHA-256 verification failed")
     if not hmac.compare_digest(mac, str(sidecar.get("hmac_sha256", ""))):
         raise ValueError("Model artifact HMAC verification failed")
-    if not hmac.compare_digest(digest, str(sidecar.get("sha256", ""))):
-        raise ValueError("Model artifact provenance verification failed")
     # Version drift is a hard error: loading an unpickled estimator with an
     # incompatible sklearn/XGBoost/LightGBM runtime is not safe or reproducible.
     installed = package_versions()
