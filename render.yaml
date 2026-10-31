@@ -3,15 +3,15 @@ services:
   - type: web
     name: AlgoBot
     runtime: python
-    plan: starter
+    # Match the currently configured free service; do not silently upgrade the
+    # Blueprint to a paid instance. Free instances are not always-on.
+    plan: free
     domains:
       - algobot.dpdns.org
       - api.algobot.dpdns.org
     envVars:
       - key: DJANGO_ENV
         value: production
-      # Romantic pre-home experience: all presentation code stays in GitHub;
-      # Render environment variables control activation, timing and content.
       - key: ALGOBOT_SPLASH_ENABLED
         value: "false"
       - key: ALGOBOT_SPLASH_PATHS_JSON
@@ -111,4 +111,3 @@ services:
     healthCheckPath: /health/
     maxShutdownDelaySeconds: 60
     autoDeployTrigger: commit
-
