@@ -113,7 +113,8 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
     labels: list[int] = []
     next_returns: list[float] = []
     feedback_rows = 0
-    from .external_signals import current_external_signal_features
+    from .external_signals import ExternalSignalTimeline
+    signal_timeline = ExternalSignalTimeline(symbol, int(candles[60]["epoch"]), int(candles[-2]["epoch"]))
     for i in range(60, len(candles) - 1):
         window = candles[i - 59 : i + 1]
         try:
@@ -121,7 +122,7 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
             accuracy, mean_return, count = _historical_ai_feedback(symbol, timeframe, int(candles[i]["epoch"]))
             signal_bias, signal_confidence, signal_count = current_strategy_signal_features(symbol, timeframe, int(candles[i]["epoch"]))
             features.extend([accuracy, mean_return, float(count), signal_bias, signal_confidence, float(signal_count)])
-            features.extend(current_external_signal_features(symbol, int(candles[i]["epoch"])).values())
+            features.extend(signal_timeline.features(int(candles[i]["epoch"])).values())
             current_close = float(candles[i]["close"])
             next_close = float(candles[i + 1]["close"])
             if current_close == 0:
