@@ -17,9 +17,27 @@ class DatabasePoolContractTests(SimpleTestCase):
         self.assertEqual(options["pool"]["max_size"], 8)
         self.assertEqual(options["pool"]["timeout"], 15)
         self.assertEqual(options["pool"]["max_lifetime"], 1800)
-        self.assertEqual(options["pool"]["timeout"], 30)
         self.assertNotIn("DISABLE_SERVER_SIDE_CURSORS", options)
         self.assertFalse(options["server_side_binding"])
+
+    def test_explicit_pool_bounds_override_the_safe_defaults(self):
+        with patch.dict(
+            os.environ,
+            {
+                "DJANGO_ENV": "production",
+                "DB_CONNECTION_POOL_ENABLED": "true",
+                "DB_POOL_MIN_SIZE": "2",
+                "DB_POOL_MAX_SIZE": "6",
+                "DB_POOL_TIMEOUT": "12",
+            },
+            clear=False,
+        ):
+            options = _database_pool_options(
+                "postgresql://postgres@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
+            )
+        self.assertEqual(options["pool"]["min_size"], 2)
+        self.assertEqual(options["pool"]["max_size"], 6)
+        self.assertEqual(options["pool"]["timeout"], 12)
 
     def test_pool_can_be_disabled_for_local_or_legacy_runtime(self):
         with patch.dict(os.environ, {"DJANGO_ENV": "development", "DB_CONNECTION_POOL_ENABLED": "false"}, clear=False):
