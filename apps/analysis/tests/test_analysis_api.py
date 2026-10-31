@@ -192,37 +192,40 @@ class AnalysisSmokeTests(TestCase):
         self.assertEqual(response.json()["account"]["credential_status"], "ready")
         self.assertEqual(response.json()["capabilities"]["market_types"], ["synthetic_index"])
 
-    @patch.object(views, "sync_active_symbols", return_value=0)
-    def test_analysis_market_endpoint_retries_sync_when_catalogue_is_empty(self, sync_markets):
+    @patch.object(views, "_schedule_analysis_market_catalogue_sync", return_value=True)
+    @patch.object(views, "sync_active_symbols")
+    def test_analysis_market_endpoint_schedules_background_sync_when_catalogue_is_empty(self, sync_markets, schedule_sync):
         response = self.client.get(reverse("analysis-markets"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["markets"], [])
         self.assertEqual(response.json()["code"], "MARKET_CATALOGUE_UNAVAILABLE")
-        self.assertIn("retry", response.json()["detail"].lower())
-        sync_markets.assert_called_once_with()
+        self.assertTrue(response.json()["refreshing"])
+        self.assertIn("background", response.json()["detail"].lower())
+        schedule_sync.assert_called_once_with()
+        sync_markets.assert_not_called()
 
+    @patch.object(views, "_schedule_analysis_market_catalogue_sync", return_value=False)
     @patch.object(views, "sync_active_symbols")
-    def test_analysis_market_endpoint_returns_symbols_after_successful_sync(self, sync_markets):
-        def populate_catalogue():
-            MarketSymbol.objects.create(
-                symbol="R_100",
-                display_name="Volatility 100 Index",
-                market="Volatility Indices",
-                broker="deriv",
-                is_active=True,
-                is_tradable=True,
-            )
-            return 1
-        sync_markets.side_effect = populate_catalogue
+    def test_analysis_market_endpoint_returns_persisted_symbols_without_blocking(self, sync_markets, schedule_sync):
+        MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100 Index",
+            market="Volatility Indices",
+            broker="deriv",
+            is_active=True,
+            is_tradable=True,
+        )
         response = self.client.get(reverse("analysis-markets"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["markets"][0]["symbol"], "R_100")
-        sync_markets.assert_called_once_with()
+        schedule_sync.assert_not_called()
+        sync_markets.assert_not_called()
 
+    @patch.object(views, "_schedule_analysis_market_catalogue_sync", return_value=True)
     @patch.object(views, "sync_active_symbols")
-    def test_analysis_market_endpoint_can_force_refresh_existing_catalogue(self, sync_markets):
+    def test_analysis_market_endpoint_can_schedule_forced_refresh_without_blocking(self, sync_markets, schedule_sync):
         MarketSymbol.objects.create(
             symbol="R_100",
             display_name="Volatility 100 Index",
@@ -234,7 +237,9 @@ class AnalysisSmokeTests(TestCase):
         response = self.client.get(reverse("analysis-markets"), {"refresh": "1"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["markets"][0]["symbol"], "R_100")
-        sync_markets.assert_called_once_with()
+        self.assertTrue(response.json()["refreshing"])
+        schedule_sync.assert_called_once_with()
+        sync_markets.assert_not_called()
 
 
 class AnalysisArchitectureReconciliationTests(TestCase):
