@@ -13,7 +13,12 @@ from .candlestick_features import FEATURE_NAMES, feature_vector
 
 AI_FEEDBACK_FEATURE_NAMES = ("ai_feedback_accuracy", "ai_feedback_mean_return", "ai_feedback_sample_count")
 STRATEGY_FEATURE_NAMES = ("strategy_signal_bias", "strategy_signal_confidence", "strategy_signal_count")
-MODEL_FEATURE_NAMES = tuple(FEATURE_NAMES) + AI_FEEDBACK_FEATURE_NAMES + STRATEGY_FEATURE_NAMES
+EXTERNAL_SIGNAL_FEATURE_NAMES = (
+    "sentiment_compound", "sentiment_positive", "sentiment_negative",
+    "sentiment_age_minutes", "sentiment_available", "orderbook_imbalance",
+    "orderbook_total_depth", "orderbook_spread_bps", "orderbook_available",
+)
+MODEL_FEATURE_NAMES = tuple(FEATURE_NAMES) + AI_FEEDBACK_FEATURE_NAMES + STRATEGY_FEATURE_NAMES + EXTERNAL_SIGNAL_FEATURE_NAMES
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,7 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
     labels: list[int] = []
     next_returns: list[float] = []
     feedback_rows = 0
+    from .external_signals import current_external_signal_features
     for i in range(60, len(candles) - 1):
         window = candles[i - 59 : i + 1]
         try:
@@ -115,6 +121,7 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
             accuracy, mean_return, count = _historical_ai_feedback(symbol, timeframe, int(candles[i]["epoch"]))
             signal_bias, signal_confidence, signal_count = current_strategy_signal_features(symbol, timeframe, int(candles[i]["epoch"]))
             features.extend([accuracy, mean_return, float(count), signal_bias, signal_confidence, float(signal_count)])
+            features.extend(current_external_signal_features(symbol, int(candles[i]["epoch"])).values())
             current_close = float(candles[i]["close"])
             next_close = float(candles[i + 1]["close"])
             if current_close == 0:
@@ -139,8 +146,8 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
         metadata={
             **pipeline.dataset_metadata(symbol, timeframe),
             "rows": len(rows),
-            "feature_count": len(FEATURE_NAMES) + len(feedback_names),
-            "feature_set": list(FEATURE_NAMES) + feedback_names,
+            "feature_count": len(MODEL_FEATURE_NAMES),
+            "feature_set": list(MODEL_FEATURE_NAMES),
             "label": "next_candle_direction",
             "return_target": "next_candle_close_return",
             "label_rule": "next_candle_return_gt_zero",
@@ -148,5 +155,7 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
             "leakage_safe": True,
             "feedback_rows": feedback_rows,
             "feedback_source": "PredictionOutcome",
+            "external_signal_sources": ["timestamped_RSS_VADER", "provider_supplied_Level2_orderbook"],
+            "external_signals_are_asof_joined": True,
         },
     )
