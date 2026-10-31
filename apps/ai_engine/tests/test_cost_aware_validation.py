@@ -17,6 +17,15 @@ class DirectionalValidationTests(unittest.TestCase):
 from apps.ai_engine.candlestick_features import FEATURE_NAMES, extract_candlestick_features
 
 
+
+    def test_canonical_timeframes_match_legacy_prediction_rows(self):
+        from apps.ai_engine.training_dataset import _timeframe_storage_aliases
+
+        self.assertEqual(_timeframe_storage_aliases("1m"), ("1m", "M1"))
+        self.assertEqual(_timeframe_storage_aliases("M1"), ("1m", "M1"))
+        self.assertEqual(_timeframe_storage_aliases("1h"), ("1h", "H1"))
+
+
 class MarketRegimeFeatureTests(unittest.TestCase):
     def test_regime_and_vwap_features_are_in_feature_contract(self):
         candles = []
