@@ -19,7 +19,7 @@ def _clip_probability(value:Any)->float:
 class EnsemblePredictor:
     """Run only models compatible with the current feature contract."""
     def __init__(self,symbol:str,timeframe:str,weights:dict[str,float]|None=None):
-        self.symbol=symbol; self.timeframe=timeframe; self.models={}; self.weights=dict(DEFAULT_WEIGHTS)
+        self.symbol=symbol; self.timeframe={"M1":"1m","M2":"2m","M5":"5m","M10":"10m","M15":"15m","M30":"30m","H1":"1h","H4":"4h","D1":"1d"}.get(str(timeframe).upper(),str(timeframe).lower()); self.models={}; self.weights=dict(DEFAULT_WEIGHTS)
         if weights: self.weights.update({k:max(0.0,float(v)) for k,v in weights.items()})
         self._load_models()
     def _load_models(self)->None:
