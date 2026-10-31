@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 import numpy as np
 from .training_dataset import MODEL_FEATURE_NAMES
+from .artifact_storage import download_verified_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,8 @@ class EnsemblePredictor:
             if champion is None:
                 return
             artifact = str((champion.metadata or {}).get("artifact") or "")
-            if not artifact or not os.path.isfile(artifact):
-                logger.warning("Champion AI artifact is missing for %s/%s", self.symbol, self.timeframe)
+            if not artifact:
+                logger.warning("Champion AI artifact reference is missing for %s/%s", self.symbol, self.timeframe)
                 return
             import joblib
             # Training persists canonical short identifiers; accept legacy aliases too.
@@ -51,7 +52,14 @@ class EnsemblePredictor:
             if key is None:
                 logger.warning("Unsupported champion algorithm %s", champion.algorithm)
                 return
-            model = joblib.load(artifact)
+            verified_path = download_verified_artifact(artifact, MODEL_FEATURE_NAMES)
+            try:
+                model = joblib.load(verified_path)
+            finally:
+                try:
+                    os.unlink(verified_path)
+                except OSError:
+                    pass
             self._validate_input(model, np.zeros((1, len(MODEL_FEATURE_NAMES)), dtype=float))
             self.models[key] = model
         except Exception:
