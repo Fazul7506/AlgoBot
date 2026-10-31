@@ -287,7 +287,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def notifications(self, request):
-        rows = Notification.objects.filter(user=request.user).order_by("-created_at")[: self._limit(request, 20)]
+        rows = Notification.objects.filter(user=request.user, channel="in_app").order_by("-created_at")[: self._limit(request, 20)]
         return Response({"status": "success", "count": len(rows), "data": [{
             "id": row.id,
             "alert_type": row.category,
