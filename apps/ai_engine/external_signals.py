@@ -164,12 +164,23 @@ def ingest_orderbook_snapshots() -> dict[str, int]:
     if parsed.scheme != "https" or not parsed.netloc or "{symbol}" not in endpoint:
         raise RuntimeError("ORDER_BOOK_API_URL must be HTTPS and contain a {symbol} placeholder")
     token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
-    from apps.market_data.services import MarketDataService
-    configured_symbols = [item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",") if item.strip()]
-    symbols_to_poll = configured_symbols or list(
-        MarketDataService.symbols.catalogue(active=True, tradable=True).values_list("symbol", flat=True)
-    )
+    # Never infer provider coverage from AlgoBot's broker catalogue. In
+    # particular, Deriv Synthetic Indices must not be polled unless the
+    # configured Level-2 provider explicitly supports those exact symbols.
+    # This allowlist is therefore mandatory and is the operator's assertion
+    # that each listed instrument is supported by the configured provider.
+    configured_symbols = list(dict.fromkeys(
+        item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
+        if item.strip()
+    ))
+    if not configured_symbols:
+        logger.warning(
+            "Order-book ingestion is disabled: ORDER_BOOK_SYMBOLS must explicitly "
+            "list instruments supported by the configured Level-2 provider"
+        )
+        return {"symbols": 0, "snapshots": 0, "configured": 0}
     count = symbols = 0
+    symbols_to_poll = configured_symbols
     for symbol in symbols_to_poll:
         symbols += 1
         try:
