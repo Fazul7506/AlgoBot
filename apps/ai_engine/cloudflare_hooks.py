@@ -23,6 +23,17 @@ def cloudflare_training_dispatch(request):
         return JsonResponse({"status": "invalid_json"}, status=400)
     if not isinstance(payload, dict):
         return JsonResponse({"status": "invalid_payload"}, status=400)
+    kind = str(payload.get("kind", "scheduled_ai_training"))
+    if kind in {"ingest_sentiment", "ingest_orderbook"}:
+        from apps.ai_engine import tasks
+        task = (
+            tasks.ingest_market_sentiment.apply_async(queue="celery")
+            if kind == "ingest_sentiment"
+            else tasks.ingest_orderbook_depth.apply_async(queue="celery")
+        )
+        return JsonResponse({"status": "queued", "kind": kind, "task_id": task.id}, status=202)
+    if kind != "scheduled_ai_training":
+        return JsonResponse({"status": "unsupported_kind"}, status=400)
     timeframe = str(payload.get("timeframe", "M1"))
     try:
         min_accuracy = float(payload.get("min_accuracy", 0.52))
