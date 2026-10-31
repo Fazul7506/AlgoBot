@@ -23,21 +23,38 @@ class EnsemblePredictor:
         if weights: self.weights.update({k:max(0.0,float(v)) for k,v in weights.items()})
         self._load_models()
     def _load_models(self)->None:
-        try: import joblib
-        except Exception: joblib=None
-        if joblib:
-            for model_type in ("rf","xgb","lgb"):
-                path=os.path.join(MODEL_DIR,f"{self.symbol}_{self.timeframe}_{model_type}.pkl")
-                if os.path.exists(path):
-                    try: self.models[model_type]=joblib.load(path)
-                    except Exception:
-                        logger.warning("Failed to load AI model %s/%s/%s", self.symbol, self.timeframe, model_type, exc_info=True)
+        """Load only the database-designated champion artifact for this symbol.
+
+        Older implementations globbed every algorithm file in AI_MODEL_DIR,
+        which allowed stale challengers from previous training runs to vote
+        alongside the current champion. The registry is the source of truth.
+        """
         try:
-            from tensorflow import keras
-            path=os.path.join(MODEL_DIR,f"{self.symbol}_{self.timeframe}_lstm.keras")
-            if os.path.exists(path): self.models["lstm"]=keras.models.load_model(path)
+            from .models import AIModel
+            registry_name = f"{self.symbol}-{self.timeframe}-"
+            champion = AIModel.objects.filter(
+                name__startswith=registry_name, status="champion"
+            ).order_by("-created_at").first()
+            if champion is None:
+                return
+            artifact = str((champion.metadata or {}).get("artifact") or "")
+            if not artifact or not os.path.isfile(artifact):
+                logger.warning("Champion AI artifact is missing for %s/%s", self.symbol, self.timeframe)
+                return
+            import joblib
+            key = {
+                "random_forest": "rf",
+                "xgboost": "xgb",
+                "lightgbm": "lgb",
+            }.get(champion.algorithm)
+            if key is None:
+                logger.warning("Unsupported champion algorithm %s", champion.algorithm)
+                return
+            model = joblib.load(artifact)
+            self._validate_input(model, np.zeros((1, len(MODEL_FEATURE_NAMES)), dtype=float))
+            self.models[key] = model
         except Exception:
-            logger.warning("Failed to load LSTM model %s/%s", self.symbol, self.timeframe, exc_info=True)
+            logger.warning("Failed to load registered champion %s/%s", self.symbol, self.timeframe, exc_info=True)
     @staticmethod
     def _predict_one(model_type:str,model:Any,X:np.ndarray)->float:
         if model_type=="lstm":
