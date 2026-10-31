@@ -5,9 +5,9 @@ import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
 
-def _trading_metrics(y_true: np.ndarray, y_pred: np.ndarray, returns: np.ndarray) -> dict[str, float]:
-    # Long/short proxy: long on class 1, short on class 0.
-    signed = np.where(y_pred.astype(int) == 1, returns, -returns)
+def _trading_metrics(y_true: np.ndarray, y_pred: np.ndarray, returns: np.ndarray, cost_rate: float = 0.0) -> dict[str, float]:
+    # Long/short proxy with round-trip execution friction deducted per trade.
+    signed = np.where(y_pred.astype(int) == 1, returns, -returns) - max(0.0, float(cost_rate))
     wins = signed[signed > 0]
     losses = signed[signed < 0]
     equity = np.cumsum(signed)
@@ -45,7 +45,7 @@ def classification_metrics(y_true: np.ndarray, y_pred: np.ndarray, probability: 
     }
 
 
-def walk_forward_validate(model_factory, X: np.ndarray, y: np.ndarray, returns: np.ndarray, folds: int = 5) -> dict[str, Any]:
+def walk_forward_validate(model_factory, X: np.ndarray, y: np.ndarray, returns: np.ndarray, folds: int = 5, cost_rate: float = 0.0) -> dict[str, Any]:
     """Expanding-window validation: every fold trains only on data before its test window."""
     n = len(X)
     min_train = max(100, n // (folds + 1))
@@ -67,10 +67,11 @@ def walk_forward_validate(model_factory, X: np.ndarray, y: np.ndarray, returns: 
             "train_samples": int(train_end),
             "test_samples": int(test_end - train_end),
             **classification_metrics(y[train_end:test_end], pred, prob),
-            **_trading_metrics(y[train_end:test_end], pred, returns[train_end:test_end]),
+            **_trading_metrics(y[train_end:test_end], pred, returns[train_end:test_end], cost_rate),
         })
     if not fold_metrics:
         raise ValueError("Unable to construct walk-forward validation folds")
     keys = ["accuracy", "precision", "recall", "f1", "auc", "expectancy", "win_rate", "profit_factor", "max_drawdown", "sharpe", "sortino", "total_return"]
     aggregate = {key: float(np.mean([m[key] for m in fold_metrics])) for key in keys}
+    aggregate["profit_factor"] = float(np.mean([min(m["profit_factor"], 10.0) for m in fold_metrics]))
     return {"folds": fold_metrics, "aggregate": aggregate}
