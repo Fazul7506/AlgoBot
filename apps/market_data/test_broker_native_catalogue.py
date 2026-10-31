@@ -73,53 +73,44 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
         self.assertNotIn("1s", response.json()["supported_timeframes"])
         self.assertNotIn("5s", response.json()["supported_timeframes"])
 
-    @patch("apps.market_data.broker_native._public_deriv")
-    @patch("apps.market_data.broker_native.sync_active_symbols", return_value=1)
-    def test_forced_refresh_uses_single_sync_request_and_database_result(self, sync_symbols, public_request):
-        response = self.client.get("/api/market/catalogue/?refresh=1")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.json()["stale"])
-        self.assertEqual(response.json()["source"], "connected_broker")
-        self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
-        sync_symbols.assert_called_once_with()
-        public_request.assert_not_called()
-
-    @patch("apps.market_data.broker_native._public_deriv")
-    @patch("apps.market_data.broker_native.sync_active_symbols", return_value=0)
-    def test_refresh_without_new_symbols_marks_database_catalogue_stale(self, sync_symbols, public_request):
+    @patch("apps.market_data.broker_native._schedule_catalogue_sync", return_value=True)
+    @patch("apps.market_data.broker_native.sync_active_symbols")
+    def test_forced_refresh_uses_background_sync_and_serves_database_catalogue(self, sync_symbols, schedule_sync):
         response = self.client.get("/api/market/catalogue/?refresh=1")
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["stale"])
+        self.assertTrue(response.json()["refreshing"])
         self.assertEqual(response.json()["source"], "cached_broker_catalogue")
-        sync_symbols.assert_called_once_with()
-        public_request.assert_not_called()
+        self.assertEqual(response.json()["symbols"][0]["symbol"], "TEST")
+        schedule_sync.assert_called_once_with()
+        sync_symbols.assert_not_called()
 
-    @patch("apps.market_data.broker_native._public_deriv")
+    @patch("apps.market_data.broker_native._schedule_catalogue_sync", return_value=True)
     @patch("apps.market_data.broker_native.sync_active_symbols")
-    def test_empty_first_run_uses_one_authoritative_sync(self, sync_symbols, public_request):
-        MarketSymbol.objects.all().delete()
-
-        def populate_catalogue():
-            MarketSymbol.objects.create(
-                broker="deriv",
-                symbol="R_100",
-                display_name="Volatility 100 Index",
-                market="Volatility Indices",
-                is_active=True,
-                is_tradable=True,
-            )
-            return 1
-
-        sync_symbols.side_effect = populate_catalogue
-        response = self.client.get("/api/market/catalogue/")
+    def test_refresh_without_new_symbols_keeps_database_catalogue_available(self, sync_symbols, schedule_sync):
+        response = self.client.get("/api/market/catalogue/?refresh=1")
 
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.json()["stale"])
-        self.assertEqual(response.json()["symbols"][0]["symbol"], "R_100")
-        sync_symbols.assert_called_once_with()
-        public_request.assert_not_called()
+        self.assertTrue(response.json()["stale"])
+        self.assertTrue(response.json()["refreshing"])
+        self.assertEqual(response.json()["source"], "cached_broker_catalogue")
+        schedule_sync.assert_called_once_with()
+        sync_symbols.assert_not_called()
+
+    @patch("apps.market_data.broker_native._schedule_catalogue_sync", return_value=True)
+    @patch("apps.market_data.broker_native.sync_active_symbols")
+    def test_empty_first_run_schedules_authoritative_sync_without_blocking(self, sync_symbols, schedule_sync):
+        MarketSymbol.objects.all().delete()
+
+        response = self.client.get("/api/market/catalogue/")
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["code"], "BROKER_CATALOGUE_REFRESHING")
+        self.assertEqual(response.json()["symbols"], [])
+        self.assertTrue(response.json()["refreshing"])
+        schedule_sync.assert_called_once_with()
+        sync_symbols.assert_not_called()
 
     @patch(
         "apps.market_data.broker_native._public_deriv",
