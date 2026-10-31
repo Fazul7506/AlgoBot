@@ -66,5 +66,6 @@ Deriv tick/candle streams do not provide bid/ask depth quantities for the releva
 
 - `ORDER_BOOK_API_URL`: HTTPS endpoint template containing `{symbol}`.
 - `ORDER_BOOK_API_TOKEN`: optional bearer token.
+- `ORDER_BOOK_SYMBOLS`: comma-separated AlgoBot symbols actually supported by that provider. Set this explicitly; otherwise AlgoBot will attempt every active/tradable symbol.
 
 The endpoint must return JSON with non-empty `bids` and `asks` arrays, each containing `[price, quantity]` levels. AlgoBot validates the top ten levels, persists snapshots, and computes `(bid_volume - ask_volume) / (bid_volume + ask_volume)`. No candle-volume or quote-only substitute is used. Do not enable this feature for symbols unsupported by the chosen provider.
