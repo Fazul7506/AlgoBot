@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 
+from apps.ai_engine.candlestick_features import FEATURE_NAMES, extract_candlestick_features
 from apps.ai_engine.validation import _trading_metrics
 
 
@@ -14,10 +15,8 @@ class DirectionalValidationTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["total_return"], 0.003)
         self.assertAlmostEqual(metrics["expectancy"], 0.0015)
 
-from apps.ai_engine.candlestick_features import FEATURE_NAMES, extract_candlestick_features
 
-
-
+class CanonicalTimeframeStorageTests(unittest.TestCase):
     def test_canonical_timeframes_match_legacy_prediction_rows(self):
         from apps.ai_engine.training_dataset import _timeframe_storage_aliases
 
