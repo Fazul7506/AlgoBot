@@ -1,0 +1,58 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "algobot-background-runtime",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "persist": true, "invocation_logs": true }
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "containers": [
+    {
+      "class_name": "CeleryWorkerContainer",
+      "scheduling_policy": "default",
+      "image": "../../deploy/external-worker/Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 1,
+      "instance_type": "standard-2",
+      "observability": { "enabled": true }
+    },
+    {
+      "class_name": "CeleryBeatContainer",
+      "scheduling_policy": "default",
+      "image": "../../deploy/external-worker/Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 1,
+      "instance_type": "basic",
+      "observability": { "enabled": true }
+    },
+    {
+      "class_name": "DerivMarketStreamContainer",
+      "scheduling_policy": "default",
+      "image": "../../deploy/external-worker/Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 1,
+      "instance_type": "basic",
+      "observability": { "enabled": true }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CELERY_WORKER", "class_name": "CeleryWorkerContainer" },
+      { "name": "CELERY_BEAT", "class_name": "CeleryBeatContainer" },
+      { "name": "DERIV_MARKET_STREAM", "class_name": "DerivMarketStreamContainer" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CeleryWorkerContainer", "CeleryBeatContainer", "DerivMarketStreamContainer"] }
+  ],
+  "exports": {
+    "CeleryWorkerContainer": { "type": "durable-object", "storage": "sqlite" },
+    "CeleryBeatContainer": { "type": "durable-object", "storage": "sqlite" },
+    "DerivMarketStreamContainer": { "type": "durable-object", "storage": "sqlite" }
+  }
+}
