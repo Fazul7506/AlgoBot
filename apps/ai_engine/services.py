@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import AIModel, ModelVersion, Prediction, FeatureVector, TrainingJob, AIRecommendation, MarketRegime, AnomalyEvent
 from .constants import CONFIDENCE_LABELS
 from .candlestick_features import FEATURE_NAMES, extract_candlestick_features
-from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES
+from .training_dataset import current_ai_feedback, current_strategy_signal_features, MODEL_FEATURE_NAMES\nfrom .external_signals import current_external_signal_features
 log=logging.getLogger(__name__)
 
 def _num(v,default=0.0):
@@ -105,8 +105,7 @@ class PredictionService:
         feats['ai_feedback_sample_count']=float(feedback_count)
         feats['strategy_signal_bias']=signal_bias
         feats['strategy_signal_confidence']=signal_confidence
-        feats['strategy_signal_count']=float(signal_count)
-        FeatureStoreService().store(symbol,timeframe,feats)
+        feats['strategy_signal_count']=float(signal_count)\n        feats.update(current_external_signal_features(symbol, before_epoch))\n        FeatureStoreService().store(symbol,timeframe,feats)
         # Training uses a complete 60-candle feature window. Refuse inference
         # on shorter history rather than padding missing market observations
         # with zeros and presenting the result as a genuine model prediction.
