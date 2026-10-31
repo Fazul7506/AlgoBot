@@ -110,6 +110,8 @@ services:
         sync: false
       - key: ORDER_BOOK_API_TOKEN
         sync: false
+      - key: ORDER_BOOK_SYMBOLS
+        sync: false
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
     # Run database migrations before the new web instance receives traffic.
     # Keep network-dependent Telegram registration out of the web start path so
