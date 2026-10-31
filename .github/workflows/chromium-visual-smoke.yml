@@ -49,7 +49,7 @@ jobs:
         env:
           # Only the web application URL belongs here. The API hostname is a
           # separate service and must not be used as the browser base URL.
-          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://algobot-pr-{0}.onrender.com', github.event.pull_request.number) || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
+          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && (vars.ALGOBOT_VISUAL_BASE_URL || 'https://algobot-pr-461-wavg.onrender.com') || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
           ALGOBOT_EXPECTED_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
           ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
