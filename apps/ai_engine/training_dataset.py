@@ -5,6 +5,7 @@ from datetime import datetime, timezone as dt_timezone
 from typing import Any
 
 import numpy as np
+import os
 from django.db.models import Q
 
 from .data_pipeline import AIDataPipeline
@@ -14,6 +15,15 @@ from .candlestick_features import FEATURE_NAMES, feature_vector
 AI_FEEDBACK_FEATURE_NAMES = ("ai_feedback_accuracy", "ai_feedback_mean_return", "ai_feedback_sample_count")
 STRATEGY_FEATURE_NAMES = ("strategy_signal_bias", "strategy_signal_confidence", "strategy_signal_count")
 MODEL_FEATURE_NAMES = tuple(FEATURE_NAMES) + AI_FEEDBACK_FEATURE_NAMES + STRATEGY_FEATURE_NAMES
+
+
+def transaction_cost_rate() -> float:
+    \"\"\"Round-trip friction assumption as a decimal return (bps / 10,000).\"\"\"
+    try:
+        bps = max(0.0, float(os.environ.get(\"AI_TRANSACTION_COST_BPS\", \"0\")))
+    except (TypeError, ValueError):
+        bps = 0.0
+    return min(bps / 10000.0, 0.05)
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,7 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
     rows: list[list[float]] = []
     labels: list[int] = []
     next_returns: list[float] = []
+    cost_rate = transaction_cost_rate()
     feedback_rows = 0
     for i in range(60, len(candles) - 1):
         window = candles[i - 59 : i + 1]
@@ -102,8 +113,12 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
             if current_close == 0:
                 continue
             rows.append(features)
-            labels.append(int(next_close > current_close))
-            next_returns.append((next_close - current_close) / current_close)
+            next_return = (next_close - current_close) / current_close
+            # Binary direction target only when the move clears configured
+            # round-trip costs; small moves are assigned to the neutral/flat
+            # side rather than teaching the model to trade noise.
+            labels.append(int(next_return > cost_rate))
+            next_returns.append(next_return)
             feedback_rows += int(count > 0)
         except (TypeError, ValueError, KeyError, FloatingPointError, OverflowError):
             continue
@@ -123,6 +138,8 @@ def build_direction_dataset(symbol: str, timeframe: str = "M1", limit: int = 500
             "feature_set": list(FEATURE_NAMES) + feedback_names,
             "label": "next_candle_direction",
             "return_target": "next_candle_close_return",
+            "transaction_cost_bps": round(cost_rate * 10000.0, 4),
+            "label_rule": "next_candle_return_gt_round_trip_cost",
             "window": 60,
             "leakage_safe": True,
             "feedback_rows": feedback_rows,
