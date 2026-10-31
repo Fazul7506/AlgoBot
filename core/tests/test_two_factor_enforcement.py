@@ -27,23 +27,37 @@ class TwoFactorEnforcementTests(TestCase):
         self.profile.two_factor_secret_encrypted = TwoFactorService.encrypt_secret(self.secret)
         self.profile.save()
 
-    def test_browser_login_requires_and_accepts_authenticator_code(self):
+    def test_browser_login_uses_dedicated_shared_second_factor_screen(self):
         response = self.client.post("/login/", {
             "identifier": self.user.username,
             "password": "A-strong-test-password-123!",
-        })
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context["mfa_required"])
-        self.assertNotIn("_auth_user_id", self.client.session)
-
-        code = TwoFactorService(self.secret).get_totp().now()
-        response = self.client.post("/login/", {
-            "identifier": self.user.username,
-            "password": "A-strong-test-password-123!",
-            "two_factor_code": code,
         })
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login/two-factor/")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        challenge = self.client.get("/login/two-factor/")
+        self.assertEqual(challenge.status_code, 200)
+        self.assertContains(challenge, "Authenticator or recovery code")
+        self.assertContains(challenge, "Verify and sign in")
+        self.assertNotContains(challenge, 'name="password"')
+        self.assertNotContains(challenge, "Confirm your password again")
+
+        code = TwoFactorService(self.secret).get_totp().now()
+        response = self.client.post("/login/two-factor/", {"two_factor_code": code})
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(self.user.pk))
+
+    def test_shared_second_factor_can_be_cancelled_and_clears_pending_identity(self):
+        self.client.post("/login/", {
+            "identifier": self.user.username,
+            "password": "A-strong-test-password-123!",
+        })
+        response = self.client.get("/login/two-factor/?cancel=1")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login/")
+        self.assertNotIn("algobot_pending_2fa_user_id", self.client.session)
+        self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_existing_session_is_challenged_after_mfa_is_enabled(self):
         self.client.force_login(self.user)
