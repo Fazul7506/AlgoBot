@@ -165,8 +165,12 @@ def ingest_orderbook_snapshots() -> dict[str, int]:
         raise RuntimeError("ORDER_BOOK_API_URL must be HTTPS and contain a {symbol} placeholder")
     token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
     from apps.market_data.services import MarketDataService
+    configured_symbols = [item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",") if item.strip()]
+    symbols_to_poll = configured_symbols or list(
+        MarketDataService.symbols.catalogue(active=True, tradable=True).values_list("symbol", flat=True)
+    )
     count = symbols = 0
-    for symbol in MarketDataService.symbols.catalogue(active=True, tradable=True).values_list("symbol", flat=True):
+    for symbol in symbols_to_poll:
         symbols += 1
         try:
             response = requests.get(
