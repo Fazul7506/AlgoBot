@@ -100,6 +100,8 @@ services:
         sync: false
       - key: AI_MODEL_SIGNING_KEY
         sync: false
+      - key: CLOUDFLARE_TRAINING_WEBHOOK_TOKEN
+        sync: false
     buildCommand: export PATH="$PWD/bin:${VENV_ROOT:-/opt/render/project/src/.venv}/bin:$PATH" && pip install -r requirements/base.txt && DJANGO_ENV=production python manage.py collectstatic --noinput
     # Run database migrations before the new web instance receives traffic.
     # Keep network-dependent Telegram registration out of the web start path so
