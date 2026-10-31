@@ -24,6 +24,7 @@ pandas>=2,<3
 scipy>=1.14,<2
 scikit-learn>=1.7,<2
 joblib>=1.4,<2
+boto3>=1.35,<2
 xgboost>=3,<4
 lightgbm>=4,<5
 # Required by the optional LSTM ensemble model in apps/ai_engine/ensemble_predictor.py.
