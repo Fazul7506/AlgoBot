@@ -103,10 +103,10 @@ class MarketModelTrainer:
             job = TrainingJob.objects.create(status="running", started_at=timezone.now())
             model = best_factory()
             model.fit(X, y)
+            version = timezone.now().strftime("%Y%m%d%H%M%S")
             path = model_dir / f"{symbol}_{timeframe}_{best_algorithm}_{version}.pkl"
             _atomic_dump(model, path)
             aggregate = best_validation["aggregate"]
-            version = timezone.now().strftime("%Y%m%d%H%M%S")
             metrics = {
                 "accuracy": aggregate["accuracy"], "precision": aggregate["precision"], "recall": aggregate["recall"],
                 "f1": aggregate["f1"], "auc": aggregate["auc"], "expectancy": aggregate["expectancy"],
