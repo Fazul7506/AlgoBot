@@ -42,11 +42,12 @@ class EnsemblePredictor:
                 logger.warning("Champion AI artifact is missing for %s/%s", self.symbol, self.timeframe)
                 return
             import joblib
+            # Training persists canonical short identifiers; accept legacy aliases too.
             key = {
-                "random_forest": "rf",
-                "xgboost": "xgb",
-                "lightgbm": "lgb",
-            }.get(champion.algorithm)
+                "rf": "rf", "random_forest": "rf",
+                "xgb": "xgb", "xgboost": "xgb",
+                "lgb": "lgb", "lightgbm": "lgb",
+            }.get(str(champion.algorithm).lower())
             if key is None:
                 logger.warning("Unsupported champion algorithm %s", champion.algorithm)
                 return
