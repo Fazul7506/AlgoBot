@@ -39,8 +39,20 @@ def extract_candlestick_features(candles:Iterable[dict])->dict[str,float]:
     inside=float(h[-1]<=h[-2] and l[-1]>=l[-2]); pin_bull=float(cur["lower"]>=.60 and cur["body_ratio"]<=.40); pin_bear=float(cur["upper"]>=.60 and cur["body_ratio"]<=.40)
     tol=atr*.15; tweezer_top=float(abs(h[-1]-h[-2])<=tol and cur["bull"] and not prev["bull"]); tweezer_bottom=float(abs(l[-1]-l[-2])<=tol and not cur["bull"] and prev["bull"])
     support_distance=(c[-1]-recent_low)/span; resistance_distance=(recent_high-c[-1])/span; breakout_up=float(c[-1]>recent_high); breakout_down=float(c[-1]<recent_low); fib_pos=(c[-1]-recent_low)/span
+    # Use observed positive volume only; never synthesize missing volume.
+    volume_available=float(np.isfinite(v).all() and np.any(v[-20:]>0))
     vol_pressure=0.0
-    if np.mean(v[-10:])>0: vol_pressure=float(np.clip((v[-1]/np.mean(v[-10:]))-1,-3,3)/3)
+    vwap_distance=0.0
+    if volume_available:
+        recent_volume=v[-20:]
+        volume_total=float(np.sum(recent_volume))
+        if volume_total>0:
+            typical_price=(h[-20:]+l[-20:]+c[-20:])/3.0
+            vwap=float(np.sum(typical_price*recent_volume)/volume_total)
+            vwap_distance=float((c[-1]-vwap)/(abs(vwap)+1e-12))
+        mean_volume=float(np.mean(v[-10:]))
+        if mean_volume>0:
+            vol_pressure=float(np.clip((v[-1]/mean_volume)-1,-3,3)/3)
     directional=(bull_engulf+morning+hammer+pin_bull+tweezer_bottom+breakout_up)-(bear_engulf+evening+shooting+pin_bear+tweezer_top+breakout_down)
     confluence=float(np.clip(.5+.08*directional+.12*trend_score+.08*(1-chop_score)+.08*float(mtf_alignment),0,1))
     return {"body_ratio":cur["body_ratio"],"upper_wick_ratio":cur["upper"],"lower_wick_ratio":cur["lower"],"bullish_candle":float(cur["bull"]),"doji":doji,"hammer":hammer,"shooting_star":shooting,"bullish_engulfing":bull_engulf,"bearish_engulfing":bear_engulf,"morning_star":morning,"evening_star":evening,"inside_bar":inside,"pin_bar_bull":pin_bull,"pin_bar_bear":pin_bear,"tweezer_top":tweezer_top,"tweezer_bottom":tweezer_bottom,"trend_score":trend_score,"range_score":range_score,"chop_score":chop_score,"support_distance":support_distance,"resistance_distance":resistance_distance,"breakout_up":breakout_up,"breakout_down":breakout_down,"fib_382":float(abs(fib_pos-.382)),"fib_500":float(abs(fib_pos-.500)),"fib_618":float(abs(fib_pos-.618)),"volume_pressure":vol_pressure,"confluence_score":confluence,"price_return_1":float(returns[-1]),"price_return_5":float((c[-1]/c[-6])-1),"atr_norm":float(atr/(abs(c[-1]) or 1e-12)),"htf_trend_score":htf_trend_score,"mtf_alignment":mtf_alignment,"log_return_1":float(log_returns[-1]),"log_return_3":float(np.sum(log_returns[-3:])),"rolling_volatility_5":rolling_volatility_5,"rolling_volatility_20":rolling_volatility_20,"volatility_regime_ratio":float(np.clip(volatility_regime_ratio,0,20)),"vwap_distance":vwap_distance,"volume_available":volume_available}
