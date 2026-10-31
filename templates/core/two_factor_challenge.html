@@ -15,7 +15,7 @@
         <input id="two-factor-code" name="two_factor_code" autocomplete="one-time-code" inputmode="numeric" maxlength="32" aria-describedby="two-factor-help" required autofocus>
       </div>
       <p class="two-factor-note" id="two-factor-help">Use the current six-digit code from your authenticator app, or enter an unused recovery code. You do not need to enter your password again.</p>
-      <div class="two-factor-actions"><button class="account-btn account-btn--primary" type="submit">Verify and sign in</button><a class="account-btn" href="{% url 'login_page' %}">Cancel sign-in</a></div>
+      <div class="two-factor-actions"><button class="account-btn account-btn--primary" type="submit">Verify and sign in</button><a class="account-btn" href="{% url 'two_factor_challenge_page' %}?cancel=1">Cancel sign-in</a></div>
     </form>
   </section>
 </main>
