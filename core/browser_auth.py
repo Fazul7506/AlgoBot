@@ -627,6 +627,12 @@ def unlink_google_identity(request):
 
 def two_factor_challenge_page(request):
     """Complete the shared second factor for password and social sign-ins."""
+    if request.GET.get("cancel") == "1":
+        for key in ("algobot_pending_2fa_user_id", "algobot_pending_2fa_started",
+                    "algobot_pending_2fa_destination", "algobot_google_post_2fa_destination"):
+            request.session.pop(key, None)
+        messages.info(request, "Sign-in verification was cancelled.")
+        return redirect("login_page")
     pending_user_id = request.session.get("algobot_pending_2fa_user_id")
     pending_started = request.session.get("algobot_pending_2fa_started")
     if not pending_user_id or not pending_started:
