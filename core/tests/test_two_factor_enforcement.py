@@ -65,6 +65,7 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/login/two-factor/")
         self.assertEqual(str(self.client.session["algobot_pending_2fa_user_id"]), str(self.user.pk))
+        self.assertIn("algobot_pending_2fa_started", self.client.session)
         self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_jwt_without_mfa_claim_is_rejected_after_enrollment(self):
