@@ -1,6 +1,12 @@
+from unittest.mock import patch
+
 from django.test import SimpleTestCase
 
-from apps.ai_engine.external_signals import _feed_items, normalize_orderbook
+from apps.ai_engine.external_signals import (
+    _feed_items,
+    ingest_orderbook_snapshots,
+    normalize_orderbook,
+)
 
 
 class ExternalMarketSignalTests(SimpleTestCase):
@@ -24,6 +30,19 @@ class ExternalMarketSignalTests(SimpleTestCase):
     def test_orderbook_rejects_missing_depth_instead_of_using_candle_volume(self):
         with self.assertRaises(ValueError):
             normalize_orderbook({"bids": [], "asks": [[100.0, 1.0]]})
+
+
+    def test_orderbook_ingestion_requires_an_explicit_provider_symbol_allowlist(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "ORDER_BOOK_API_URL": "https://provider.example/book/{symbol}",
+                "ORDER_BOOK_SYMBOLS": "",
+            },
+            clear=False,
+        ):
+            result = ingest_orderbook_snapshots()
+        self.assertEqual(result, {"symbols": 0, "snapshots": 0, "configured": 0})
 
     def test_rss_parser_supports_atom_entries(self):
         payload = b"""<?xml version="1.0"?>
