@@ -106,7 +106,9 @@ class PredictionService:
         feats['ai_feedback_sample_count']=float(feedback_count)
         feats['strategy_signal_bias']=signal_bias
         feats['strategy_signal_confidence']=signal_confidence
-        feats['strategy_signal_count']=float(signal_count)\n        feats.update(current_external_signal_features(symbol, before_epoch))\n        FeatureStoreService().store(symbol,timeframe,feats)
+        feats['strategy_signal_count']=float(signal_count)
+        feats.update(current_external_signal_features(symbol, before_epoch))
+        FeatureStoreService().store(symbol,timeframe,feats)
         # Training uses a complete 60-candle feature window. Refuse inference
         # on shorter history rather than padding missing market observations
         # with zeros and presenting the result as a genuine model prediction.
