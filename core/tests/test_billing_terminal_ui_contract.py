@@ -177,8 +177,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
-    def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):
-        from pathlib import Path
+    def test_frontend_transport_allows_only_idempotent_account_switch_fallback(self):        from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("sameOriginRetryPath", client)
         self.assertIn("forceSameOrigin=false", client)
@@ -280,7 +279,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotServices.instruments.list", trade_history, "Trade History must load its market filter through the shared instrument service.")
         self.assertNotIn("/api/market/catalogue/", trade_history, "Trade History must not duplicate the canonical catalogue endpoint.")
         self.assertIn("window.AlgoBotServices.request('trade-history'", trade_history, "Trade History records must use the shared authenticated service transport.")
-        self.assertIn("/api/market/catalogue/", terminal)
+        self.assertIn("window.AlgoBotServices.instruments.list", terminal, "Trading Terminal must load instruments through the shared service.")
+        self.assertNotIn("/api/market/catalogue/", terminal, "Trading Terminal must not duplicate the canonical catalogue endpoint.")
         backtesting = Path("static/js/backtesting_workspace_fix.js").read_text(encoding="utf-8")
         strategy_builder = Path("static/js/strategy_builder.js").read_text(encoding="utf-8")
         live_broker = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
@@ -302,8 +302,10 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         trade_history = Path("static/js/trade_history.js").read_text(encoding="utf-8")
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         self.assertIn("window.AlgoBotServices?.instruments?.list", market_watch)
-        self.assertIn("/api/market/catalogue/", trade_history)
-        self.assertIn("/api/market/catalogue/", terminal)
+        self.assertIn("window.AlgoBotServices.instruments.list", trade_history)
+        self.assertNotIn("/api/market/catalogue/", trade_history)
+        self.assertIn("window.AlgoBotServices.instruments.list", terminal)
+        self.assertNotIn("/api/market/catalogue/", terminal)
         self.assertIn('market_picker_enhancement.js', base)
         self.assertIn('market_asset_registry.js', base)
         self.assertIn('option.textContent = name', shared_picker)
@@ -357,8 +359,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn('>{{ row.symbol }}<', performance_template)
         self.assertNotIn('>{{ t.symbol }}<', postmortem_template)
 
-    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):
-        from pathlib import Path
+    def test_api_client_does_not_monkey_patch_global_fetch_and_has_safe_advisory_fallbacks(self):        from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         self.assertIn("sameOriginFallbackPath", client)
         self.assertIn("/api/ai/predict/", client)
@@ -537,8 +538,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
     def test_public_market_quote_loading_does_not_require_a_connected_trading_account(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
-        quote_loader = terminal.split("async function loadQuote()", 1)[1].split("async function loadRecords()", 1)[0]
-        self.assertIn("if(!symbol)return", quote_loader)
+        quote_loader = terminal.split("async function loadQuote()", 1)[1].split("async function loadRecords()", 1)[0]        self.assertIn("if(!symbol)return", quote_loader)
         self.assertNotIn("brokerReady()", quote_loader)
 
     def test_free_plan_is_system_managed_and_does_not_offer_cancellation(self):
@@ -616,4 +616,3 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
             "@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])",
             views,
         )
-
