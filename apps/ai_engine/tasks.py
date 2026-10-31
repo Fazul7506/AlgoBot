@@ -166,3 +166,15 @@ def evaluate_model(model_id):
 @app.task
 def compare_champion_challenger():
     return {"status": "compared"}
+
+
+@app.task
+def ingest_market_sentiment():
+    from .external_signals import ingest_rss_sentiment
+    return ingest_rss_sentiment()
+
+
+@app.task
+def ingest_orderbook_depth():
+    from .external_signals import ingest_orderbook_snapshots
+    return ingest_orderbook_snapshots()
