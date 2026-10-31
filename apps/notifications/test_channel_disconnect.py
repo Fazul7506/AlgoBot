@@ -153,6 +153,7 @@ class BrandedNotificationEmailTests(TestCase):
         self.assertEqual(email.to, ["user@gmail.com"])
         self.assertEqual(email.subject, "Security alert")
         self.assertIn("A new sign-in was detected.\nReview your account.", email.body)
+        self.assertIn("Review account: https://algobot.dpdns.org/security", email.body)
         self.assertIn("<h1", email.alternatives[0][0])
         self.assertIn("Review account", email.alternatives[0][0])
         self.assertEqual(email.alternatives[0][1], "text/html")
