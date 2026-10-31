@@ -35,6 +35,8 @@ class TwoFactorEnforcementTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/login/two-factor/")
         self.assertNotIn("_auth_user_id", self.client.session)
+        login_page = self.client.get("/login/")
+        self.assertNotContains(login_page, 'name="two_factor_code"')
 
         challenge = self.client.get("/login/two-factor/")
         self.assertEqual(challenge.status_code, 200)
