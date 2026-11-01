@@ -46,6 +46,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/base.txt
 
+      - name: Set up Node for Cloudflare Worker validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            cloudflare/background-scheduler/package-lock.json
+            cloudflare/market-stream/package-lock.json
+
+      - name: Install Cloudflare Worker toolchains
+        run: |
+          npm install --no-audit --no-fund --prefix cloudflare/background-scheduler
+          npm install --no-audit --no-fund --prefix cloudflare/market-stream
+
+      - name: Test Cloudflare background scheduler
+        run: npm --prefix cloudflare/background-scheduler test
+
+      - name: Dry-run bundle Cloudflare Workers
+        run: |
+          npm --prefix cloudflare/background-scheduler run check
+          npm --prefix cloudflare/market-stream run check
+
       - name: Compile Python sources
         run: python -m compileall -q .
 
