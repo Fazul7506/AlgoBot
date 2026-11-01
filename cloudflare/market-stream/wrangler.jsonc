@@ -20,7 +20,8 @@
   ],
   "queues": {
     "producers": [
-      { "binding": "MARKET_TICK_QUEUE", "queue": "algobot-market-ticks" }
+      { "binding": "MARKET_TICK_QUEUE", "queue": "algobot-market-ticks" },
+      { "binding": "MARKET_TICK_DLQ_QUEUE", "queue": "algobot-market-ticks-dlq" }
     ],
     "consumers": [
       {
