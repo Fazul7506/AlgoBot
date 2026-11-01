@@ -129,3 +129,44 @@ class CloudflareTaskDispatchTests(SimpleTestCase):
         )
         response = cloudflare_task_dispatch(request)
         self.assertEqual(response.status_code, 400)
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    @patch("apps.automation.cloudflare_hooks.cache")
+    @patch("apps.automation.cloudflare_hooks.current_app")
+    def test_ai_training_is_dispatched_through_unified_allowlist(self, celery, cache):
+        cache.add.return_value = True
+        celery.send_task.return_value = Mock(id="celery-ai-training")
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=json.dumps({
+                "schedule_id": "ai-training-every-6-hours",
+                "task": "apps.ai_engine.tasks.scheduled_ai_training",
+                "kwargs": {"timeframe": "M1", "min_accuracy": 0.52},
+                "scheduled_minute": 29_999_999,
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 202)
+        celery.send_task.assert_called_once_with(
+            "apps.ai_engine.tasks.scheduled_ai_training",
+            kwargs={"timeframe": "M1", "min_accuracy": 0.52},
+            queue="celery",
+        )
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    def test_ai_training_rejects_out_of_range_min_accuracy(self):
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=json.dumps({
+                "schedule_id": "ai-training-every-6-hours",
+                "task": "apps.ai_engine.tasks.scheduled_ai_training",
+                "kwargs": {"timeframe": "M1", "min_accuracy": 2.0},
+                "scheduled_minute": 29_999_999,
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 400)
