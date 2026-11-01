@@ -134,7 +134,15 @@ def resolve_prediction_outcomes(timeframe="M1", horizon_candles=1, batch_size=50
                 "correct": predicted_direction == actual_direction,
                 "horizon_candles": horizon_candles,
                 "resolved_at": timezone.now(),
-                "details": {"reference_price": base_close, "close": actual_close, "predicted_direction": predicted_direction},
+                "details": {
+                    "reference_price": base_close,
+                    "close": actual_close,
+                    "predicted_direction": predicted_direction,
+                    "model_id": (prediction.payload or {}).get("model_id"),
+                    "model_version": (prediction.payload or {}).get("model_version"),
+                    "model_algorithm": (prediction.payload or {}).get("model_algorithm"),
+                    "evaluation_horizon_candles": horizon_candles,
+                },
             },
         )
         resolved += 1
