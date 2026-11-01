@@ -80,9 +80,11 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 
 from apps.ai_engine.cloudflare_hooks import cloudflare_training_dispatch
+from apps.automation.cloudflare_hooks import cloudflare_task_dispatch
 
 urlpatterns = [
     path("api/internal/cloudflare/ai-training/", cloudflare_training_dispatch, name="cloudflare-ai-training-dispatch"),
+    path("api/internal/cloudflare/task-dispatch/", cloudflare_task_dispatch, name="cloudflare-task-dispatch"),
     path("health/", include("apps.health.urls")),
     path("admin/", admin.site.urls),
     path("", home, name="home"),
