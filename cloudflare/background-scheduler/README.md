@@ -4,7 +4,7 @@ This project is a standard Cloudflare Worker and Cloudflare Queue consumer. It i
 
 ## Current migration boundary
 
-- Cloudflare Cron Triggers replace the Celery Beat clock for the schedules listed in `src/index.js`, including scheduled AI training (six-hour and daily), sentiment ingestion, order-book ingestion, AI data health, prediction outcome resolution, and notification monitoring.
+- Cloudflare Cron Triggers replace the Celery Beat clock for the schedules listed in `src/index.js`, including scheduled AI training (six-hour and daily), sentiment ingestion, order-book ingestion, AI data health and model-degradation monitoring, prediction outcome resolution, and notification monitoring.
 - Cloudflare Queues provide buffering, retry, and a dead-letter queue.
 - The authenticated Django dispatch endpoint enqueues the existing allowlisted Celery tasks. Therefore **a Celery execution worker is still required** until each Python task has been ported to a Worker-compatible implementation or another supported runtime.
 - Execution queue recovery is deliberately gated by `ENABLE_EXECUTION_QUEUE_RECOVERY=true`. Do not enable it until the dispatch path has been validated against the production execution queue and duplicate-order protections.
