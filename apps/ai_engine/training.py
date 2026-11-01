@@ -134,8 +134,18 @@ class MarketModelTrainer:
             ai_model = AIModel.objects.create(name=name, version=version, algorithm=best_algorithm, framework="sklearn", status="experimental", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
             ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES), "provenance": dataset.metadata}, hyperparameters={"algorithm": best_algorithm, "selection_score": best_score})
 
-            previous = AIModel.objects.filter(name=name, status="champion").exclude(pk=ai_model.pk).order_by("-created_at").first()
-            promoted = previous is None or best_score > float((previous.metadata or {}).get("validation", {}).get("promotion_score", float("-inf")))
+            # Compare against the current champion for this symbol/timeframe,
+            # regardless of algorithm. A newly seen algorithm must not displace
+            # a stronger champion merely because it has no same-algorithm history.
+            previous = AIModel.objects.filter(
+                name__startswith=f"{symbol}-{timeframe}-",
+                status="champion",
+            ).exclude(pk=ai_model.pk).order_by("-created_at").first()
+            previous_score = (
+                float((previous.metadata or {}).get("validation", {}).get("promotion_score", float("-inf")))
+                if previous else float("-inf")
+            )
+            promoted = previous is None or best_score > previous_score
             if promoted:
                 AIModel.objects.filter(name__startswith=f"{symbol}-{timeframe}-", status="champion").update(status="active")
                 ai_model.status = "champion"
@@ -165,3 +175,62 @@ class MarketModelTrainer:
                 logger.warning("AI training skipped", extra={"symbol": symbol, "timeframe": timeframe, "error": str(exc)})
                 results[symbol] = {"status": "skipped", "error": str(exc)}
         return results
+
+def rollback_champion_model(symbol: str, timeframe: str = "M1") -> dict[str, Any]:
+    """Restore the strongest previously validated active model without retraining."""
+    from django.db import transaction
+
+    timeframe = normalize_timeframe(timeframe)
+    prefix = f"{symbol}-{timeframe}-"
+    with transaction.atomic():
+        current = AIModel.objects.select_for_update().filter(
+            name__startswith=prefix, status="champion"
+        ).order_by("-created_at").first()
+        candidates = list(
+            AIModel.objects.select_for_update().filter(
+                name__startswith=prefix, status="active"
+            ).order_by("-created_at")
+        )
+        safe_candidates = []
+        for candidate in candidates:
+            validation = (candidate.metadata or {}).get("validation", {})
+            try:
+                score = float(validation.get("promotion_score", float("-inf")))
+                accuracy = float(validation.get("accuracy", 0.0))
+                expectancy = float(validation.get("expectancy", 0.0))
+                total_return = float(validation.get("total_return", 0.0))
+            except (TypeError, ValueError):
+                continue
+            if (
+                np.isfinite(score) and np.isfinite(accuracy)
+                and np.isfinite(expectancy) and np.isfinite(total_return)
+                and accuracy >= 0.52 and (expectancy > 0 or total_return > 0)
+            ):
+                safe_candidates.append((score, candidate))
+        if not safe_candidates:
+            return {
+                "status": "rollback_unavailable",
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "current_champion_id": current.pk if current else None,
+                "reason": "no_active_model_passed_persisted_validation_gates",
+            }
+        _, replacement = max(safe_candidates, key=lambda item: item[0])
+        if current:
+            current.status = "active"
+            current.save(update_fields=["status"])
+        replacement.status = "champion"
+        replacement.save(update_fields=["status"])
+        return {
+            "status": "rolled_back",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "previous_champion_id": current.pk if current else None,
+            "champion_id": replacement.pk,
+            "model_version": replacement.version,
+            "algorithm": replacement.algorithm,
+            "promotion_score": float(
+                (replacement.metadata or {}).get("validation", {}).get("promotion_score", 0.0)
+            ),
+        }
+
