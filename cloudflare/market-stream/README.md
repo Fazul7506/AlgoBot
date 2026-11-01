@@ -13,6 +13,9 @@ Set these Worker secrets:
 
 The configured Deriv WebSocket URL follows the current Django public-stream setting. Confirm the provider endpoint and app requirements with a real non-production smoke test before cutting over.
 
+## Activation gate
+The Worker defaults to disabled (`CLOUDFLARE_MARKET_STREAM_ACTIVE=false`). It does not open a Deriv WebSocket until this flag is explicitly set to `true` for a parallel smoke test.
+
 ## Cutover safety
 Do not stop Render's `run_market_stream` command until all of the following pass:
 1. Deploy the Django endpoint and this Worker without stopping the existing stream.
