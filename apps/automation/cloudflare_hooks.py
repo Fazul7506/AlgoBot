@@ -17,6 +17,9 @@ ALLOWED_TASKS = {
     "apps.automation.tasks.process_due_scheduled_tasks": {"limit"},
     "apps.execution.process_execution_queue": {"batch_size"},
     "apps.ai_engine.tasks.check_ai_data_health": {"timeframe"},
+    "apps.ai_engine.tasks.scheduled_ai_training": {"timeframe", "min_accuracy"},
+    "apps.ai_engine.tasks.ingest_market_sentiment": set(),
+    "apps.ai_engine.tasks.ingest_orderbook_depth": set(),
     "apps.ai_engine.tasks.resolve_prediction_outcomes": {
         "timeframe", "horizon_candles", "batch_size"
     },
@@ -27,6 +30,10 @@ ALLOWED_SCHEDULES = {
     "automation-due-schedules-every-30-seconds": "apps.automation.tasks.process_due_scheduled_tasks",
     "execution-queue-recovery-every-30-seconds": "apps.execution.process_execution_queue",
     "ai-data-health-every-15-minutes": "apps.ai_engine.tasks.check_ai_data_health",
+    "ai-training-every-6-hours": "apps.ai_engine.tasks.scheduled_ai_training",
+    "ai-training-daily": "apps.ai_engine.tasks.scheduled_ai_training",
+    "ai-sentiment-every-15-minutes": "apps.ai_engine.tasks.ingest_market_sentiment",
+    "ai-orderbook-every-minute": "apps.ai_engine.tasks.ingest_orderbook_depth",
     "ai-resolve-predictions-every-5-minutes": "apps.ai_engine.tasks.resolve_prediction_outcomes",
     "telegram-watchdog-every-minute": "apps.notifications.tasks.telegram_watchdog",
     "telegram-recover-stuck-every-5-minutes": "apps.notifications.tasks.recover_stuck_notifications",
@@ -60,6 +67,12 @@ def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
     ):
         return None
     if "timeframe" in clean and clean["timeframe"] not in ALLOWED_TIMEFRAMES:
+        return None
+    if "min_accuracy" in clean and (
+        not isinstance(clean["min_accuracy"], (int, float))
+        or isinstance(clean["min_accuracy"], bool)
+        or not 0.0 <= float(clean["min_accuracy"]) <= 1.0
+    ):
         return None
     return clean
 
