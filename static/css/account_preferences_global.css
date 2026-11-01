@@ -219,3 +219,54 @@ html[data-theme="light"] [data-security-page] .security-reassurance-banner{backg
 html[data-theme="light"] [data-security-page] .security-reassurance-banner>.material-symbols-rounded{background:var(--panel2)!important;color:var(--accent)!important}
 html[data-theme="light"] [data-security-page] .security-reassurance-banner strong{color:var(--text)!important}
 html[data-theme="light"] [data-security-page] .security-reassurance-banner p{color:var(--muted)!important}
+
+
+/* Cross-workspace compatibility fixes for legacy surfaces that still declare dark-only colours. */
+html[data-theme="light"] .topbar-account-trigger {
+  background:var(--panel)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .topbar-account-trigger :where(strong,small,.topbar-account-shield,.topbar-chevron) {
+  color:var(--text)!important;
+}
+html[data-theme="light"] .topbar-profile-identity__copy small {
+  color:var(--muted)!important;
+}
+html[data-theme="light"] :where(.analysis-dashboard .toolbar-field select,.analysis-dashboard .analysis-toolbar select) {
+  background:var(--panel)!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+}
+html[data-theme="light"] .analysis-dashboard :where(.toolbar-field label,.kpi-foot,.analysis-toolbar label) {
+  color:var(--muted)!important;
+}
+html[data-theme="light"] .dev-dashboard :where(.dev-code-language,.dev-endpoint-detail code,.dev-endpoint-row) {
+  background:var(--panel2)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+}
+html[data-theme="light"] .dev-dashboard .dev-endpoint-row:hover {
+  background:color-mix(in srgb,var(--accent) 9%,var(--panel))!important;
+  border-color:var(--accent)!important;
+}
+html[data-theme="light"] .dev-dashboard :where(.dev-endpoint-row small,.dev-endpoint-detail small,.dev-endpoint-row p) {
+  color:var(--muted)!important;
+}
+html[data-theme="light"] .profile-edit-modal :where(.iti__country-list,.iti__country) {
+  color:var(--text);
+}
+html[data-theme="light"] .profile-edit-modal .iti__country-list {
+  background:var(--panel)!important;
+  border-color:var(--line)!important;
+  box-shadow:0 12px 30px #14233824;
+}
+html[data-theme="light"] .profile-edit-modal .iti__country.iti__highlight {
+  background:var(--panel2)!important;
+}
+html[data-theme="light"] .profile-edit-modal .iti__divider {
+  border-color:var(--line)!important;
+}
