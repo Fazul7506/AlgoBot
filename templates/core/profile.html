@@ -292,7 +292,10 @@
       });
     }
   };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once:true}); else initialize();
+  // intl-tel-input is loaded with defer, so DOMContentLoaded can fire before its global exists.
+  // Wait for window load (after deferred scripts) before initializing the modal and phone widget.
+  if (document.readyState === 'complete') initialize();
+  else window.addEventListener('load', initialize, {once:true});
 })();
 </script>
 {% endblock %}
