@@ -9,6 +9,10 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
+    if (env.CLOUDFLARE_MARKET_STREAM_ACTIVE !== "true") {
+      console.log("Cloudflare Deriv stream remains disabled until deliberate cutover");
+      return;
+    }
     const id = env.MARKET_STREAM_COORDINATOR.idFromName("deriv-public-stream");
     const coordinator = env.MARKET_STREAM_COORDINATOR.get(id);
     ctx.waitUntil(coordinator.fetch("https://market-stream.internal/start", {
