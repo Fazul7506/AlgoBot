@@ -138,3 +138,29 @@ class CloudflareMarketHookTests(SimpleTestCase):
         response = cloudflare_market_tick(request)
         self.assertEqual(response.status_code, 503)
         service_class.return_value.tick_service.ingest.assert_not_called()
+
+    @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
+    @patch("apps.market_data.cloudflare_hooks.cache")
+    @patch("apps.market_data.cloudflare_hooks.MarketDataService")
+    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=None)
+    def test_missing_channel_layer_returns_retryable_failure(self, _layer, service_class, cache):
+        query = Mock()
+        query.exists.return_value = True
+        service_class.symbols.catalogue.return_value = query
+        cache.add.return_value = True
+        stored_tick = object()
+        service_class.return_value.tick_service.ingest.return_value = stored_tick
+        service_class.return_value.tick_service.serialize.return_value = {
+            "symbol": "R_100", "quote": "123.45", "epoch": 1_800_000_000
+        }
+        request = self.factory.post(
+            "/api/internal/cloudflare/market-tick/",
+            data=json.dumps({"tick": {
+                "symbol": "R_100", "quote": 123.45, "epoch": 1_800_000_000, "volume": 0
+            }}),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_market_tick(request)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(json.loads(response.content)["status"], "channel_layer_unavailable")
