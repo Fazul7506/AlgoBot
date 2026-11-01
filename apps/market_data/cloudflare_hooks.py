@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import os
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 MAX_MARKET_TICK_BODY_BYTES = 16_384
+MARKET_TICK_IDEMPOTENCY_TTL_SECONDS = 86_400
 
 from apps.market_data.deriv_sync import sync_active_symbols
 from apps.market_data.exceptions import ValidationError as MarketDataValidationError
@@ -68,26 +71,65 @@ def cloudflare_market_tick(request):
     ).exists():
         return JsonResponse({"status": "unknown_symbol"}, status=422)
 
-    try:
-        stored = MarketDataService().tick_service.ingest({
-            "symbol": symbol,
-            "quote": tick.get("quote"),
-            "bid": tick.get("bid"),
-            "ask": tick.get("ask"),
-            "epoch": tick.get("epoch"),
-            "volume": tick.get("volume", 0),
-        })
-    except (MarketDataValidationError, TypeError, ValueError) as exc:
-        return JsonResponse({"status": "invalid_tick", "detail": str(exc)[:200]}, status=422)
-    except Exception:
-        # Queue consumers should retry transient database/service failures.
-        return JsonResponse({"status": "ingestion_unavailable"}, status=503)
+    normalized_tick = {
+        "symbol": symbol,
+        "quote": tick.get("quote"),
+        "bid": tick.get("bid"),
+        "ask": tick.get("ask"),
+        "epoch": tick.get("epoch"),
+        "volume": tick.get("volume", 0),
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(normalized_tick, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    ).hexdigest()
+    idempotency_key = f"cf-market-tick:{fingerprint}"
 
-    data = MarketDataService().tick_service.serialize(stored)
+    try:
+        claimed = cache.add(
+            idempotency_key,
+            {"status": "processing"},
+            timeout=MARKET_TICK_IDEMPOTENCY_TTL_SECONDS,
+        )
+        if not claimed:
+            existing = cache.get(idempotency_key)
+            if not isinstance(existing, dict):
+                return JsonResponse({"status": "idempotency_unavailable"}, status=503)
+            if existing.get("status") == "processing":
+                return JsonResponse({"status": "tick_processing"}, status=503)
+            cached_tick = existing.get("tick")
+            if existing.get("status") != "ingested" or not isinstance(cached_tick, dict):
+                return JsonResponse({"status": "idempotency_unavailable"}, status=503)
+            data = cached_tick
+        else:
+            try:
+                stored = MarketDataService().tick_service.ingest(normalized_tick)
+                data = MarketDataService().tick_service.serialize(stored)
+                cache.set(
+                    idempotency_key,
+                    {"status": "ingested", "tick": data},
+                    timeout=MARKET_TICK_IDEMPOTENCY_TTL_SECONDS,
+                )
+            except (MarketDataValidationError, TypeError, ValueError) as exc:
+                cache.delete(idempotency_key)
+                return JsonResponse({"status": "invalid_tick", "detail": str(exc)[:200]}, status=422)
+            except Exception:
+                cache.delete(idempotency_key)
+                return JsonResponse({"status": "ingestion_unavailable"}, status=503)
+    except Exception:
+        # Fail closed when shared idempotency state is unavailable; the Queue can retry.
+        return JsonResponse({"status": "idempotency_unavailable"}, status=503)
+
     layer = get_channel_layer()
     if layer:
-        async_to_sync(layer.group_send)(
-            f"algobot-market-{symbol}",
-            {"type": "broker.event", "event_type": "market.tick", "payload": data},
-        )
-    return JsonResponse({"status": "ingested", "tick": data}, status=202)
+        try:
+            async_to_sync(layer.group_send)(
+                f"algobot-market-{symbol}",
+                {"type": "broker.event", "event_type": "market.tick", "payload": data},
+            )
+        except Exception:
+            # The stored idempotent result lets a Queue retry re-attempt fan-out.
+            return JsonResponse({"status": "fanout_unavailable"}, status=503)
+    return JsonResponse(
+        {"status": "duplicate" if not claimed else "ingested", "tick": data},
+        status=202,
+    )
