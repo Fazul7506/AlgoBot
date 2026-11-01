@@ -10,6 +10,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+MAX_MARKET_TICK_BODY_BYTES = 16_384
+
 from apps.market_data.deriv_sync import sync_active_symbols
 from apps.market_data.exceptions import ValidationError as MarketDataValidationError
 from apps.market_data.services import MarketDataService
@@ -46,6 +48,8 @@ def cloudflare_market_symbols(request):
 def cloudflare_market_tick(request):
     if not _authorized(request):
         return JsonResponse({"status": "unauthorized"}, status=401)
+    if len(request.body) > MAX_MARKET_TICK_BODY_BYTES:
+        return JsonResponse({"status": "payload_too_large"}, status=413)
     try:
         payload = json.loads(request.body or b"{}")
     except (TypeError, ValueError, UnicodeDecodeError):
