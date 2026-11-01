@@ -35,7 +35,10 @@ ALLOWED_TIMEFRAMES = {
     "M1", "M2", "M5", "M10", "M15", "M30", "H1", "H4", "D1",
     "1m", "2m", "5m", "10m", "15m", "30m", "1h", "4h", "1d",
 }
-IDEMPOTENCY_TTL_SECONDS = 180
+# Cloudflare Queue messages can be retained for 24 hours. Keep dispatch
+# idempotency records for that same window so delayed redeliveries cannot
+# enqueue a duplicate after the cache entry expires.
+IDEMPOTENCY_TTL_SECONDS = 86_400
 
 
 def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
@@ -91,7 +94,7 @@ def cloudflare_task_dispatch(request):
     if kwargs is None:
         return JsonResponse({"status": "invalid_kwargs"}, status=400)
 
-    # The minute bucket deduplicates Cloudflare Queue redeliveries. The execution
+    # The scheduled slot deduplicates Cloudflare Queue redeliveries. The execution
     # task also retains its own distributed lock; this is not a substitute for it.
     raw_key = f"{schedule_id}:{task_name}:{scheduled_minute}"
     idempotency_key = "cf-task-dispatch:" + hashlib.sha256(raw_key.encode()).hexdigest()
