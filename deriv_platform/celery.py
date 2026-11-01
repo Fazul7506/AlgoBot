@@ -26,7 +26,7 @@ def _close_task_connections(*args, **kwargs):
     close_old_connections()
 
 
-app.conf.beat_schedule = {
+app.conf.beat_schedule = {} if os.environ.get("CLOUDFLARE_SCHEDULER_ACTIVE", "").lower() == "true" else {
     "automation-due-schedules-every-30-seconds": {
         "task": "apps.automation.tasks.process_due_scheduled_tasks",
         "schedule": 30.0,
