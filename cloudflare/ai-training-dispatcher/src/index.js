@@ -10,6 +10,10 @@ const WEBHOOK_TIMEOUT_MS = 15_000;
 
 export default {
   async scheduled(controller, env, ctx) {
+    if (env.AI_TRAINING_DISPATCH_ACTIVE !== "true") {
+      console.log("Legacy AI dispatcher schedule disabled; unified background scheduler owns AI schedules");
+      return;
+    }
     // Keep cron events as queue producers only. Python model training runs in
     // AlgoBot's Celery runtime; Cloudflare Workers must never pretend to run
     // scikit-learn/XGBoost jobs themselves.
