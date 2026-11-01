@@ -517,4 +517,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("algobot:preferences-loaded", shell_script)
         self.assertIn("savedTheme=localStorage.getItem", shell_script)
         self.assertIn("syncSystemTheme", shell_script)
+        self.assertIn("const effectiveTheme", settings_template)
+        self.assertIn("detail: resolvedPreferences", settings_template)
+        self.assertIn("Final cross-workspace light palette", (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text())
         self.assertIn("algobot-theme-preference", settings_template)
