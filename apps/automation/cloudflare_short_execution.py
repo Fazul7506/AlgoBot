@@ -75,10 +75,20 @@ def cloudflare_short_execution(request):
         return JsonResponse({"status": "invalid_payload"}, status=400)
 
     key_digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+    request_fingerprint = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     idempotency_key = f"cf-short-op:{key_digest}"
-    if not cache.add(idempotency_key, {"status": "running"}, timeout=IDEMPOTENCY_TTL_SECONDS):
+    in_progress = {
+        "status": "running",
+        "operation": operation,
+        "fingerprint": request_fingerprint,
+    }
+    if not cache.add(idempotency_key, in_progress, timeout=IDEMPOTENCY_TTL_SECONDS):
         existing = cache.get(idempotency_key)
-        if isinstance(existing, dict) and existing.get("status") == "completed":
+        if not isinstance(existing, dict) or existing.get("fingerprint") != request_fingerprint:
+            return JsonResponse({"status": "idempotency_key_conflict"}, status=409)
+        if existing.get("status") == "completed":
             return JsonResponse({
                 "status": "duplicate",
                 "request_id": request_id,
@@ -98,7 +108,12 @@ def cloudflare_short_execution(request):
             return JsonResponse({"status": "execution_budget_exceeded"}, status=503)
         cache.set(
             idempotency_key,
-            {"status": "completed", "result": result},
+            {
+                "status": "completed",
+                "operation": operation,
+                "fingerprint": request_fingerprint,
+                "result": result,
+            },
             timeout=IDEMPOTENCY_TTL_SECONDS,
         )
         return JsonResponse({"status": "executed", "request_id": request_id, "result": result})
