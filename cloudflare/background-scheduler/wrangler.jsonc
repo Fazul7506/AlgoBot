@@ -18,7 +18,8 @@
   ],
   "queues": {
     "producers": [
-      { "binding": "ALGOBOT_TASK_QUEUE", "queue": "algobot-background-tasks" }
+      { "binding": "ALGOBOT_TASK_QUEUE", "queue": "algobot-background-tasks" },
+      { "binding": "ALGOBOT_TASK_DLQ_QUEUE", "queue": "algobot-background-tasks-dlq" }
     ],
     "consumers": [
       {
