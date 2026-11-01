@@ -123,15 +123,19 @@ def cloudflare_market_tick(request):
         return JsonResponse({"status": "idempotency_unavailable"}, status=503)
 
     layer = get_channel_layer()
-    if layer:
-        try:
-            async_to_sync(layer.group_send)(
-                f"algobot-market-{symbol}",
-                {"type": "broker.event", "event_type": "market.tick", "payload": data},
-            )
-        except Exception:
-            # The stored idempotent result lets a Queue retry re-attempt fan-out.
-            return JsonResponse({"status": "fanout_unavailable"}, status=503)
+    if layer is None:
+        # Never acknowledge a Queue message when live subscribers cannot receive
+        # the tick. A retry can fan out the already-ingested tick once Redis/Channels
+        # recovers without inserting a duplicate market-data row.
+        return JsonResponse({"status": "channel_layer_unavailable"}, status=503)
+    try:
+        async_to_sync(layer.group_send)(
+            f"algobot-market-{symbol}",
+            {"type": "broker.event", "event_type": "market.tick", "payload": data},
+        )
+    except Exception:
+        # The stored idempotent result lets a Queue retry re-attempt fan-out.
+        return JsonResponse({"status": "fanout_unavailable"}, status=503)
     return JsonResponse(
         {"status": "duplicate" if not claimed else "ingested", "tick": data},
         status=202,
