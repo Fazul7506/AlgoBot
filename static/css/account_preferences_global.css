@@ -270,3 +270,18 @@ html[data-theme="light"] .profile-edit-modal .iti__country.iti__highlight {
 html[data-theme="light"] .profile-edit-modal .iti__divider {
   border-color:var(--line)!important;
 }
+
+
+/* Shared form-control and modal contract: avoid hidden-width initialization and dark native widgets. */
+.profile-edit-modal .iti { display:block; width:100%; max-width:100%; }
+.profile-edit-modal .iti input[type="tel"] { width:100%; min-width:0; box-sizing:border-box; }
+html[data-theme="light"] .profile-edit-modal .iti__selected-country,
+html[data-theme="light"] .profile-edit-modal .iti__dropdown-content,
+html[data-theme="light"] .profile-edit-modal .iti__search-input {
+  background:var(--panel)!important; color:var(--text)!important; border-color:var(--line)!important;
+}
+html[data-theme="light"] .profile-edit-modal .iti__country:hover,
+html[data-theme="light"] .profile-edit-modal .iti__country[aria-selected="true"] {
+  background:var(--panel2)!important; color:var(--text)!important;
+}
+html[data-theme="light"] .profile-edit-modal .iti__dial-code { color:var(--muted)!important; }
