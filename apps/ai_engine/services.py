@@ -140,6 +140,14 @@ class PredictionService:
         consensus_confidence=float(consensus.get('confidence',0.0) or 0.0)*100.0
         cal=ConfidenceCalibrationService().calibrate(raw['probability'],raw['risk_score'])
         model_features=list(MODEL_FEATURE_NAMES)
+        # Persist the exact champion identity used for this symbol/timeframe with
+        # the prediction, so later outcome metrics can be attributed to a model
+        # version instead of only to an algorithm family.
+        normalized_timeframe = {"M1":"1m","M2":"2m","M5":"5m","M10":"10m","M15":"15m","M30":"30m","H1":"1h","H4":"4h","D1":"1d"}.get(str(timeframe).upper(),str(timeframe).lower())
+        champion = AIModel.objects.filter(
+            name__startswith=f"{symbol}-{normalized_timeframe}-",
+            status="champion",
+        ).order_by("-created_at").first()
         return Prediction.objects.create(
             user=user,
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
@@ -147,6 +155,10 @@ class PredictionService:
             payload={
                 'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
+                'model_id': champion.pk if champion else None,
+                'model_version': champion.version if champion else None,
+                'model_algorithm': champion.algorithm if champion else None,
+                'evaluation_horizon_candles': 1,
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,'expected_return_available':bool(raw.get('expected_return_available',False)),'expected_return_source':raw.get('expected_return_source','not_estimated_by_direction_classifier'),
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
                 'feature_values': feats,
