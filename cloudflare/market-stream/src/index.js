@@ -17,6 +17,19 @@ export default {
       console.log("Cloudflare Deriv stream remains disabled until deliberate cutover");
       return;
     }
+    const missing = [
+      "MARKET_STREAM_CONTROL_TOKEN",
+      "CLOUDFLARE_MARKET_STREAM_TOKEN",
+      "ALGOBOT_MARKET_SYMBOLS_URL",
+      "ALGOBOT_MARKET_TICK_URL",
+      "DERIV_PUBLIC_WS_URL",
+    ].filter(name => !String(env[name] || "").trim());
+    if (missing.length || !env.MARKET_STREAM_COORDINATOR) {
+      console.error("Market stream activation refused; required configuration is missing", {
+        missing: [...missing, ...(!env.MARKET_STREAM_COORDINATOR ? ["MARKET_STREAM_COORDINATOR"] : [])],
+      });
+      return;
+    }
     const id = env.MARKET_STREAM_COORDINATOR.idFromName("deriv-public-stream");
     const coordinator = env.MARKET_STREAM_COORDINATOR.get(id);
     ctx.waitUntil(coordinator.fetch("https://market-stream.internal/start", {
@@ -26,7 +39,16 @@ export default {
   },
 
   async queue(batch, env) {
+    const missing = [
+      "CLOUDFLARE_MARKET_STREAM_TOKEN",
+      "ALGOBOT_MARKET_TICK_URL",
+    ].filter(name => !String(env[name] || "").trim());
     for (const message of batch.messages) {
+      if (missing.length) {
+        console.error("Market tick consumer configuration missing; message retained", { missing });
+        message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        continue;
+      }
       try {
         const response = await fetch(env.ALGOBOT_MARKET_TICK_URL, {
           method: "POST",
@@ -79,7 +101,8 @@ export class MarketStreamCoordinator extends DurableObject {
   }
 
   async fetch(request) {
-    if (request.headers.get("Authorization") !== `Bearer ${this.env.MARKET_STREAM_CONTROL_TOKEN}`) {
+    if (!this.env.MARKET_STREAM_CONTROL_TOKEN ||
+        request.headers.get("Authorization") !== `Bearer ${this.env.MARKET_STREAM_CONTROL_TOKEN}`) {
       return new Response("Unauthorized", { status: 401 });
     }
     await this.ensureConnected();
