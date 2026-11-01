@@ -94,7 +94,7 @@ class CandleService:
                     event_bus.publish(EVENT_NEW_CANDLE, self.serialize(previous))
             made.append(candle)
         return made
-    def serialize(self,c): return {"symbol": c.symbol.symbol, "timeframe": c.timeframe, "open": str(c.open), "high": str(c.high), "low": str(c.low), "close": str(c.close), "volume": str(c.volume), "epoch": c.epoch}
+    def serialize(self,c): return {"symbol": c.symbol.symbol, "timeframe": c.timeframe, "open": str(c.open), "high": str(c.high), "low": str(c.low), "close": str(c.close), "volume": str(c.volume), "epoch": c.epoch, "source": c.source}
 
 
 class TickService:
