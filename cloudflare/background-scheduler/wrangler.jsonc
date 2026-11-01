@@ -7,6 +7,14 @@
   "vars": {
     "ALGOBOT_TASK_DISPATCH_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/task-dispatch/"
   },
+  "durable_objects": {
+    "bindings": [
+      { "name": "SCHEDULER_COORDINATOR", "class_name": "SchedulerCoordinator" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SchedulerCoordinator"] }
+  ],
   "queues": {
     "producers": [
       { "binding": "ALGOBOT_TASK_QUEUE", "queue": "algobot-background-tasks" }
