@@ -67,6 +67,10 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
 
+      - name: Test Cloudflare Django integration endpoints
+        run: |
+          python manage.py test apps.automation.test_cloudflare_hooks apps.market_data.test_cloudflare_hooks --verbosity 2
+
       - name: Django system checks
         run: python manage.py check
 
