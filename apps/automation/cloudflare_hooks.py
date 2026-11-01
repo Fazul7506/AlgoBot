@@ -56,14 +56,14 @@ def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
     if set(kwargs) - allowed:
         return None
     clean = dict(kwargs)
-    if "limit" in clean and (not isinstance(clean["limit"], int) or not 1 <= clean["limit"] <= 100):
+    if "limit" in clean and (isinstance(clean["limit"], bool) or not isinstance(clean["limit"], int) or not 1 <= clean["limit"] <= 100):
         return None
     if "batch_size" in clean and (
-        not isinstance(clean["batch_size"], int) or not 1 <= clean["batch_size"] <= 500
+        isinstance(clean["batch_size"], bool) or not isinstance(clean["batch_size"], int) or not 1 <= clean["batch_size"] <= 500
     ):
         return None
     if "horizon_candles" in clean and (
-        not isinstance(clean["horizon_candles"], int) or not 1 <= clean["horizon_candles"] <= 100
+        isinstance(clean["horizon_candles"], bool) or not isinstance(clean["horizon_candles"], int) or not 1 <= clean["horizon_candles"] <= 100
     ):
         return None
     if "timeframe" in clean and clean["timeframe"] not in ALLOWED_TIMEFRAMES:
@@ -103,7 +103,7 @@ def cloudflare_task_dispatch(request):
         not isinstance(schedule_id, str) or not schedule_id or len(schedule_id) > 100
         or not isinstance(task_name, str) or task_name not in ALLOWED_TASKS
         or ALLOWED_SCHEDULES.get(schedule_id) != task_name
-        or not isinstance(scheduled_minute, int) or scheduled_minute < 0
+        or isinstance(scheduled_minute, bool) or not isinstance(scheduled_minute, int) or scheduled_minute < 0
     ):
         return JsonResponse({"status": "invalid_payload"}, status=400)
 
