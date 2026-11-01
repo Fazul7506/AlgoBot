@@ -79,9 +79,12 @@ def cloudflare_market_tick(request):
         "epoch": tick.get("epoch"),
         "volume": tick.get("volume", 0),
     }
-    fingerprint = hashlib.sha256(
-        json.dumps(normalized_tick, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-    ).hexdigest()
+    try:
+        fingerprint = hashlib.sha256(
+            json.dumps(normalized_tick, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+        ).hexdigest()
+    except (TypeError, ValueError):
+        return JsonResponse({"status": "invalid_tick"}, status=422)
     idempotency_key = f"cf-market-tick:{fingerprint}"
 
     try:
