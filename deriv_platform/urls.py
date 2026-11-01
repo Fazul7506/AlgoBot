@@ -81,10 +81,13 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 from apps.ai_engine.cloudflare_hooks import cloudflare_training_dispatch
 from apps.automation.cloudflare_hooks import cloudflare_task_dispatch
+from apps.market_data.cloudflare_hooks import cloudflare_market_symbols, cloudflare_market_tick
 
 urlpatterns = [
     path("api/internal/cloudflare/ai-training/", cloudflare_training_dispatch, name="cloudflare-ai-training-dispatch"),
     path("api/internal/cloudflare/task-dispatch/", cloudflare_task_dispatch, name="cloudflare-task-dispatch"),
+    path("api/internal/cloudflare/market-symbols/", cloudflare_market_symbols, name="cloudflare-market-symbols"),
+    path("api/internal/cloudflare/market-tick/", cloudflare_market_tick, name="cloudflare-market-tick"),
     path("health/", include("apps.health.urls")),
     path("admin/", admin.site.urls),
     path("", home, name="home"),
