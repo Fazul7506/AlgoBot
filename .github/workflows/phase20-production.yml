@@ -56,6 +56,9 @@ jobs:
           npm install --no-audit --no-fund --prefix cloudflare/background-scheduler
           npm install --no-audit --no-fund --prefix cloudflare/market-stream
 
+      - name: Preflight Cloudflare architecture configuration
+        run: node cloudflare/preflight.mjs
+
       - name: Test Cloudflare background scheduler
         run: npm --prefix cloudflare/background-scheduler test
 
