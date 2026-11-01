@@ -6,6 +6,7 @@
   "workers_dev": true,
   "vars": {
     "CLOUDFLARE_SCHEDULER_ACTIVE": "false",
+    "ENABLE_EXECUTION_QUEUE_RECOVERY": "false",
     "ALGOBOT_TASK_DISPATCH_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/task-dispatch/"
   },
   "durable_objects": {
