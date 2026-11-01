@@ -81,7 +81,7 @@ def cloudflare_task_dispatch(request):
     scheduled_minute = payload.get("scheduled_minute")
     if (
         not isinstance(schedule_id, str) or not schedule_id or len(schedule_id) > 100
-        or task_name not in ALLOWED_TASKS
+        or not isinstance(task_name, str) or task_name not in ALLOWED_TASKS
         or ALLOWED_SCHEDULES.get(schedule_id) != task_name
         or not isinstance(scheduled_minute, int) or scheduled_minute < 0
     ):
