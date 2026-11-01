@@ -103,9 +103,25 @@ export default {
         continue;
       }
 
-      if ([400, 422].includes(response.status)) {
-        console.error("Task dispatch rejected invalid message", { messageId: message.id, status: response.status });
-        message.ack();
+      if ([400, 413, 422].includes(response.status)) {
+        try {
+          await env.ALGOBOT_TASK_DLQ_QUEUE.send({
+            source: "algobot-background-scheduler",
+            original_message_id: message.id,
+            failure_status: response.status,
+            failed_at: new Date().toISOString(),
+            body: message.body,
+          });
+          console.error("Invalid task message moved to dead-letter queue", {
+            messageId: message.id, scheduleId: message.body?.schedule_id, status: response.status,
+          });
+          message.ack();
+        } catch (error) {
+          console.error("Could not dead-letter invalid task message", {
+            messageId: message.id, error: String(error),
+          });
+          message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        }
       } else {
         console.error("Task dispatch endpoint unavailable; retaining queue message", {
           messageId: message.id,
