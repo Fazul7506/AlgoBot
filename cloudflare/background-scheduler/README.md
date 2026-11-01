@@ -8,8 +8,8 @@ This project is a standard Cloudflare Worker and Cloudflare Queue consumer. It i
 - Cloudflare Queues provide buffering, retry, and a dead-letter queue.
 - The authenticated Django dispatch endpoint enqueues the existing allowlisted Celery tasks. Therefore **a Celery execution worker is still required** until each Python task has been ported to a Worker-compatible implementation or another supported runtime.
 - Execution queue recovery is deliberately gated by `ENABLE_EXECUTION_QUEUE_RECOVERY=true`. Do not enable it until the dispatch path has been validated against the production execution queue and duplicate-order protections.
-- Cron expressions have one-minute granularity. The two former 30-second Beat schedules run once per minute in this initial scheduler; do not claim exact 30-second parity.
-- This scheduler is not production-active merely because files exist. Provision the queue and secrets, deploy the Worker, test with a non-trading task, and verify logs before changing Celery Beat.
+- Cron Triggers have one-minute granularity, so a Durable Object alarm maintains the two former 30-second schedules. The alarm's 30-second slot is part of the dispatch idempotency key.
+- The Worker defaults to disabled (`CLOUDFLARE_SCHEDULER_ACTIVE=false`). Provision queues and secrets, deploy it, verify the consumer and harmless task path, then explicitly enable it during cutover.
 
 ## Required resources and secrets
 
