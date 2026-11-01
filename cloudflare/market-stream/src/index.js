@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_SECONDS = 10;
 const MAX_PENDING_TICK_WRITES = 1_000;
+const MAX_QUEUE_SEND_ATTEMPTS = 3;
 
 export default {
   async fetch() {
@@ -106,7 +107,11 @@ export class MarketStreamCoordinator extends DurableObject {
         const write = this.pendingTickWrites.then(() => this.handleMessage(event.data));
         this.pendingTickWrites = write
           .catch(error => {
-            console.error("Could not queue Deriv tick", String(error));
+            console.error("Could not queue Deriv tick after bounded retries", String(error));
+            // Stop receiving more ticks when the durable Queue cannot accept
+            // them. The close handler schedules a reconnect; the failure is
+            // visible in logs rather than silently continuing with a dead path.
+            try { socket.close(1013, "Market tick queue unavailable"); } catch {}
           })
           .finally(() => {
             this.pendingTickCount = Math.max(0, this.pendingTickCount - 1);
@@ -136,13 +141,26 @@ export class MarketStreamCoordinator extends DurableObject {
     if (message.error || message.msg_type !== "tick") return;
     const tick = message.tick || {};
     if (!tick.symbol || tick.quote == null || tick.epoch == null) return;
-    await this.env.MARKET_TICK_QUEUE.send({
+    const payload = {
       symbol: String(tick.symbol),
       quote: tick.quote,
       bid: tick.bid ?? null,
       ask: tick.ask ?? null,
       epoch: tick.epoch,
       volume: tick.volume ?? 0,
-    });
+    };
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_QUEUE_SEND_ATTEMPTS; attempt += 1) {
+      try {
+        await this.env.MARKET_TICK_QUEUE.send(payload);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < MAX_QUEUE_SEND_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+        }
+      }
+    }
+    throw lastError || new Error("Market tick Queue send failed");
   }
 }
