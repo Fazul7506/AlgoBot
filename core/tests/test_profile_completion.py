@@ -510,3 +510,14 @@ class ProfileCompletionTests(TestCase):
         self.assertIn('data-profile-edit-close', template)
         self.assertIn('aria-modal="true"', template)
         self.assertIn("event.key === 'Escape'", template)
+
+
+    def test_profile_modal_initializes_phone_widget_after_deferred_script(self):
+        from pathlib import Path
+
+        template = Path("templates/core/profile.html").read_text(encoding="utf-8")
+        self.assertIn('src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer', template)
+        self.assertIn("window.addEventListener('load', initialize, {once:true})", template)
+        self.assertIn("window.intlTelInput(phone", template)
+        self.assertIn("iti.getNumber()", template)
+        self.assertIn("name=\"phone\" type=\"tel\"", template)
