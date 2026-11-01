@@ -212,7 +212,7 @@ def process_closed_candle(symbol, timeframe="1m", epoch=None):
     except (TypeError, ValueError):
         return {"status": "invalid_candle_epoch"}
     lock_key = f"ai:closed-candle:{symbol}:{canonical_timeframe}:{target_epoch}"
-    if not cache.add(lock_key, "processing", timeout=6 * 60 * 60):
+    if not cache.add(lock_key, "processing", timeout=300):
         return {"status": "duplicate_candle_event", "symbol": symbol, "epoch": target_epoch}
     try:
         rows = list(
