@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_SECONDS = 10;
+const MAX_PENDING_TICK_WRITES = 1_000;
 
 export default {
   async fetch() {
@@ -54,6 +55,8 @@ export class MarketStreamCoordinator extends DurableObject {
     super(ctx, env);
     this.socket = null;
     this.connecting = false;
+    this.pendingTickWrites = Promise.resolve();
+    this.pendingTickCount = 0;
   }
 
   async fetch(request) {
@@ -90,9 +93,23 @@ export class MarketStreamCoordinator extends DurableObject {
         }
       });
       socket.addEventListener("message", event => {
-        this.handleMessage(event.data).catch(error => {
-          console.error("Could not queue Deriv tick", String(error));
-        });
+        if (this.pendingTickCount >= MAX_PENDING_TICK_WRITES) {
+          console.error("Deriv tick queue producer is backpressured; closing stream to bound memory", {
+            pending: this.pendingTickCount,
+          });
+          try { socket.close(1013, "Market tick ingestion backpressure"); } catch {}
+          return;
+        }
+
+        this.pendingTickCount += 1;
+        const write = this.pendingTickWrites.then(() => this.handleMessage(event.data));
+        this.pendingTickWrites = write
+          .catch(error => {
+            console.error("Could not queue Deriv tick", String(error));
+          })
+          .finally(() => {
+            this.pendingTickCount = Math.max(0, this.pendingTickCount - 1);
+          });
       });
       socket.addEventListener("error", () => {
         try { socket.close(); } catch {}
