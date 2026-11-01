@@ -33,7 +33,7 @@ def cloudflare_market_symbols(request):
         pass
     symbols = list(
         MarketDataService.symbols.catalogue(
-            broker="deriv", active=True, tradable=None
+            broker="deriv", active=True, tradable=True
         ).values_list("symbol", flat=True)
     )
     if not symbols:
