@@ -113,7 +113,7 @@
     const profileOpen = document.querySelector('[data-profile-edit-open]');
     const profileClose = document.querySelector('[data-profile-edit-close]');
     const closeProfileModal = () => { if (profileModal) profileModal.hidden = true; };
-    profileOpen?.addEventListener('click', () => { if (profileModal) { profileModal.hidden = false; profileClose?.focus(); } });
+    profileOpen?.addEventListener('click', () => { if (profileModal) { profileModal.hidden = false; window.requestAnimationFrame(() => initializePhoneWidget()); profileClose?.focus(); } });
     profileClose?.addEventListener('click', closeProfileModal);
     profileModal?.addEventListener('click', event => { if (event.target === profileModal) closeProfileModal(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileModal && !profileModal.hidden) { closeProfileModal(); profileOpen?.focus(); } });
@@ -262,14 +262,27 @@
       const option = document.createElement('option'); option.value = current; option.textContent = current; select.add(option, 1);
     }
     select.value = current;
-    const phone = document.querySelector('#profile-phone');
-    if (phone && window.intlTelInput) {
-      const iti = window.intlTelInput(phone, {initialCountry:'ke', separateDialCode:true, nationalMode:false, formatOnDisplay:true, countrySearch:true, loadUtils:() => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')});
+    let phoneWidgetInitialized = false;
+    const initializePhoneWidget = () => {
+      const phone = document.querySelector('#profile-phone');
+      if (!phone || phoneWidgetInitialized || typeof window.intlTelInput !== 'function') return;
+      // The editor starts hidden. Initialize only after it is opened so the plugin
+      // can measure the real input width and position its country dropdown correctly.
+      if (profileModal?.hidden || phone.getClientRects().length === 0) return;
+      const iti = window.intlTelInput(phone, {
+        initialCountry: 'ke',
+        separateDialCode: true,
+        nationalMode: false,
+        formatOnDisplay: true,
+        countrySearch: true,
+        loadUtils: () => import('https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js')
+      });
+      phoneWidgetInitialized = true;
       const syncPhoneCountry = () => {
         const selectedOption = select.options[select.selectedIndex];
         let iso2 = selectedOption?.dataset.iso2 || '';
         if (!iso2) {
-          const countryName = selectedOption?.textContent?.replace(/^\\S+\\s+/, '').trim().toLocaleLowerCase();
+          const countryName = selectedOption?.textContent?.replace(/^\S+\s+/, '').trim().toLocaleLowerCase();
           const match = window.intlTelInput.getCountryData().find(item => item.name.toLocaleLowerCase() === countryName);
           iso2 = match?.iso2 || '';
         }
@@ -279,18 +292,20 @@
       syncPhoneCountry();
       const form = phone.closest('form');
       if (form) form.addEventListener('submit', () => {
+        const raw = phone.value.trim();
+        if (!raw) { phone.value = ''; return; }
         const internationalNumber = iti.getNumber();
         if (internationalNumber) {
           phone.value = internationalNumber;
-        } else if (phone.value.trim()) {
-          const selected = iti.getSelectedCountryData();
-          const digits = phone.value.replace(/\D/g, '');
-          phone.value = phone.value.trim().startsWith('+')
-            ? '+' + digits
-            : '+' + (selected.dialCode || '254') + digits.replace(/^0+/, '');
+          return;
         }
+        const selected = iti.getSelectedCountryData();
+        const digits = raw.replace(/\D/g, '');
+        phone.value = raw.startsWith('+')
+          ? '+' + digits
+          : '+' + (selected.dialCode || '254') + digits.replace(/^0+/, '');
       });
-    }
+    };
   };
   // intl-tel-input is loaded with defer, so DOMContentLoaded can fire before its global exists.
   // Wait for window load (after deferred scripts) before initializing the modal and phone widget.
