@@ -67,6 +67,45 @@ const trainingHookSource = await read("apps/ai_engine/cloudflare_hooks.py");
 const marketDocs = await read("cloudflare/market-stream/README.md");
 const schedulerDocs = await read("cloudflare/README.md");
 
+const requiredSchedules = [
+  ["ai-training-every-6-hours", "apps.ai_engine.tasks.scheduled_ai_training"],
+  ["ai-training-daily", "apps.ai_engine.tasks.scheduled_ai_training"],
+  ["ai-sentiment-every-15-minutes", "apps.ai_engine.tasks.ingest_market_sentiment"],
+  ["ai-orderbook-every-minute", "apps.ai_engine.tasks.ingest_orderbook_depth"],
+  ["ai-data-health-every-15-minutes", "apps.ai_engine.tasks.check_ai_data_health"],
+  ["ai-model-degradation-every-15-minutes", "apps.ai_engine.tasks.check_model_degradation"],
+  ["ai-resolve-predictions-every-5-minutes", "apps.ai_engine.tasks.resolve_prediction_outcomes"],
+  ["telegram-watchdog-every-minute", "apps.notifications.tasks.telegram_watchdog"],
+  ["telegram-recover-stuck-every-5-minutes", "apps.notifications.tasks.recover_stuck_notifications"],
+  ["automation-due-schedules-every-30-seconds", "apps.automation.tasks.process_due_scheduled_tasks"],
+  ["execution-queue-recovery-every-30-seconds", "apps.execution.process_execution_queue"],
+];
+for (const [scheduleId, taskName] of requiredSchedules) {
+  check(schedulerSource.includes(scheduleId), `Scheduler definition missing schedule: ${scheduleId}`);
+  check(dispatcherSource.includes(scheduleId), `Django allowlist missing schedule: ${scheduleId}`);
+  check(schedulerSource.includes(taskName), `Scheduler definition missing task: ${taskName}`);
+  check(dispatcherSource.includes(taskName), `Django task allowlist missing task: ${taskName}`);
+}
+for (const [label, url] of [
+  ["market symbols endpoint", market.vars?.ALGOBOT_MARKET_SYMBOLS_URL],
+  ["market tick endpoint", market.vars?.ALGOBOT_MARKET_TICK_URL],
+  ["task dispatch endpoint", scheduler.vars?.ALGOBOT_TASK_DISPATCH_URL],
+  ["legacy training endpoint", legacy.vars?.ALGOBOT_TRAINING_URL],
+]) {
+  try {
+    const parsed = new URL(String(url || ""));
+    check(parsed.protocol === "https:" && Boolean(parsed.hostname), `${label} must be a valid HTTPS URL`);
+  } catch {
+    check(false, `${label} must be a valid HTTPS URL`);
+  }
+}
+try {
+  const deriv = new URL(String(market.vars?.DERIV_PUBLIC_WS_URL || ""));
+  check(deriv.protocol === "wss:" && Boolean(deriv.hostname), "Deriv public stream URL must be a valid WSS URL");
+} catch {
+  check(false, "Deriv public stream URL must be a valid WSS URL");
+}
+
 for (const [label, source, required] of [
   ["market stream", marketSource, ["MARKET_STREAM_CONTROL_TOKEN", "CLOUDFLARE_MARKET_STREAM_TOKEN", "ALGOBOT_MARKET_SYMBOLS_URL", "ALGOBOT_MARKET_TICK_URL", "DERIV_PUBLIC_WS_URL"]],
   ["scheduler", schedulerSource, ["ALGOBOT_TASK_DISPATCH_URL", "ALGOBOT_TASK_DISPATCH_TOKEN", "ALGOBOT_TASK_QUEUE", "ALGOBOT_TASK_DLQ_QUEUE"]],
