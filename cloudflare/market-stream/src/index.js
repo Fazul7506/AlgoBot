@@ -2,6 +2,10 @@ import { DurableObject } from "cloudflare:workers";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_SECONDS = 10;
+const MAX_PENDING_TICK_WRITES = 1_000;
+const MAX_QUEUE_SEND_ATTEMPTS = 3;
+const MAX_TICK_AGE_SECONDS = 30;
+const FUTURE_TICK_TOLERANCE_SECONDS = 30;
 
 export default {
   async fetch() {
@@ -9,6 +13,23 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
+    if (env.CLOUDFLARE_MARKET_STREAM_ACTIVE !== "true") {
+      console.log("Cloudflare Deriv stream remains disabled until deliberate cutover");
+      return;
+    }
+    const missing = [
+      "MARKET_STREAM_CONTROL_TOKEN",
+      "CLOUDFLARE_MARKET_STREAM_TOKEN",
+      "ALGOBOT_MARKET_SYMBOLS_URL",
+      "ALGOBOT_MARKET_TICK_URL",
+      "DERIV_PUBLIC_WS_URL",
+    ].filter(name => !String(env[name] || "").trim());
+    if (missing.length || !env.MARKET_STREAM_COORDINATOR) {
+      console.error("Market stream activation refused; required configuration is missing", {
+        missing: [...missing, ...(!env.MARKET_STREAM_COORDINATOR ? ["MARKET_STREAM_COORDINATOR"] : [])],
+      });
+      return;
+    }
     const id = env.MARKET_STREAM_COORDINATOR.idFromName("deriv-public-stream");
     const coordinator = env.MARKET_STREAM_COORDINATOR.get(id);
     ctx.waitUntil(coordinator.fetch("https://market-stream.internal/start", {
@@ -18,7 +39,16 @@ export default {
   },
 
   async queue(batch, env) {
+    const missing = [
+      "CLOUDFLARE_MARKET_STREAM_TOKEN",
+      "ALGOBOT_MARKET_TICK_URL",
+    ].filter(name => !String(env[name] || "").trim());
     for (const message of batch.messages) {
+      if (missing.length) {
+        console.error("Market tick consumer configuration missing; message retained", { missing });
+        message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        continue;
+      }
       try {
         const response = await fetch(env.ALGOBOT_MARKET_TICK_URL, {
           method: "POST",
@@ -31,9 +61,25 @@ export default {
         });
         if (response.ok) {
           message.ack();
-        } else if ([400, 422].includes(response.status)) {
-          console.error("Market tick rejected as invalid", { id: message.id, status: response.status });
-          message.ack();
+        } else if ([400, 413, 422].includes(response.status)) {
+          try {
+            await env.MARKET_TICK_DLQ_QUEUE.send({
+              source: "algobot-market-stream",
+              original_message_id: message.id,
+              failure_status: response.status,
+              failed_at: new Date().toISOString(),
+              body: message.body,
+            });
+            console.error("Invalid market tick moved to dead-letter queue", {
+              id: message.id, status: response.status,
+            });
+            message.ack();
+          } catch (error) {
+            console.error("Could not dead-letter invalid market tick", {
+              id: message.id, error: String(error),
+            });
+            message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+          }
         } else {
           message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
         }
@@ -50,10 +96,13 @@ export class MarketStreamCoordinator extends DurableObject {
     super(ctx, env);
     this.socket = null;
     this.connecting = false;
+    this.pendingTickWrites = Promise.resolve();
+    this.pendingTickCount = 0;
   }
 
   async fetch(request) {
-    if (request.headers.get("Authorization") !== `Bearer ${this.env.MARKET_STREAM_CONTROL_TOKEN}`) {
+    if (!this.env.MARKET_STREAM_CONTROL_TOKEN ||
+        request.headers.get("Authorization") !== `Bearer ${this.env.MARKET_STREAM_CONTROL_TOKEN}`) {
       return new Response("Unauthorized", { status: 401 });
     }
     await this.ensureConnected();
@@ -81,14 +130,33 @@ export class MarketStreamCoordinator extends DurableObject {
       const socket = new WebSocket(this.env.DERIV_PUBLIC_WS_URL);
       this.socket = socket;
       socket.addEventListener("open", () => {
-        for (const [index, symbol] of symbols.entries()) {
-          socket.send(JSON.stringify({ ticks: symbol, subscribe: 1, req_id: index + 1 }));
-        }
+        // Deriv's public ticks endpoint accepts a symbol array. One subscription
+        // request avoids flooding the socket with one request per market and
+        // makes the subscription set explicit for reconnects.
+        socket.send(JSON.stringify({ ticks: symbols, subscribe: 1, req_id: 1 }));
       });
       socket.addEventListener("message", event => {
-        this.handleMessage(event.data).catch(error => {
-          console.error("Could not queue Deriv tick", String(error));
-        });
+        if (this.pendingTickCount >= MAX_PENDING_TICK_WRITES) {
+          console.error("Deriv tick queue producer is backpressured; closing stream to bound memory", {
+            pending: this.pendingTickCount,
+          });
+          try { socket.close(1013, "Market tick ingestion backpressure"); } catch {}
+          return;
+        }
+
+        this.pendingTickCount += 1;
+        const write = this.pendingTickWrites.then(() => this.handleMessage(event.data));
+        this.pendingTickWrites = write
+          .catch(error => {
+            console.error("Could not queue Deriv tick after bounded retries", String(error));
+            // Stop receiving more ticks when the durable Queue cannot accept
+            // them. The close handler schedules a reconnect; the failure is
+            // visible in logs rather than silently continuing with a dead path.
+            try { socket.close(1013, "Market tick queue unavailable"); } catch {}
+          })
+          .finally(() => {
+            this.pendingTickCount = Math.max(0, this.pendingTickCount - 1);
+          });
       });
       socket.addEventListener("error", () => {
         try { socket.close(); } catch {}
@@ -111,16 +179,52 @@ export class MarketStreamCoordinator extends DurableObject {
     if (typeof raw !== "string") return;
     let message;
     try { message = JSON.parse(raw); } catch { return; }
-    if (message.error || message.msg_type !== "tick") return;
+    if (message.error) {
+      console.error("Deriv public tick subscription returned an error", {
+        code: message.error.code,
+        message: String(message.error.message || "unknown").slice(0, 200),
+      });
+      return;
+    }
+    if (message.msg_type !== "tick") return;
     const tick = message.tick || {};
-    if (!tick.symbol || tick.quote == null || tick.epoch == null) return;
-    await this.env.MARKET_TICK_QUEUE.send({
-      symbol: String(tick.symbol),
-      quote: tick.quote,
+    const symbol = String(tick.symbol || "").trim();
+    const quote = Number(tick.quote);
+    const epoch = Number(tick.epoch);
+    if (!symbol || symbol.length > 64 || tick.quote == null || tick.epoch == null) return;
+    if (!Number.isFinite(quote) || !Number.isSafeInteger(epoch) || epoch <= 0) {
+      console.error("Deriv tick failed numeric validation", { symbol });
+      return;
+    }
+    const ageSeconds = Math.floor(Date.now() / 1000) - epoch;
+    if (ageSeconds < -FUTURE_TICK_TOLERANCE_SECONDS) {
+      console.error("Deriv tick timestamp is too far in the future", { symbol, ageSeconds });
+      return;
+    }
+    if (ageSeconds > MAX_TICK_AGE_SECONDS) {
+      console.warn("Dropping stale Deriv tick before persistence", { symbol, ageSeconds });
+      return;
+    }
+    const payload = {
+      symbol,
+      quote,
       bid: tick.bid ?? null,
       ask: tick.ask ?? null,
-      epoch: tick.epoch,
+      epoch,
       volume: tick.volume ?? 0,
-    });
+    };
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_QUEUE_SEND_ATTEMPTS; attempt += 1) {
+      try {
+        await this.env.MARKET_TICK_QUEUE.send(payload);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < MAX_QUEUE_SEND_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
+        }
+      }
+    }
+    throw lastError || new Error("Market tick Queue send failed");
   }
 }

@@ -10,7 +10,6 @@ from .artifact_storage import download_verified_artifact
 
 logger = logging.getLogger(__name__)
 
-MODEL_DIR=os.environ.get("AI_MODEL_DIR",os.path.join(os.path.dirname(__file__),"models"))
 DEFAULT_WEIGHTS={"rf":1.0,"xgb":1.0,"lgb":1.0,"lstm":1.0}
 
 def _clip_probability(value:Any)->float:
