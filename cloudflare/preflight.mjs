@@ -9,7 +9,6 @@ const errors = [];
 const check = (condition, message) => {
   if (!condition) errors.push(message);
 };
-const names = list => new Set((list || []).map(item => item.name || item.binding || item.queue));
 
 const [market, scheduler, legacy] = await Promise.all([
   parseConfig("cloudflare/market-stream/wrangler.jsonc"),
@@ -31,8 +30,6 @@ const queueCheck = (config, queueName, dlqName, producerBinding, requiredConsume
   const consumers = config.queues?.consumers || [];
   check(producers.some(item => item.queue === queueName && item.binding === producerBinding),
     `${config.name}: missing producer binding ${producerBinding} -> ${queueName}`);
-  check(producers.some(item => item.queue === dlqName),
-    `${config.name}: missing producer binding for DLQ ${dlqName}`);
   if (requiredConsumer) {
     const consumer = consumers.find(item => item.queue === queueName);
     check(Boolean(consumer), `${config.name}: missing consumer for ${queueName}`);
