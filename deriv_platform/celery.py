@@ -48,6 +48,10 @@ app.conf.beat_schedule = {} if os.environ.get("CLOUDFLARE_SCHEDULER_ACTIVE", "")
         "schedule": crontab(minute="*/15"),
         "kwargs": {"timeframe": "M1"},
     },
+    "ai-model-degradation-every-15-minutes": {
+        "task": "apps.ai_engine.tasks.check_model_degradation",
+        "schedule": crontab(minute="*/15"),
+    },
     "ai-resolve-predictions-every-5-minutes": {
         "task": "apps.ai_engine.tasks.resolve_prediction_outcomes",
         "schedule": crontab(minute="*/5"),
