@@ -79,3 +79,23 @@ test("execution queue recovery is emitted only when explicitly enabled", async (
   assert.equal(messages.some(message => message.schedule_id === "execution-queue-recovery-every-30-seconds"), true);
 });
 
+
+test("six-hour AI training schedule is dispatched through the unified task queue", async () => {
+  const { messages } = await scheduled("15 */6 * * *");
+  assert.deepEqual(messages.map(message => message.schedule_id), ["ai-training-every-6-hours"]);
+  assert.equal(messages[0].task, "apps.ai_engine.tasks.scheduled_ai_training");
+  assert.deepEqual(messages[0].kwargs, { timeframe: "M1", min_accuracy: 0.52 });
+});
+
+test("daily AI training schedule is dispatched through the unified task queue", async () => {
+  const { messages } = await scheduled("30 2 * * *");
+  assert.deepEqual(messages.map(message => message.schedule_id), ["ai-training-daily"]);
+});
+
+test("AI external-signal ingestion shares the unified scheduler and queue", async () => {
+  const { messages } = await scheduled("*/15 * * * *");
+  assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
+    "ai-data-health-every-15-minutes",
+    "ai-sentiment-every-15-minutes",
+  ]);
+});
