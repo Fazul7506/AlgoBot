@@ -23,7 +23,10 @@ async function scheduled(cron) {
 test("every-minute cron starts the durable 30-second scheduler and dispatches Telegram watchdog", async () => {
   const { messages, coordinatorStarted } = await scheduled("* * * * *");
   assert.equal(coordinatorStarted, true);
-  assert.deepEqual(messages.map(message => message.schedule_id), ["telegram-watchdog-every-minute"]);
+  assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
+    "ai-orderbook-every-minute",
+    "telegram-watchdog-every-minute",
+  ]);
   assert.ok(messages.every(message => Number.isInteger(message.scheduled_minute)));
 });
 
@@ -35,9 +38,12 @@ test("five-minute cron dispatches prediction resolution and Telegram recovery", 
   ]);
 });
 
-test("fifteen-minute cron dispatches data health", async () => {
+test("fifteen-minute cron dispatches data health and sentiment ingestion", async () => {
   const { messages } = await scheduled("*/15 * * * *");
-  assert.deepEqual(messages.map(message => message.schedule_id), ["ai-data-health-every-15-minutes"]);
+  assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
+    "ai-data-health-every-15-minutes",
+    "ai-sentiment-every-15-minutes",
+  ]);
 });
 
 test("unknown cron does not enqueue work", async () => {
