@@ -42,6 +42,7 @@ test("fifteen-minute cron dispatches data health and sentiment ingestion", async
   const { messages } = await scheduled("*/15 * * * *");
   assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
     "ai-data-health-every-15-minutes",
+    "ai-model-degradation-every-15-minutes",
     "ai-sentiment-every-15-minutes",
   ]);
 });
