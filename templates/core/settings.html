@@ -113,7 +113,9 @@
   };
   const applyAppearance = (prefs) => {
     const html = document.documentElement;
-    const preferenceTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark';
+    const storedTheme = (() => { try { return localStorage.getItem('algobot-theme-preference') || localStorage.getItem('algobot-theme'); } catch (_) { return ''; } })();
+    const existingTheme = ['light','dark','system'].includes(html.dataset.themePreference) ? html.dataset.themePreference : storedTheme;
+    const preferenceTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme : (['light','dark','system'].includes(existingTheme) ? existingTheme : 'dark');
     html.dataset.themePreference = preferenceTheme;
     try { localStorage.setItem('algobot-theme-preference', preferenceTheme); } catch (_) {}
     let theme = preferenceTheme;
