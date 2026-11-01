@@ -49,6 +49,19 @@ def profile_page(request):
             errors.append("Timezone must be 100 characters or fewer.")
         if len(phone) > 32:
             errors.append("Phone number must be 32 characters or fewer.")
+        elif phone:
+            # The browser widget normally submits E.164, but server-side validation
+            # must still protect saves when its deferred CDN script is unavailable.
+            compact_phone = "".join(character for character in phone if character not in " ().-")
+            if (
+                not compact_phone.startswith("+")
+                or not compact_phone[1:].isdigit()
+                or not 7 <= len(compact_phone[1:]) <= 15
+                or compact_phone[1:].startswith("0")
+            ):
+                errors.append("Enter a valid international phone number including its country calling code.")
+            else:
+                phone = compact_phone
         if timezone_name not in available_timezones():
             errors.append("Choose a valid time zone.")
         if avatar_file:
