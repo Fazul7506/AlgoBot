@@ -116,6 +116,12 @@ services:
         value: "false"
       - key: REDIS_CHANNEL_MAX_CONNECTIONS
         value: "2"
+      - key: REDIS_URL
+        sync: false
+      - key: USE_REDIS
+        value: "true"
+      - key: USE_CELERY
+        value: "true"
       - key: AI_SENTIMENT_RSS_URLS
         sync: false
       - key: AI_SENTIMENT_SYMBOL_KEYWORDS_JSON
