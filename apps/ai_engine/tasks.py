@@ -217,7 +217,8 @@ def rollback_champion_model(symbol, timeframe="M1"):
     from .training import rollback_champion_model as rollback
 
     return rollback(symbol=symbol, timeframe=timeframe)
-\n
+
+
 
 @app.task
 def process_closed_candle(symbol, timeframe="1m", epoch=None):
@@ -355,4 +356,4 @@ def check_model_degradation():
                     extra={"timeframe": timeframe},
                 )
     return {"status": "checked", "models_with_degradation": len(degraded), "degraded": degraded}
-\n
+
