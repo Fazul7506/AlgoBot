@@ -285,3 +285,48 @@ html[data-theme="light"] .profile-edit-modal .iti__country[aria-selected="true"]
   background:var(--panel2)!important; color:var(--text)!important;
 }
 html[data-theme="light"] .profile-edit-modal .iti__dial-code { color:var(--muted)!important; }
+
+
+/* Final cross-workspace light palette for legacy enterprise and developer/API components. */
+html[data-theme="light"] :where(.enterprise-hero,.panel,.kpi-card,.chart-shell,.segmented,.table-wrap,.activity-list li,.timeline li,.api-control-strip,.api-sidebar,.api-main,.api-panel,.api-endpoint,.api-meta-grid article,.status-row,.status-grid article,.dev-row,.dev-list,.dev-form fieldset,.secret-panel,.dev-code,.dev-page .panel,.api-explorer .panel,.api-status-page .panel) {
+  background-color:var(--panel)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+  box-shadow:none;
+}
+html[data-theme="light"] :where(.enterprise-hero,.panel,.kpi-card,.chart-shell,.api-control-strip,.api-sidebar,.api-main,.api-panel,.api-endpoint,.api-meta-grid article,.status-row,.status-grid article,.dev-row,.dev-list,.dev-form fieldset,.secret-panel) :where(h1,h2,h3,h4,h5,h6,p,span,strong,label,small,code,pre,li,th,td,a) {
+  color:inherit;
+}
+html[data-theme="light"] :where(.enterprise-hero,.panel,.kpi-card,.chart-shell,.api-control-strip,.api-sidebar,.api-main,.api-panel,.api-endpoint,.api-meta-grid article,.status-row,.status-grid article,.dev-row,.dev-list,.dev-form fieldset,.secret-panel) :where(p,small,.muted,.helper-text,.dev-help,.dev-meta,.api-control-strip span) {
+  color:var(--muted)!important;
+}
+html[data-theme="light"] :where(.btn:not(.btn-primary),.icon-btn,.link-btn,.segmented button,.action-list button,.dev-page .dev-actions button,.api-explorer .api-tabs button,.api-control-strip .btn) {
+  background:var(--panel2)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+  box-shadow:none!important;
+  text-shadow:none!important;
+}
+html[data-theme="light"] :where(.btn:not(.btn-primary),.icon-btn,.link-btn,.segmented button,.action-list button,.dev-page .dev-actions button,.api-explorer .api-tabs button):hover {
+  background:color-mix(in srgb,var(--accent) 10%,var(--panel))!important;
+  color:var(--text)!important;
+  border-color:var(--accent)!important;
+}
+html[data-theme="light"] :where(.enterprise-table th,.data-table th,.table-wrap th) {
+  background:var(--panel2)!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+}
+html[data-theme="light"] :where(.enterprise-table td,.data-table td,.table-wrap td) {
+  background-color:transparent;
+  color:var(--text);
+  border-color:var(--line)!important;
+}
+html[data-theme="light"] :where(.api-explorer pre,.api-explorer code,.dev-page pre,.dev-page code,.dev-code,.secret-panel code) {
+  background:var(--panel2)!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+}
+html[data-theme="light"] :where(.enterprise-hero,.builder-hero,.developer-hero,.hm-header) { background-image:none!important; }
