@@ -26,6 +26,10 @@ const REQUEST_TIMEOUT_MS = 12_000;
 
 export default {
   async scheduled(controller, env, ctx) {
+    if (env.CLOUDFLARE_SCHEDULER_ACTIVE !== "true") {
+      console.log("Cloudflare scheduler remains disabled until deliberate cutover");
+      return;
+    }
     const cron = controller.cron;
     if (cron === "* * * * *") {
       const id = env.SCHEDULER_COORDINATOR.idFromName("algobot-background-scheduler");
@@ -108,6 +112,10 @@ export class SchedulerCoordinator {
   }
 
   async alarm() {
+    if (this.env.CLOUDFLARE_SCHEDULER_ACTIVE !== "true") {
+      await this.ctx.storage.setAlarm(Date.now() + 30_000);
+      return;
+    }
     const scheduledTime = Date.now();
     const slot = Math.floor(scheduledTime / 30_000);
     const common = {
