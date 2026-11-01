@@ -82,7 +82,17 @@ class CandleService:
                 candle.source in {"deriv_candles", "connected_broker"} and TIMEFRAMES.get(timeframe, 0) >= 60
             ):
                 candle.high=max(candle.high,tick.quote); candle.low=min(candle.low,tick.quote); candle.close=tick.quote; candle.volume += tick.volume; candle.save(update_fields=["high","low","close","volume"])
-            MarketCacheService().set_latest_candle(tick.symbol.symbol, timeframe, self.serialize(candle)); event_bus.publish(EVENT_NEW_CANDLE, self.serialize(candle)); made.append(candle)
+            MarketCacheService().set_latest_candle(tick.symbol.symbol, timeframe, self.serialize(candle))
+            # A candle is closed when the first tick in the next bucket arrives.
+            # Publish the prior bucket once, not every tick update to the live
+            # candle, so downstream AI inference is event-driven and bounded.
+            if created:
+                previous = Candle.objects.filter(
+                    symbol=tick.symbol, timeframe=timeframe, epoch__lt=epoch
+                ).order_by("-epoch").first()
+                if previous:
+                    event_bus.publish(EVENT_NEW_CANDLE, self.serialize(previous))
+            made.append(candle)
         return made
     def serialize(self,c): return {"symbol": c.symbol.symbol, "timeframe": c.timeframe, "open": str(c.open), "high": str(c.high), "low": str(c.low), "close": str(c.close), "volume": str(c.volume), "epoch": c.epoch}
 
