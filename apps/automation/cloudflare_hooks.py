@@ -39,6 +39,7 @@ ALLOWED_TIMEFRAMES = {
 # idempotency records for that same window so delayed redeliveries cannot
 # enqueue a duplicate after the cache entry expires.
 IDEMPOTENCY_TTL_SECONDS = 86_400
+MAX_TASK_DISPATCH_BODY_BYTES = 4096
 
 
 def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
@@ -71,6 +72,9 @@ def cloudflare_task_dispatch(request):
     supplied = request.headers.get("Authorization", "")
     if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
         return JsonResponse({"status": "unauthorized"}, status=401)
+
+    if len(request.body) > MAX_TASK_DISPATCH_BODY_BYTES:
+        return JsonResponse({"status": "payload_too_large"}, status=413)
 
     try:
         payload = json.loads(request.body or b"{}")
