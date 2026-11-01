@@ -519,6 +519,10 @@ class ProfileCompletionTests(TestCase):
         self.assertIn('src="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js" defer', template)
         self.assertIn("window.addEventListener('load', initialize, {once:true})", template)
         self.assertIn("window.intlTelInput(phone", template)
+        self.assertIn("window.requestAnimationFrame(() => initializePhoneWidget())", template)
+        self.assertIn("phone.getClientRects().length === 0", template)
+        global_css = Path("static/css/account_preferences_global.css").read_text(encoding="utf-8")
+        self.assertIn('.profile-edit-modal .iti input[type="tel"]', global_css)
         self.assertIn("iti.getNumber()", template)
         self.assertIn("name=\"phone\" type=\"tel\"", template)
 
