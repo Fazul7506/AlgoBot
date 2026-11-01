@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-31",
   "workers_dev": true,
   "vars": {
+    "CLOUDFLARE_SCHEDULER_ACTIVE": "false",
     "ALGOBOT_TASK_DISPATCH_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/task-dispatch/"
   },
   "durable_objects": {
