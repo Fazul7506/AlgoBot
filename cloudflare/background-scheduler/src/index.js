@@ -1,13 +1,13 @@
 const SCHEDULES = {
   "automation-due-schedules-every-30-seconds": {
-    cron: "*/1 * * * *",
+    cron: "* * * * *",
     task: "apps.automation.tasks.process_due_scheduled_tasks",
     kwargs: { limit: 100 },
     queue: "celery",
     expires: 55,
   },
   "execution-queue-recovery-every-30-seconds": {
-    cron: "*/1 * * * *",
+    cron: "* * * * *",
     task: "apps.execution.process_execution_queue",
     kwargs: { batch_size: 10 },
     queue: "celery",
