@@ -1,4 +1,24 @@
 const SCHEDULES = {
+  "ai-training-every-6-hours": {
+    cron: "15 */6 * * *",
+    task: "apps.ai_engine.tasks.scheduled_ai_training",
+    kwargs: { timeframe: "M1", min_accuracy: 0.52 },
+  },
+  "ai-training-daily": {
+    cron: "30 2 * * *",
+    task: "apps.ai_engine.tasks.scheduled_ai_training",
+    kwargs: { timeframe: "M1", min_accuracy: 0.52 },
+  },
+  "ai-sentiment-every-15-minutes": {
+    cron: "*/15 * * * *",
+    task: "apps.ai_engine.tasks.ingest_market_sentiment",
+    kwargs: {},
+  },
+  "ai-orderbook-every-minute": {
+    cron: "* * * * *",
+    task: "apps.ai_engine.tasks.ingest_orderbook_depth",
+    kwargs: {},
+  },
   "ai-data-health-every-15-minutes": {
     cron: "*/15 * * * *",
     task: "apps.ai_engine.tasks.check_ai_data_health",
