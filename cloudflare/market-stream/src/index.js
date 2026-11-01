@@ -4,6 +4,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_DELAY_SECONDS = 10;
 const MAX_PENDING_TICK_WRITES = 1_000;
 const MAX_QUEUE_SEND_ATTEMPTS = 3;
+const MAX_TICK_AGE_SECONDS = 30;
+const FUTURE_TICK_TOLERANCE_SECONDS = 30;
 
 export default {
   async fetch() {
@@ -138,15 +140,38 @@ export class MarketStreamCoordinator extends DurableObject {
     if (typeof raw !== "string") return;
     let message;
     try { message = JSON.parse(raw); } catch { return; }
-    if (message.error || message.msg_type !== "tick") return;
+    if (message.error) {
+      console.error("Deriv public tick subscription returned an error", {
+        code: message.error.code,
+        message: String(message.error.message || "unknown").slice(0, 200),
+      });
+      return;
+    }
+    if (message.msg_type !== "tick") return;
     const tick = message.tick || {};
-    if (!tick.symbol || tick.quote == null || tick.epoch == null) return;
+    const symbol = String(tick.symbol || "").trim();
+    const quote = Number(tick.quote);
+    const epoch = Number(tick.epoch);
+    if (!symbol || symbol.length > 64 || tick.quote == null || tick.epoch == null) return;
+    if (!Number.isFinite(quote) || !Number.isSafeInteger(epoch) || epoch <= 0) {
+      console.error("Deriv tick failed numeric validation", { symbol });
+      return;
+    }
+    const ageSeconds = Math.floor(Date.now() / 1000) - epoch;
+    if (ageSeconds < -FUTURE_TICK_TOLERANCE_SECONDS) {
+      console.error("Deriv tick timestamp is too far in the future", { symbol, ageSeconds });
+      return;
+    }
+    if (ageSeconds > MAX_TICK_AGE_SECONDS) {
+      console.warn("Dropping stale Deriv tick before persistence", { symbol, ageSeconds });
+      return;
+    }
     const payload = {
-      symbol: String(tick.symbol),
-      quote: tick.quote,
+      symbol,
+      quote,
       bid: tick.bid ?? null,
       ask: tick.ask ?? null,
-      epoch: tick.epoch,
+      epoch,
       volume: tick.volume ?? 0,
     };
     let lastError;
