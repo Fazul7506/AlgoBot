@@ -36,7 +36,23 @@ def refresh_ai_data(timeframe="M1", lookback_hours=168):
 
 @app.task
 def check_ai_data_health(timeframe="M1"):
-    return AIDataPipeline().health(timeframe)
+    import logging
+
+    logger = logging.getLogger(__name__)
+    results = AIDataPipeline().health(timeframe)
+    for item in results:
+        if not item.get("ready") or item.get("ticks_last_hour", 0) == 0:
+            logger.warning(
+                "ai.market_data_degraded",
+                extra={
+                    "symbol": item.get("symbol"),
+                    "timeframe": timeframe,
+                    "candles_last_hour": item.get("candles_last_hour", 0),
+                    "ticks_last_hour": item.get("ticks_last_hour", 0),
+                    "latest_candle_epoch": item.get("latest_candle_epoch"),
+                },
+            )
+    return results
 
 
 @app.task
