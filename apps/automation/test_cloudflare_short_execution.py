@@ -79,6 +79,23 @@ class CloudflareShortExecutionTests(SimpleTestCase):
         "CLOUDFLARE_SHORT_EXECUTION_TOKEN": "short-secret",
     })
     @patch("apps.automation.cloudflare_short_execution.cache")
+    def test_reused_request_id_with_different_payload_is_rejected(self, cache):
+        cache.add.return_value = False
+        cache.get.return_value = {
+            "status": "completed",
+            "operation": "health_check",
+            "fingerprint": "different-payload",
+            "result": {"healthy": True},
+        }
+        response = cloudflare_short_execution(self.post())
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(json.loads(response.content)["status"], "idempotency_key_conflict")
+
+    @patch.dict("os.environ", {
+        "CLOUDFLARE_SHORT_EXECUTION_ACTIVE": "true",
+        "CLOUDFLARE_SHORT_EXECUTION_TOKEN": "short-secret",
+    })
+    @patch("apps.automation.cloudflare_short_execution.cache")
     @patch("apps.automation.cloudflare_short_execution.ALLOWED_SHORT_OPERATIONS")
     def test_failure_returns_500_and_releases_idempotency_key(self, handlers, cache):
         cache.add.return_value = True
