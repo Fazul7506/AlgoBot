@@ -11,7 +11,22 @@ Set these Worker secrets:
 - `MARKET_STREAM_CONTROL_TOKEN`: protects the scheduled coordinator trigger.
 - `CLOUDFLARE_MARKET_STREAM_TOKEN`: bearer token sent to Django; must match Render's `CLOUDFLARE_MARKET_STREAM_TOKEN`.
 
-The configured Deriv WebSocket URL follows the current Django public-stream setting. Confirm the provider endpoint and app requirements with a real non-production smoke test before cutting over.
+The public market-data URL is `wss://api.derivws.com/trading/v1/options/ws/public`. This is Deriv's unauthenticated Options API public endpoint. The stream subscribes with `{ "ticks": [<symbols>], "subscribe": 1, "req_id": 1 }`; Deriv documents `ticks` as accepting a symbol or an array of symbols. See the [official public endpoint](https://developers.deriv.com/docs/options/ws-public/) and [tick stream request schema](https://developers.deriv.com/docs/data/ticks/).
+
+Required variables:
+- `DERIV_PUBLIC_WS_URL`: the public URL above.
+- `ALGOBOT_MARKET_SYMBOLS_URL`: Django's authenticated active-symbol endpoint.
+- `ALGOBOT_MARKET_TICK_URL`: Django's authenticated tick ingestion endpoint.
+- `CLOUDFLARE_MARKET_STREAM_ACTIVE`: keep `false` until cutover.
+- `MARKET_STREAM_CONTROL_TOKEN`: Worker-only secret used to protect the Durable Object control request.
+- `CLOUDFLARE_MARKET_STREAM_TOKEN`: Worker secret matching Django's Render environment variable.
+
+Set secrets with Wrangler from this directory (enter values interactively; never commit them):
+```sh
+npx wrangler secret put MARKET_STREAM_CONTROL_TOKEN
+npx wrangler secret put CLOUDFLARE_MARKET_STREAM_TOKEN
+```
+
 
 ## Activation gate
 The Worker defaults to disabled (`CLOUDFLARE_MARKET_STREAM_ACTIVE=false`). It does not open a Deriv WebSocket until this flag is explicitly set to `true` for a parallel smoke test.
