@@ -97,7 +97,7 @@ services:
       - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
         sync: false
       - key: CLOUDFLARE_R2_BUCKET
-        value: algobot-model-artifacts
+        sync: false
       - key: AI_MODEL_SIGNING_KEY
         sync: false
       - key: CLOUDFLARE_TRAINING_WEBHOOK_TOKEN
