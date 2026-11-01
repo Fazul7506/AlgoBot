@@ -30,7 +30,16 @@ export default {
   },
 
   async queue(batch, env) {
+    const missing = [
+      "ALGOBOT_TRAINING_URL",
+      "AI_TRAINING_WEBHOOK_TOKEN",
+    ].filter(name => !String(env[name] || "").trim());
     for (const message of batch.messages) {
+      if (missing.length) {
+        console.error("Legacy AI dispatcher configuration missing; message retained", { missing });
+        message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        continue;
+      }
       let response;
       try {
         response = await fetch(env.ALGOBOT_TRAINING_URL, {
