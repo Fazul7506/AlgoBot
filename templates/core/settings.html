@@ -138,7 +138,11 @@
     const data = await request('GET');
     const profile = data.profile || {};
     const prefs = profile.account_preferences || {};
-    setRadio('theme', prefs.theme || 'dark');
+    const storedTheme = (() => { try { return localStorage.getItem('algobot-theme-preference') || localStorage.getItem('algobot-theme'); } catch (_) { return ''; } })();
+    const effectiveTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme
+      : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference
+      : (['light','dark','system'].includes(storedTheme) ? storedTheme : 'dark'));
+    setRadio('theme', effectiveTheme);
     setRadio('density', prefs.density || 'default');
     setRadio('accent', prefs.accent || 'cyan');
     ['layout','chart_position','default_page','auto_refresh_interval','refresh_frequency'].forEach(name => { if (field(name)) field(name).value = prefs[name] || ({layout:'classic',chart_position:'right',default_page:'dashboard',auto_refresh_interval:'realtime',refresh_frequency:'1m'}[name]); });
@@ -157,8 +161,9 @@
     const email = data.user?.email || 'No login email configured';
     root.querySelector('[data-preferences-user]').textContent = username;
     root.querySelector('[data-preferences-email]').textContent = email;
-    applyAppearance(prefs);
-    document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: prefs}));
+    const resolvedPreferences = {...prefs, theme: effectiveTheme};
+    applyAppearance(resolvedPreferences);
+    document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: resolvedPreferences}));
     lastSavedFormState = captureFormState();
     status.textContent = 'Preferences loaded';
     status.classList.remove('account-state--warn','account-state--bad'); status.classList.add('account-state--good');
