@@ -88,9 +88,10 @@ export class MarketStreamCoordinator extends DurableObject {
       const socket = new WebSocket(this.env.DERIV_PUBLIC_WS_URL);
       this.socket = socket;
       socket.addEventListener("open", () => {
-        for (const [index, symbol] of symbols.entries()) {
-          socket.send(JSON.stringify({ ticks: symbol, subscribe: 1, req_id: index + 1 }));
-        }
+        // Deriv's public ticks endpoint accepts a symbol array. One subscription
+        // request avoids flooding the socket with one request per market and
+        // makes the subscription set explicit for reconnects.
+        socket.send(JSON.stringify({ ticks: symbols, subscribe: 1, req_id: 1 }));
       });
       socket.addEventListener("message", event => {
         if (this.pendingTickCount >= MAX_PENDING_TICK_WRITES) {
