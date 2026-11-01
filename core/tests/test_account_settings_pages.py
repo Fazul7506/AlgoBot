@@ -515,4 +515,6 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("prefers-color-scheme: light", base_template)
         self.assertIn("algobot-theme-preference", shell_script)
         self.assertIn("algobot:preferences-loaded", shell_script)
+        self.assertIn("savedTheme=localStorage.getItem", shell_script)
+        self.assertIn("syncSystemTheme", shell_script)
         self.assertIn("algobot-theme-preference", settings_template)
