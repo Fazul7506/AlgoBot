@@ -1,40 +1,23 @@
 const SCHEDULES = {
-  "automation-due-schedules-every-30-seconds": {
-    cron: "* * * * *",
-    task: "apps.automation.tasks.process_due_scheduled_tasks",
-    kwargs: { limit: 100 },
-    queue: "celery",
-    expires: 55,
-  },
-  "execution-queue-recovery-every-30-seconds": {
-    cron: "* * * * *",
-    task: "apps.execution.process_execution_queue",
-    kwargs: { batch_size: 10 },
-    queue: "celery",
-    expires: 55,
-    requires_explicit_enable: true,
-  },
   "ai-data-health-every-15-minutes": {
     cron: "*/15 * * * *",
     task: "apps.ai_engine.tasks.check_ai_data_health",
     kwargs: { timeframe: "M1" },
-    queue: "celery",
   },
   "ai-resolve-predictions-every-5-minutes": {
     cron: "*/5 * * * *",
     task: "apps.ai_engine.tasks.resolve_prediction_outcomes",
     kwargs: { timeframe: "M1", horizon_candles: 1, batch_size: 500 },
-    queue: "celery",
   },
   "telegram-watchdog-every-minute": {
     cron: "* * * * *",
     task: "apps.notifications.tasks.telegram_watchdog",
-    queue: "celery",
+    kwargs: {},
   },
   "telegram-recover-stuck-every-5-minutes": {
     cron: "*/5 * * * *",
     task: "apps.notifications.tasks.recover_stuck_notifications",
-    queue: "celery",
+    kwargs: {},
   },
 };
 
@@ -43,24 +26,31 @@ const REQUEST_TIMEOUT_MS = 12_000;
 
 export default {
   async scheduled(controller, env, ctx) {
-    const matches = Object.entries(SCHEDULES).filter(([, item]) => item.cron === controller.cron);
+    const cron = controller.cron;
+    if (cron === "* * * * *") {
+      const id = env.SCHEDULER_COORDINATOR.idFromName("algobot-background-scheduler");
+      const coordinator = env.SCHEDULER_COORDINATOR.get(id);
+      ctx.waitUntil(coordinator.fetch("https://scheduler.internal/start", { method: "POST" }));
+    }
+
+    const matches = Object.entries(SCHEDULES).filter(([, item]) => item.cron === cron);
     if (!matches.length) {
-      console.error("Unknown scheduler cron; no messages produced", { cron: controller.cron });
+      if (cron !== "* * * * *") {
+        console.error("Unknown scheduler cron; no messages produced", { cron });
+      }
       return;
     }
+
     ctx.waitUntil(Promise.all(matches.map(async ([scheduleId, schedule]) => {
-      if (schedule.requires_explicit_enable && env.ENABLE_EXECUTION_QUEUE_RECOVERY !== "true") {
-        console.log("Execution queue recovery remains disabled until explicitly enabled", { scheduleId });
-        return;
-      }
+      const scheduledTime = controller.scheduledTime || Date.now();
       await env.ALGOBOT_TASK_QUEUE.send({
         schedule_id: scheduleId,
         task: schedule.task,
-        kwargs: schedule.kwargs || {},
-        queue: schedule.queue || "celery",
-        expires: schedule.expires || null,
-        scheduled_at: new Date(controller.scheduledTime || Date.now()).toISOString(),
-        scheduled_minute: Math.floor((controller.scheduledTime || Date.now()) / 60_000),
+        kwargs: schedule.kwargs,
+        queue: "celery",
+        expires: null,
+        scheduled_at: new Date(scheduledTime).toISOString(),
+        scheduled_minute: Math.floor(scheduledTime / 60_000),
       });
     })));
   },
@@ -101,4 +91,56 @@ export default {
       }
     }
   },
+};
+
+export class SchedulerCoordinator {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+    if (await this.ctx.storage.getAlarm() === null) {
+      await this.ctx.storage.setAlarm(Date.now() + 1_000);
+    }
+    return Response.json({ status: "scheduled" }, { status: 202 });
+  }
+
+  async alarm() {
+    const scheduledTime = Date.now();
+    const slot = Math.floor(scheduledTime / 30_000);
+    const common = {
+      queue: "celery",
+      scheduled_at: new Date(scheduledTime).toISOString(),
+      // This integer is a 30-second slot for these two schedules. The Django
+      // dispatcher uses it only as an idempotency component.
+      scheduled_minute: slot,
+    };
+    try {
+      const sends = [
+        this.env.ALGOBOT_TASK_QUEUE.send({
+          ...common,
+          schedule_id: "automation-due-schedules-every-30-seconds",
+          task: "apps.automation.tasks.process_due_scheduled_tasks",
+          kwargs: { limit: 100 },
+          expires: 25,
+        }),
+      ];
+      if (this.env.ENABLE_EXECUTION_QUEUE_RECOVERY === "true") {
+        sends.push(this.env.ALGOBOT_TASK_QUEUE.send({
+          ...common,
+          schedule_id: "execution-queue-recovery-every-30-seconds",
+          task: "apps.execution.process_execution_queue",
+          kwargs: { batch_size: 10 },
+          expires: 25,
+        }));
+      }
+      await Promise.all(sends);
+    } catch (error) {
+      console.error("Could not enqueue 30-second scheduled tasks", String(error));
+    } finally {
+      await this.ctx.storage.setAlarm(Date.now() + 30_000);
+    }
+  }
 };
