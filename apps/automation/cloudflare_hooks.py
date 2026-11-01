@@ -23,6 +23,14 @@ ALLOWED_TASKS = {
     "apps.notifications.tasks.telegram_watchdog": set(),
     "apps.notifications.tasks.recover_stuck_notifications": set(),
 }
+ALLOWED_SCHEDULES = {
+    "automation-due-schedules-every-30-seconds": "apps.automation.tasks.process_due_scheduled_tasks",
+    "execution-queue-recovery-every-30-seconds": "apps.execution.process_execution_queue",
+    "ai-data-health-every-15-minutes": "apps.ai_engine.tasks.check_ai_data_health",
+    "ai-resolve-predictions-every-5-minutes": "apps.ai_engine.tasks.resolve_prediction_outcomes",
+    "telegram-watchdog-every-minute": "apps.notifications.tasks.telegram_watchdog",
+    "telegram-recover-stuck-every-5-minutes": "apps.notifications.tasks.recover_stuck_notifications",
+}
 ALLOWED_TIMEFRAMES = {
     "M1", "M2", "M5", "M10", "M15", "M30", "H1", "H4", "D1",
     "1m", "2m", "5m", "10m", "15m", "30m", "1h", "4h", "1d",
@@ -74,6 +82,7 @@ def cloudflare_task_dispatch(request):
     if (
         not isinstance(schedule_id, str) or not schedule_id or len(schedule_id) > 100
         or task_name not in ALLOWED_TASKS
+        or ALLOWED_SCHEDULES.get(schedule_id) != task_name
         or not isinstance(scheduled_minute, int) or scheduled_minute < 0
     ):
         return JsonResponse({"status": "invalid_payload"}, status=400)
