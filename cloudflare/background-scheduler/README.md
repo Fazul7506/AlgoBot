@@ -19,6 +19,13 @@ Create queues:
 
 Set secret `ALGOBOT_TASK_DISPATCH_TOKEN` in Cloudflare and matching Django environment variable `CLOUDFLARE_TASK_DISPATCH_TOKEN` in Render. Keep secrets out of source control.
 
+Set the Cloudflare secret from this directory (enter the value interactively):
+```sh
+npx wrangler secret put ALGOBOT_TASK_DISPATCH_TOKEN
+```
+
+Render must also have a shared `REDIS_URL` reachable by both Django/Channels and the Celery worker, with `USE_REDIS=true` and `USE_CELERY=true`. The dispatch endpoint only publishes allowlisted tasks to the Celery broker; it does not execute Python. Keep a live Python worker attached to the same Redis broker before enabling this scheduler.
+
 Deploy from this directory with Wrangler after queue creation and secret configuration. Do not enable execution queue recovery during initial smoke tests.
 
 ## Remaining full migration work
