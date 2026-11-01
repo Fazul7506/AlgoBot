@@ -112,3 +112,58 @@ test("AI external-signal ingestion shares the unified scheduler and queue", asyn
     "ai-sentiment-every-15-minutes",
   ]);
 });
+
+
+test("active scheduler refuses to emit work when dispatch credentials are missing", async () => {
+  const messages = [];
+  const pending = [];
+  let coordinatorStarted = false;
+  const env = {
+    CLOUDFLARE_SCHEDULER_ACTIVE: "true",
+    ALGOBOT_TASK_QUEUE: { async send(message) { messages.push(message); } },
+    SCHEDULER_COORDINATOR: {
+      idFromName() { return "scheduler-id"; },
+      get() { return { async fetch() { coordinatorStarted = true; } }; },
+    },
+  };
+  await worker.scheduled(
+    { cron: "*/5 * * * *", scheduledTime: 1_800_000_000_000 },
+    env,
+    { waitUntil(promise) { pending.push(promise); } },
+  );
+  await Promise.all(pending);
+  assert.deepEqual(messages, []);
+  assert.equal(coordinatorStarted, false);
+});
+
+test("task Queue consumer retains messages when dispatch configuration is missing", async () => {
+  let retryOptions = null;
+  let acked = false;
+  const message = {
+    id: "missing-config-message",
+    body: { schedule_id: "ai-training-every-6-hours" },
+    ack() { acked = true; },
+    retry(options) { retryOptions = options; },
+  };
+  await worker.queue({ messages: [message] }, {});
+  assert.deepEqual(retryOptions, { delaySeconds: 60 });
+  assert.equal(acked, false);
+});
+
+test("30-second coordinator does not enqueue work when dispatch configuration is missing", async () => {
+  const messages = [];
+  const alarms = [];
+  const ctx = {
+    storage: {
+      async getAlarm() { return null; },
+      async setAlarm(value) { alarms.push(value); },
+    },
+  };
+  const coordinator = new SchedulerCoordinator(ctx, {
+    CLOUDFLARE_SCHEDULER_ACTIVE: "true",
+    ALGOBOT_TASK_QUEUE: { async send(message) { messages.push(message); } },
+  });
+  await coordinator.alarm();
+  assert.deepEqual(messages, []);
+  assert.equal(alarms.length, 1);
+});
