@@ -66,7 +66,9 @@ def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
         isinstance(clean["horizon_candles"], bool) or not isinstance(clean["horizon_candles"], int) or not 1 <= clean["horizon_candles"] <= 100
     ):
         return None
-    if "timeframe" in clean and clean["timeframe"] not in ALLOWED_TIMEFRAMES:
+    if "timeframe" in clean and (
+        not isinstance(clean["timeframe"], str) or clean["timeframe"] not in ALLOWED_TIMEFRAMES
+    ):
         return None
     if "min_accuracy" in clean and (
         not isinstance(clean["min_accuracy"], (int, float))
@@ -121,7 +123,7 @@ def cloudflare_task_dispatch(request):
     options = {"queue": "celery"}
     expires = payload.get("expires")
     if expires is not None:
-        if not isinstance(expires, int) or not 1 <= expires <= 300:
+        if isinstance(expires, bool) or not isinstance(expires, int) or not 1 <= expires <= 300:
             cache.delete(idempotency_key)
             return JsonResponse({"status": "invalid_expires"}, status=400)
         options["expires"] = expires
