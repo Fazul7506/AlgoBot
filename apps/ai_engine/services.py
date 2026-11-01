@@ -148,6 +148,7 @@ class PredictionService:
             name__startswith=f"{symbol}-{normalized_timeframe}-",
             status="champion",
         ).order_by("-created_at").first()
+        effective_champion = champion if int(raw.get("models_used", 0) or 0) > 0 else None
         return Prediction.objects.create(
             user=user,
             symbol=symbol,timeframe=timeframe,prediction=raw['direction'],probability=raw['probability'],
@@ -155,9 +156,9 @@ class PredictionService:
             payload={
                 'latency_ms':(time.perf_counter()-start)*1000,'confidence_label':cal['label'],'model_confidence':round(consensus_confidence,2),'confidence_source':'ensemble_consensus',
                 'models_used':raw.get('models_used',0),'model_types':raw.get('model_types',[]),
-                'model_id': champion.pk if champion else None,
-                'model_version': champion.version if champion else None,
-                'model_algorithm': champion.algorithm if champion else None,
+                'model_id': effective_champion.pk if effective_champion else None,
+                'model_version': effective_champion.version if effective_champion else None,
+                'model_algorithm': effective_champion.algorithm if effective_champion else None,
                 'evaluation_horizon_candles': 1,
                 'source':raw.get('source'),'consensus':consensus,'feature_set':model_features,'expected_return_available':bool(raw.get('expected_return_available',False)),'expected_return_source':raw.get('expected_return_source','not_estimated_by_direction_classifier'),
                 'price_action':{k:feats.get(k) for k in FEATURE_NAMES},
