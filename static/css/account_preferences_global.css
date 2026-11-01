@@ -330,3 +330,10 @@ html[data-theme="light"] :where(.api-explorer pre,.api-explorer code,.dev-page p
   border-color:var(--line)!important;
 }
 html[data-theme="light"] :where(.enterprise-hero,.builder-hero,.developer-hero,.hm-header) { background-image:none!important; }
+
+html[data-theme="light"] .app-content .btn.primary {
+  background:var(--accent)!important;
+  background-image:none!important;
+  color:var(--accent-foreground,#ffffff)!important;
+  border-color:var(--accent)!important;
+}
