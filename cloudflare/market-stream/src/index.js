@@ -39,9 +39,25 @@ export default {
         });
         if (response.ok) {
           message.ack();
-        } else if ([400, 422].includes(response.status)) {
-          console.error("Market tick rejected as invalid", { id: message.id, status: response.status });
-          message.ack();
+        } else if ([400, 413, 422].includes(response.status)) {
+          try {
+            await env.MARKET_TICK_DLQ_QUEUE.send({
+              source: "algobot-market-stream",
+              original_message_id: message.id,
+              failure_status: response.status,
+              failed_at: new Date().toISOString(),
+              body: message.body,
+            });
+            console.error("Invalid market tick moved to dead-letter queue", {
+              id: message.id, status: response.status,
+            });
+            message.ack();
+          } catch (error) {
+            console.error("Could not dead-letter invalid market tick", {
+              id: message.id, error: String(error),
+            });
+            message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+          }
         } else {
           message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
         }
