@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -29,17 +28,6 @@ def normalize_timeframe(timeframe: str) -> str:
         raise ValueError(f"Unsupported candle timeframe: {timeframe}")
     return canonical
 
-
-def _model_dir() -> Path:
-    configured = os.environ.get("AI_MODEL_DIR", "").strip()
-    if getattr(settings, "DEBUG", False):
-        path = Path(configured or (Path(__file__).resolve().parent / "models"))
-    else:
-        if not configured:
-            raise RuntimeError("AI_MODEL_DIR must point to durable model storage in production")
-        path = Path(configured)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _atomic_dump(model: Any, path: Path) -> None:
