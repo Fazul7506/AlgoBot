@@ -13,7 +13,7 @@ class EventBus:
             # per-tick inference would overload the Python worker and can use an
             # incomplete candle. Dispatch failures are observable but must not
             # make canonical market-data ingestion fail.
-            if payload.get("timeframe") == "1m" and payload.get("symbol") and payload.get("epoch") is not None:
+            if payload.get("source") == "tick_stream" and payload.get("timeframe") == "1m" and payload.get("symbol") and payload.get("epoch") is not None:
                 try:
                     from apps.ai_engine.tasks import process_closed_candle
                     process_closed_candle.apply_async(
