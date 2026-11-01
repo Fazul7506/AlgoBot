@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "algobot-market-stream",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "vars": {
+    "ALGOBOT_MARKET_SYMBOLS_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/market-symbols/",
+    "ALGOBOT_MARKET_TICK_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/market-tick/",
+    "DERIV_PUBLIC_WS_URL": "wss://api.derivws.com/trading/v1/options/ws/public"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "MARKET_STREAM_COORDINATOR", "class_name": "MarketStreamCoordinator" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["MarketStreamCoordinator"] }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "MARKET_TICK_QUEUE", "queue": "algobot-market-ticks" }
+    ],
+    "consumers": [
+      {
+        "queue": "algobot-market-ticks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "retry_delay": 10,
+        "dead_letter_queue": "algobot-market-ticks-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  }
+}
