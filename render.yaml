@@ -102,6 +102,20 @@ services:
         sync: false
       - key: CLOUDFLARE_TRAINING_WEBHOOK_TOKEN
         sync: false
+      - key: CLOUDFLARE_MARKET_STREAM_TOKEN
+        sync: false
+      - key: CLOUDFLARE_TASK_DISPATCH_TOKEN
+        sync: false
+      - key: CLOUDFLARE_SCHEDULER_ACTIVE
+        value: "false"
+      - key: CLOUDFLARE_MARKET_STREAM_ACTIVE
+        value: "false"
+      - key: ENABLE_EXECUTION_QUEUE_RECOVERY
+        value: "false"
+      - key: ALLOW_LIVE_TRADING
+        value: "false"
+      - key: REDIS_CHANNEL_MAX_CONNECTIONS
+        value: "2"
       - key: AI_SENTIMENT_RSS_URLS
         sync: false
       - key: AI_SENTIMENT_SYMBOL_KEYWORDS_JSON
