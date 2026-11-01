@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-31",
   "workers_dev": true,
   "vars": {
+    "AI_TRAINING_DISPATCH_ACTIVE": "false",
     "ALGOBOT_TRAINING_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/ai-training/"
   },
   "queues": {
