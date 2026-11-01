@@ -24,6 +24,11 @@ const SCHEDULES = {
     task: "apps.ai_engine.tasks.check_ai_data_health",
     kwargs: { timeframe: "M1" },
   },
+  "ai-model-degradation-every-15-minutes": {
+    cron: "*/15 * * * *",
+    task: "apps.ai_engine.tasks.check_model_degradation",
+    kwargs: {},
+  },
   "ai-resolve-predictions-every-5-minutes": {
     cron: "*/5 * * * *",
     task: "apps.ai_engine.tasks.resolve_prediction_outcomes",
