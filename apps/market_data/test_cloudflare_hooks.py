@@ -63,6 +63,18 @@ class CloudflareMarketHookTests(SimpleTestCase):
             response = cloudflare_market_tick(request)
         self.assertEqual(response.status_code, 401)
 
+
+    @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
+    def test_oversized_tick_payload_is_rejected(self):
+        request = self.factory.post(
+            "/api/internal/cloudflare/market-tick/",
+            data=" " * 16_385,
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_market_tick(request)
+        self.assertEqual(response.status_code, 413)
+
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
     @patch("apps.market_data.cloudflare_hooks.sync_active_symbols")
     @patch("apps.market_data.cloudflare_hooks.MarketDataService")
