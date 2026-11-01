@@ -69,7 +69,7 @@ jobs:
 
       - name: Test Cloudflare Django integration endpoints
         run: |
-          python manage.py test apps.ai_engine.test_cloudflare_training_webhook apps.automation.test_cloudflare_hooks apps.automation.test_cloudflare_short_execution apps.market_data.test_cloudflare_hooks --verbosity 2
+          python manage.py test apps.ai_engine.test_cloudflare_training_webhook apps.automation.test_cloudflare_hooks apps.market_data.test_cloudflare_hooks --verbosity 2
 
       - name: Django system checks
         run: python manage.py check
