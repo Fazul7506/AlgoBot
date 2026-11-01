@@ -8,6 +8,8 @@ async function scheduled(cron) {
   let coordinatorStarted = false;
   const env = {
     CLOUDFLARE_SCHEDULER_ACTIVE: "true",
+    ALGOBOT_TASK_DISPATCH_URL: "https://example.invalid/task-dispatch/",
+    ALGOBOT_TASK_DISPATCH_TOKEN: "test-token",
     ALGOBOT_TASK_QUEUE: { async send(message) { messages.push(message); } },
     SCHEDULER_COORDINATOR: {
       idFromName(name) { assert.equal(name, "algobot-background-scheduler"); return "scheduler-id"; },
@@ -64,6 +66,8 @@ test("durable alarm dispatches automation on 30-second slots and keeps execution
   };
   const coordinator = new SchedulerCoordinator(ctx, {
     CLOUDFLARE_SCHEDULER_ACTIVE: "true",
+    ALGOBOT_TASK_DISPATCH_URL: "https://example.invalid/task-dispatch/",
+    ALGOBOT_TASK_DISPATCH_TOKEN: "test-token",
     ENABLE_EXECUTION_QUEUE_RECOVERY: "false",
     ALGOBOT_TASK_QUEUE: { async send(message) { messages.push(message); } },
   });
@@ -80,6 +84,8 @@ test("execution queue recovery is emitted only when explicitly enabled", async (
   const ctx = { storage: { async getAlarm() { return null; }, async setAlarm() {} } };
   await new SchedulerCoordinator(ctx, {
     CLOUDFLARE_SCHEDULER_ACTIVE: "true",
+    ALGOBOT_TASK_DISPATCH_URL: "https://example.invalid/task-dispatch/",
+    ALGOBOT_TASK_DISPATCH_TOKEN: "test-token",
     ENABLE_EXECUTION_QUEUE_RECOVERY: "true",
     ALGOBOT_TASK_QUEUE: { async send(message) { messages.push(message); } },
   }).alarm();
