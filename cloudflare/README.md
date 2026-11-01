@@ -43,3 +43,36 @@ The DLQ queues intentionally have no consumer so failed payloads remain inspecta
 
 All these are source-level implementations. They remain inactive for Cloudflare scheduling/market streaming until the matching production secrets and activation flags are deliberately configured.
 
+## Repeatable infrastructure setup (safe by default)
+
+From the repository root, run the source/configuration preflight and Wrangler bundle checks:
+
+```sh
+bash cloudflare/deploy-safe.sh --check
+```
+
+This check does not deploy or mutate Cloudflare resources. The opt-in `--apply` mode first verifies Cloudflare Queue API access, creates only missing Queue resources, and deploys the three Wrangler configurations with their checked-in activation flags set to `false`. It does not create or change secret values, enable live streaming/scheduling, enable execution recovery, or enable trading:
+
+```sh
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+export CLOUDFLARE_API_TOKEN="token-with-required-queue-and-worker-deployment-permissions"
+bash cloudflare/deploy-safe.sh --apply
+```
+
+Use a least-privilege API token and verify the account before running `--apply`. Do not paste the token into chat, commit it, or enable flags as part of deployment. The script does not print the token or secret values. Queue consumer bindings, retry policies, DLQ destinations, Durable Object bindings/migrations, and cron triggers are applied from the version-controlled Wrangler configs. If deployment fails, keep all activation flags off and correct the reported resource/permission issue before retrying; the setup only creates queues that are missing and does not purge or delete queues.
+
+### Secret and environment mapping
+
+Configure values interactively with Wrangler after the initial disabled Worker deployment, then set the matching Django environment variable in Render. Never put real values in Wrangler `vars`, source files, logs, or this repository.
+
+| Cloudflare Worker secret | Matching Render/Django environment |
+|---|---|
+| `CLOUDFLARE_MARKET_STREAM_TOKEN` on `algobot-market-stream` | `CLOUDFLARE_MARKET_STREAM_TOKEN` |
+| `MARKET_STREAM_CONTROL_TOKEN` on `algobot-market-stream` | Worker-only control secret; no Render copy required |
+| `ALGOBOT_TASK_DISPATCH_TOKEN` on `algobot-background-scheduler` | `CLOUDFLARE_TASK_DISPATCH_TOKEN` |
+| `AI_TRAINING_WEBHOOK_TOKEN` on legacy dispatcher | `CLOUDFLARE_TRAINING_WEBHOOK_TOKEN` |
+
+The scheduler URL and market endpoint URLs are non-secret config values in their respective Wrangler files. Before any activation, confirm that the public API domain resolves to the intended Render deployment and that each matching secret is present on both sides. Keep `CLOUDFLARE_SCHEDULER_ACTIVE=false`, `CLOUDFLARE_MARKET_STREAM_ACTIVE=false`, `ENABLE_EXECUTION_QUEUE_RECOVERY=false`, and live-trading/execution flags disabled until the separate validation and controlled-cutover steps are approved.
+
+The preflight is intentionally a source/configuration check, not proof of live account state. After a disabled deployment, independently inspect the Cloudflare dashboard/API for Worker scripts, Queue consumers and DLQs, secret names (never values), cron triggers, Durable Object migrations, and R2 access. Do not retire the legacy dispatcher, Celery, or Render market stream until end-to-end parity and recovery checks pass.
+
