@@ -1,5 +1,5 @@
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from django.test import RequestFactory, SimpleTestCase
 
@@ -14,7 +14,7 @@ class CloudflareMarketHookTests(SimpleTestCase):
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
     @patch("apps.market_data.cloudflare_hooks.cache")
     @patch("apps.market_data.cloudflare_hooks.MarketDataService")
-    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=None)
+    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=Mock(group_send=AsyncMock()))
     def test_valid_tick_is_ingested(self, _layer, service_class, cache):
         symbol_query = Mock()
         symbol_query.exists.return_value = True
