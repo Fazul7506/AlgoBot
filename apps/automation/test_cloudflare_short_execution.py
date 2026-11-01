@@ -1,5 +1,6 @@
+import hashlib
 import json
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import RequestFactory, SimpleTestCase
 
@@ -69,7 +70,15 @@ class CloudflareShortExecutionTests(SimpleTestCase):
     @patch("apps.automation.cloudflare_short_execution.cache")
     def test_duplicate_completed_request_returns_cached_result(self, cache):
         cache.add.return_value = False
-        cache.get.return_value = {"status": "completed", "result": {"healthy": True}}
+        fingerprint = hashlib.sha256(
+            json.dumps(self.payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        cache.get.return_value = {
+            "status": "completed",
+            "operation": "health_check",
+            "fingerprint": fingerprint,
+            "result": {"healthy": True},
+        }
         response = cloudflare_short_execution(self.post())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["status"], "duplicate")
@@ -96,10 +105,12 @@ class CloudflareShortExecutionTests(SimpleTestCase):
         "CLOUDFLARE_SHORT_EXECUTION_TOKEN": "short-secret",
     })
     @patch("apps.automation.cloudflare_short_execution.cache")
-    @patch("apps.automation.cloudflare_short_execution.ALLOWED_SHORT_OPERATIONS")
+    @patch(
+        "apps.automation.cloudflare_short_execution.ALLOWED_SHORT_OPERATIONS",
+        {"health_check": Mock(side_effect=RuntimeError("test failure"))},
+    )
     def test_failure_returns_500_and_releases_idempotency_key(self, handlers, cache):
         cache.add.return_value = True
-        handlers["health_check"].side_effect = RuntimeError("test failure")
         response = cloudflare_short_execution(self.post())
         self.assertEqual(response.status_code, 500)
         cache.delete.assert_called_once()
