@@ -194,3 +194,141 @@ def rollback_champion_model(symbol, timeframe="M1"):
 
     return rollback(symbol=symbol, timeframe=timeframe)
 \n
+
+@app.task
+def process_closed_candle(symbol, timeframe="1m", epoch=None):
+    """Build features and a non-executing AI recommendation from a closed live candle."""
+    import logging
+    from django.core.cache import cache
+    from apps.market_data.models import Candle
+    from .services import PredictionService, RecommendationService
+
+    logger = logging.getLogger(__name__)
+    canonical_timeframe = str(timeframe or "1m").lower()
+    if canonical_timeframe != "1m" or epoch is None:
+        return {"status": "unsupported_candle_event", "symbol": symbol, "timeframe": canonical_timeframe}
+    try:
+        target_epoch = int(epoch)
+    except (TypeError, ValueError):
+        return {"status": "invalid_candle_epoch"}
+    lock_key = f"ai:closed-candle:{symbol}:{canonical_timeframe}:{target_epoch}"
+    if not cache.add(lock_key, "processing", timeout=6 * 60 * 60):
+        return {"status": "duplicate_candle_event", "symbol": symbol, "epoch": target_epoch}
+    try:
+        rows = list(
+            Candle.objects.filter(
+                symbol__symbol=symbol,
+                timeframe=canonical_timeframe,
+                source="tick_stream",
+                epoch__lte=target_epoch,
+            ).order_by("-epoch").values(
+                "open", "high", "low", "close", "volume", "epoch"
+            )[:60]
+        )
+        rows.reverse()
+        if len(rows) < 60:
+            cache.set(lock_key, "insufficient_history", timeout=6 * 60 * 60)
+            return {
+                "status": "insufficient_history",
+                "symbol": symbol,
+                "timeframe": canonical_timeframe,
+                "available_candles": len(rows),
+                "required_candles": 60,
+            }
+        latest = rows[-1]
+        context = {
+            "candles": rows,
+            "market_data": {
+                "open": latest["open"],
+                "high": latest["high"],
+                "low": latest["low"],
+                "close": latest["close"],
+                "volume": latest["volume"],
+            },
+        }
+        prediction = PredictionService().predict(symbol, canonical_timeframe, context)
+        recommendation = RecommendationService().recommend(symbol, prediction)
+        cache.set(lock_key, "completed", timeout=6 * 60 * 60)
+        return {
+            "status": "completed",
+            "symbol": symbol,
+            "timeframe": canonical_timeframe,
+            "epoch": target_epoch,
+            "prediction_id": prediction.pk,
+            "model_version": (prediction.payload or {}).get("model_version"),
+            "recommendation_id": recommendation.pk,
+            "recommendation": recommendation.recommendation,
+        }
+    except Exception:
+        cache.delete(lock_key)
+        logger.exception(
+            "ai.closed_candle_processing_failed",
+            extra={"symbol": symbol, "timeframe": canonical_timeframe, "epoch": target_epoch},
+        )
+        raise
+
+
+@app.task
+def check_model_degradation():
+    """Measure persisted prediction outcomes and schedule guarded retraining on degradation."""
+    import logging
+    from collections import defaultdict
+    from django.core.cache import cache
+
+    logger = logging.getLogger(__name__)
+    outcomes = PredictionOutcome.objects.filter(
+        resolved_at__isnull=False,
+        correct__isnull=False,
+    ).select_related("prediction").order_by("-resolved_at")[:1000]
+    grouped = defaultdict(list)
+    for outcome in outcomes:
+        payload = outcome.prediction.payload or {}
+        model_id = payload.get("model_id")
+        model_version = payload.get("model_version")
+        if model_id is None or not model_version:
+            continue
+        key = (
+            outcome.prediction.symbol,
+            outcome.prediction.timeframe,
+            str(model_id),
+            str(model_version),
+        )
+        grouped[key].append(bool(outcome.correct))
+
+    degraded = []
+    for (symbol, timeframe, model_id, model_version), values in grouped.items():
+        if len(values) < 30:
+            continue
+        accuracy = sum(values) / len(values)
+        if accuracy >= 0.48:
+            continue
+        degraded.append({
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "model_id": model_id,
+            "model_version": model_version,
+            "sample_size": len(values),
+            "accuracy": accuracy,
+        })
+        logger.warning(
+            "ai.model_degradation_detected",
+            extra=degraded[-1],
+        )
+        # One shared six-hour gate per timeframe prevents a degradation event
+        # from enqueuing a retraining storm. Promotion still requires the full
+        # walk-forward profitability and champion comparison gates.
+        gate = f"ai:model-degradation-retrain:{timeframe}"
+        if cache.add(gate, "queued", timeout=6 * 60 * 60):
+            try:
+                scheduled_ai_training.apply_async(
+                    kwargs={"timeframe": timeframe, "min_accuracy": 0.52},
+                    queue="celery",
+                )
+            except Exception:
+                cache.delete(gate)
+                logger.exception(
+                    "ai.model_degradation_retraining_dispatch_failed",
+                    extra={"timeframe": timeframe},
+                )
+    return {"status": "checked", "models_with_degradation": len(degraded), "degraded": degraded}
+\n
