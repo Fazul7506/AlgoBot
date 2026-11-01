@@ -12,12 +12,14 @@ class CloudflareMarketHookTests(SimpleTestCase):
         self.headers = {"HTTP_AUTHORIZATION": "Bearer market-secret"}
 
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
+    @patch("apps.market_data.cloudflare_hooks.cache")
     @patch("apps.market_data.cloudflare_hooks.MarketDataService")
     @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=None)
-    def test_valid_tick_is_ingested(self, _layer, service_class):
+    def test_valid_tick_is_ingested(self, _layer, service_class, cache):
         symbol_query = Mock()
         symbol_query.exists.return_value = True
         service_class.symbols.catalogue.return_value = symbol_query
+        cache.add.return_value = True
         stored_tick = object()
         service_class.return_value.tick_service.ingest.return_value = stored_tick
         service_class.return_value.tick_service.serialize.return_value = {
@@ -89,3 +91,50 @@ class CloudflareMarketHookTests(SimpleTestCase):
         response = cloudflare_market_symbols(request)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["symbols"], ["R_100", "1HZ100V"])
+
+    @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
+    @patch("apps.market_data.cloudflare_hooks.cache")
+    @patch("apps.market_data.cloudflare_hooks.MarketDataService")
+    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=None)
+    def test_exact_queue_redelivery_is_deduplicated(self, _layer, service_class, cache):
+        query = Mock()
+        query.exists.return_value = True
+        service_class.symbols.catalogue.return_value = query
+        cache.add.return_value = False
+        cache.get.return_value = {
+            "status": "ingested",
+            "tick": {"symbol": "R_100", "quote": "123.45", "epoch": 1_800_000_000},
+        }
+        request = self.factory.post(
+            "/api/internal/cloudflare/market-tick/",
+            data=json.dumps({"tick": {
+                "symbol": "R_100", "quote": 123.45, "epoch": 1_800_000_000, "volume": 0
+            }}),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_market_tick(request)
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(json.loads(response.content)["status"], "duplicate")
+        service_class.return_value.tick_service.ingest.assert_not_called()
+
+    @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
+    @patch("apps.market_data.cloudflare_hooks.cache")
+    @patch("apps.market_data.cloudflare_hooks.MarketDataService")
+    def test_in_progress_duplicate_is_retried(self, service_class, cache):
+        query = Mock()
+        query.exists.return_value = True
+        service_class.symbols.catalogue.return_value = query
+        cache.add.return_value = False
+        cache.get.return_value = {"status": "processing"}
+        request = self.factory.post(
+            "/api/internal/cloudflare/market-tick/",
+            data=json.dumps({"tick": {
+                "symbol": "R_100", "quote": 123.45, "epoch": 1_800_000_000, "volume": 0
+            }}),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_market_tick(request)
+        self.assertEqual(response.status_code, 503)
+        service_class.return_value.tick_service.ingest.assert_not_called()
