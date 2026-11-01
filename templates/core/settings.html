@@ -115,6 +115,7 @@
     const html = document.documentElement;
     const preferenceTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark';
     html.dataset.themePreference = preferenceTheme;
+    try { localStorage.setItem('algobot-theme-preference', preferenceTheme); } catch (_) {}
     let theme = preferenceTheme;
     if (theme === 'system') {
       try { localStorage.removeItem('algobot-theme'); } catch (_) {}
