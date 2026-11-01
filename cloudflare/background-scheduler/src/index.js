@@ -55,6 +55,20 @@ export default {
       console.log("Cloudflare scheduler remains disabled until deliberate cutover");
       return;
     }
+    const missing = [
+      "ALGOBOT_TASK_DISPATCH_URL",
+      "ALGOBOT_TASK_DISPATCH_TOKEN",
+    ].filter(name => !String(env[name] || "").trim());
+    if (missing.length || !env.ALGOBOT_TASK_QUEUE || !env.SCHEDULER_COORDINATOR) {
+      console.error("Scheduler activation refused; required configuration is missing", {
+        missing: [
+          ...missing,
+          ...(!env.ALGOBOT_TASK_QUEUE ? ["ALGOBOT_TASK_QUEUE"] : []),
+          ...(!env.SCHEDULER_COORDINATOR ? ["SCHEDULER_COORDINATOR"] : []),
+        ],
+      });
+      return;
+    }
     const cron = controller.cron;
     if (cron === "* * * * *") {
       const id = env.SCHEDULER_COORDINATOR.idFromName("algobot-background-scheduler");
@@ -85,7 +99,16 @@ export default {
   },
 
   async queue(batch, env) {
+    const missing = [
+      "ALGOBOT_TASK_DISPATCH_URL",
+      "ALGOBOT_TASK_DISPATCH_TOKEN",
+    ].filter(name => !String(env[name] || "").trim());
     for (const message of batch.messages) {
+      if (missing.length) {
+        console.error("Task consumer configuration missing; message retained", { missing });
+        message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        continue;
+      }
       let response;
       try {
         response = await fetch(env.ALGOBOT_TASK_DISPATCH_URL, {
@@ -154,6 +177,17 @@ export class SchedulerCoordinator {
 
   async alarm() {
     if (this.env.CLOUDFLARE_SCHEDULER_ACTIVE !== "true") {
+      await this.ctx.storage.setAlarm(Date.now() + 30_000);
+      return;
+    }
+    const missing = [
+      "ALGOBOT_TASK_DISPATCH_URL",
+      "ALGOBOT_TASK_DISPATCH_TOKEN",
+    ].filter(name => !String(this.env[name] || "").trim());
+    if (missing.length || !this.env.ALGOBOT_TASK_QUEUE) {
+      console.error("30-second scheduler refused to enqueue tasks; configuration missing", {
+        missing: [...missing, ...(!this.env.ALGOBOT_TASK_QUEUE ? ["ALGOBOT_TASK_QUEUE"] : [])],
+      });
       await this.ctx.storage.setAlarm(Date.now() + 30_000);
       return;
     }
