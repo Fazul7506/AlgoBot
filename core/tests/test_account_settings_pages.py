@@ -506,3 +506,13 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("color:var(--text)", security_css)
         self.assertIn("color:var(--muted)", security_css)
 
+
+    def test_theme_preference_bootstrap_preserves_system_choice_across_navigation(self):
+        base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
+        shell_script = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text()
+        settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
+        self.assertIn("algobot-theme-preference", base_template)
+        self.assertIn("prefers-color-scheme: light", base_template)
+        self.assertIn("algobot-theme-preference", shell_script)
+        self.assertIn("algobot:preferences-loaded", shell_script)
+        self.assertIn("algobot-theme-preference", settings_template)
