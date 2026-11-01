@@ -37,6 +37,20 @@ class CloudflareTaskDispatchTests(SimpleTestCase):
             queue="celery",
         )
 
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    def test_oversized_task_dispatch_payload_is_rejected(self):
+        from apps.automation.cloudflare_hooks import MAX_TASK_DISPATCH_BODY_BYTES
+
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=b"x" * (MAX_TASK_DISPATCH_BODY_BYTES + 1),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 413)
+
     def test_missing_token_is_rejected(self):
         request = self.factory.post(
             "/api/internal/cloudflare/task-dispatch/",
