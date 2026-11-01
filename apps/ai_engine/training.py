@@ -119,7 +119,8 @@ class MarketModelTrainer:
             )
             path.unlink(missing_ok=True)
             metadata = {**model_metadata, **stored}
-            ai_model = AIModel.objects.create(name=name, version=version, algorithm=best_algorithm, framework="sklearn", status="experimental", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
+            framework = {"rf": "scikit-learn", "xgb": "xgboost", "lgb": "lightgbm"}[best_algorithm]
+            ai_model = AIModel.objects.create(name=name, version=version, algorithm=best_algorithm, framework=framework, status="experimental", accuracy=metrics["accuracy"], precision=metrics["precision"], recall=metrics["recall"], f1_score=metrics["f1"], auc=metrics["auc"], metadata=metadata)
             ModelVersion.objects.create(model=ai_model, version=version, training_dataset=f"market_data:{symbol}:{timeframe}", feature_set={"features": list(FEATURES), "provenance": dataset.metadata}, hyperparameters={"algorithm": best_algorithm, "selection_score": best_score})
 
             # Compare against the current champion for this symbol/timeframe,
