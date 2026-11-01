@@ -186,3 +186,11 @@ def ingest_market_sentiment():
 def ingest_orderbook_depth():
     from .external_signals import ingest_orderbook_snapshots
     return ingest_orderbook_snapshots()
+
+@app.task
+def rollback_champion_model(symbol, timeframe="M1"):
+    """Explicit operator-triggered rollback to the best persisted validated model."""
+    from .training import rollback_champion_model as rollback
+
+    return rollback(symbol=symbol, timeframe=timeframe)
+\n
