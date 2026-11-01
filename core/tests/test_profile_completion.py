@@ -521,3 +521,37 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("window.intlTelInput(phone", template)
         self.assertIn("iti.getNumber()", template)
         self.assertIn("name=\"phone\" type=\"tel\"", template)
+
+
+    def test_profile_modal_rejects_invalid_phone_when_widget_is_unavailable(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "country": "Kenya",
+                "timezone": "UTC",
+                "phone": "0712-not-a-number",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid international phone number")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.phone, "")
+
+    def test_profile_modal_normalizes_formatted_international_phone(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "country": "Kenya",
+                "timezone": "UTC",
+                "phone": "+254 712-345-678",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.phone, "+254712345678")
