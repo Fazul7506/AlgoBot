@@ -84,6 +84,22 @@ class CloudflareTaskDispatchTests(SimpleTestCase):
         self.assertEqual(json.loads(response.content)["status"], "duplicate")
         celery.send_task.assert_not_called()
 
+    def test_unhashable_task_name_is_rejected(self):
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=json.dumps({
+                "schedule_id": "ai-data-health-every-15-minutes",
+                "task": ["apps.ai_engine.tasks.check_ai_data_health"],
+                "kwargs": {},
+                "scheduled_minute": 10,
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        with patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"}):
+            response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 400)
+
     @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
     def test_schedule_cannot_dispatch_a_different_allowlisted_task(self):
         request = self.factory.post(
