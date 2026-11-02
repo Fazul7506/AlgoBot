@@ -14,7 +14,7 @@ from config.settings.utils import env_bool, env_list
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY", os.getenv("DJANGO_SECRET_KEY", "django-insecure-local-development-only"))
 DEBUG = env_bool("DEBUG", env_bool("DJANGO_DEBUG", True))
-ALLOW_LIVE_TRADING = env_bool("ALLOW_LIVE_TRADING", False)
+ALLOW_LIVE_TRADING = env_bool("ALLOW_LIVE_TRADING", True)
 ENABLE_BROKER_ACCOUNT_SWITCH = env_bool("ENABLE_BROKER_ACCOUNT_SWITCH", True)
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["127.0.0.1", "localhost", "testserver", "algobot.dpdns.org", "www.algobot.dpdns.org", "api.algobot.dpdns.org"])
