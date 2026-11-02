@@ -107,10 +107,11 @@ test("daily AI training schedule is dispatched through the unified task queue", 
 
 test("AI external-signal ingestion shares the unified scheduler and queue", async () => {
   const { messages } = await scheduled("*/15 * * * *");
-  assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
-    "ai-data-health-every-15-minutes",
-    "ai-sentiment-every-15-minutes",
-  ]);
+  const scheduleIds = messages.map(message => message.schedule_id).sort();
+  assert.ok(scheduleIds.includes("ai-data-health-every-15-minutes"));
+  assert.ok(scheduleIds.includes("ai-sentiment-every-15-minutes"));
+  assert.ok(scheduleIds.includes("ai-model-degradation-every-15-minutes"));
+  assert.equal(new Set(scheduleIds).size, scheduleIds.length, "15-minute schedules must not be duplicated");
 });
 
 
