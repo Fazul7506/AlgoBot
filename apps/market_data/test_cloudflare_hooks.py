@@ -95,8 +95,8 @@ class CloudflareMarketHookTests(SimpleTestCase):
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
     @patch("apps.market_data.cloudflare_hooks.cache")
     @patch("apps.market_data.cloudflare_hooks.MarketDataService")
-    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=None)
-    def test_exact_queue_redelivery_is_deduplicated(self, _layer, service_class, cache):
+    @patch("apps.market_data.cloudflare_hooks.get_channel_layer", return_value=Mock(group_send=AsyncMock()))
+    def test_exact_queue_redelivery_is_deduplicated(self, layer, service_class, cache):
         query = Mock()
         query.exists.return_value = True
         service_class.symbols.catalogue.return_value = query
@@ -117,6 +117,7 @@ class CloudflareMarketHookTests(SimpleTestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(json.loads(response.content)["status"], "duplicate")
         service_class.return_value.tick_service.ingest.assert_not_called()
+        layer.group_send.assert_called_once()
 
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
     @patch("apps.market_data.cloudflare_hooks.cache")
