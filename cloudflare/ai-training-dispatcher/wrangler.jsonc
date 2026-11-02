@@ -10,7 +10,10 @@
   },
   "queues": {
     "producers": [
-      { "binding": "AI_TRAINING_QUEUE", "queue": "algobot-ai-training" }
+      {
+        "binding": "AI_TRAINING_QUEUE",
+        "queue": "algobot-ai-training"
+      }
     ],
     "consumers": [
       {
@@ -22,5 +25,6 @@
         "dead_letter_queue": "algobot-ai-training-dlq"
       }
     ]
-  }
+  },
+  "previews": {}
 }
