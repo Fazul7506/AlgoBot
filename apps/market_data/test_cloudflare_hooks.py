@@ -117,7 +117,7 @@ class CloudflareMarketHookTests(SimpleTestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(json.loads(response.content)["status"], "duplicate")
         service_class.return_value.tick_service.ingest.assert_not_called()
-        _layer.group_send.assert_called_once()
+        layer.group_send.assert_called_once()
 
     @patch.dict("os.environ", {"CLOUDFLARE_MARKET_STREAM_TOKEN": "market-secret"})
     @patch("apps.market_data.cloudflare_hooks.cache")
