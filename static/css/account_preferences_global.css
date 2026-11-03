@@ -337,3 +337,13 @@ html[data-theme="light"] .app-content .btn.primary {
   color:var(--accent-foreground,#ffffff)!important;
   border-color:var(--accent)!important;
 }
+
+
+/* Final cross-workspace light palette: override dark-only workspace components at the shared theme boundary. */
+html[data-theme="light"] :where(.ai-lab,.ai-lab-grid,.ai-lab-card,.ai-section,.ai-section-card,.ai-market-list,.ai-market-option,.ai-predictions-page) { color:var(--text); }
+html[data-theme="light"] :where(.ai-lab-card,.ai-section-card,.ai-market-option,.ai-market-list,.ai-predictions-page .panel) { background:var(--panel); color:var(--text); border-color:var(--line); box-shadow:0 8px 24px #14233812; }
+html[data-theme="light"] :where(.ai-lab h1,.ai-lab h2,.ai-lab h3,.ai-lab strong,.ai-market-option-label strong) { color:var(--text); }
+html[data-theme="light"] :where(.ai-lab p,.ai-stat-label,.ai-market-option-label small,.ai-lab .muted) { color:var(--muted); }
+html[data-theme="light"] :where(.ai-pill,.ai-badge) { background:var(--panel2); color:var(--text); border-color:var(--line); }
+html[data-theme="light"] :where(.ai-lab input,.ai-lab select,.ai-lab textarea,.ai-predictions-page input,.ai-predictions-page select) { background:var(--panel); color:var(--text); border-color:var(--line); }
+html[data-theme="light"] :where(.ai-market-option[aria-pressed="true"]) { background:color-mix(in srgb,var(--accent) 12%,var(--panel)); border-color:var(--accent); }
