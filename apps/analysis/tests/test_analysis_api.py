@@ -331,3 +331,112 @@ class AnalysisArchitectureReconciliationTests(TestCase):
             response.json()["contract_capabilities"]["source"],
             "deriv_authenticated_contracts_for",
         )
+
+
+class AnalysisRegressionTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="analysis-regression", password="test-pass-123"
+        )
+        self.client.force_login(self.user)
+        cache.clear()
+
+    @patch.object(views, "build_account_risk_context", return_value={})
+    @patch.object(views, "_authenticated_contract_capabilities", return_value={
+        "source": "deriv_authenticated_contracts_for",
+        "available_contract_types": ["MULTUP"],
+        "available_contract_families": ["multiplier"],
+        "available": [],
+    })
+    @patch.object(views.BrokerRegistry, "adapter")
+    @patch.object(views, "get_active_account")
+    @patch.object(views, "persist_broker_chart_history", return_value={"created": 3})
+    def test_analysis_refresh_does_not_shadow_authenticated_request(
+        self, persist_history, get_active, adapter_factory, _capabilities, _risk_context
+    ):
+        market = MarketSymbol.objects.create(
+            symbol="R_100",
+            display_name="Volatility 100 Index",
+            market="Volatility Indices",
+            broker="deriv",
+        )
+        account = type(
+            "Account", (),
+            {"pk": 7, "user_id": self.user.pk,
+             "broker": type("Broker", (), {"broker_type": "deriv", "name": "Deriv"})()},
+        )()
+        get_active.return_value = account
+        adapter = type(
+            "Adapter", (),
+            {
+                "get_chart_history": lambda *args, **kwargs: AsyncMock(return_value={
+                    "symbol": "R_100",
+                    "items": [
+                        {"epoch": 100, "open": 1, "high": 2, "low": 1, "close": 2},
+                        {"epoch": 160, "open": 2, "high": 3, "low": 2, "close": 3},
+                        {"epoch": 220, "open": 3, "high": 4, "low": 3, "close": 4},
+                    ],
+                })(),
+                "get_live_signal_tick": lambda *args, **kwargs: AsyncMock(return_value=None)(),
+            },
+        )()
+        adapter_factory.return_value = adapter
+        for epoch, close in ((100, 2), (160, 3), (220, 4)):
+            Candle.objects.create(
+                symbol=market, timeframe="1m", open=close, high=close + 1,
+                low=close - 1, close=close, volume=1, epoch=epoch,
+                source="deriv_candles",
+            )
+        with patch.object(
+            views, "analyze_candles",
+            return_value={
+                "status": "ok", "candles": 3, "signal": "NO_TRADE",
+                "technical_signal": "Neutral", "technical_score": 50,
+                "confidence": None, "structure": "Neutral",
+                "volatility_regime": "normal", "factors": [],
+            },
+        ):
+            response = self.client.get(
+                reverse("analysis-data"),
+                {"symbol": "R_100", "timeframe": "M1", "limit": 300, "refresh": "1"},
+            )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["symbol"], "R_100")
+        persist_history.assert_called_once()
+
+    @patch.object(views, "fetch_contracts_for", return_value={
+        "available_contract_types": [], "available_contract_families": [],
+        "expiry_types": [], "sentiments": [],
+    })
+    @patch.object(views.PredictionService, "predict", side_effect=RuntimeError("model registry unavailable"))
+    @patch.object(
+        views, "analyze_candles",
+        return_value={
+            "status": "ok", "candles": 25, "signal": "NO_TRADE",
+            "technical_signal": "Neutral", "technical_score": 50,
+            "confidence": None, "structure": "Neutral",
+            "volatility_regime": "normal", "factors": [], "indicators": {},
+            "market_structure": {},
+        },
+    )
+    def test_analysis_prediction_exception_is_reported_without_secondary_logger_failure(
+        self, _analyze, _predict, _contracts
+    ):
+        market = MarketSymbol.objects.create(
+            symbol="R_100", display_name="Volatility 100 Index",
+            market="Volatility Indices", broker="deriv",
+        )
+        for index in range(25):
+            close = 100 + index
+            Candle.objects.create(
+                symbol=market, timeframe="1m", open=close, high=close + 1,
+                low=close - 1, close=close, volume=1, epoch=100 + index * 60,
+                source="deriv_candles",
+            )
+        response = self.client.get(
+            reverse("analysis-data"),
+            {"symbol": "R_100", "timeframe": "M1", "limit": 300},
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["ai"]["status"], "unavailable")
+        self.assertIn("no AI signal", response.json()["ai"]["reason"])
