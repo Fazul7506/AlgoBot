@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "algobot-background-scheduler",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "vars": {
+    "CLOUDFLARE_SCHEDULER_ACTIVE": "false",
+    "ENABLE_EXECUTION_QUEUE_RECOVERY": "false",
+    "ALGOBOT_TASK_DISPATCH_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/task-dispatch/"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "SCHEDULER_COORDINATOR", "class_name": "SchedulerCoordinator" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SchedulerCoordinator"] }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "ALGOBOT_TASK_QUEUE", "queue": "algobot-background-tasks" },
+      { "binding": "ALGOBOT_TASK_DLQ_QUEUE", "queue": "algobot-background-tasks-dlq" }
+    ],
+    "consumers": [
+      {
+        "queue": "algobot-background-tasks",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "dead_letter_queue": "algobot-background-tasks-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["* * * * *", "*/5 * * * *", "*/15 * * * *", "15 */6 * * *", "30 2 * * *"]
+  }
+}

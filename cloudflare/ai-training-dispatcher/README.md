@@ -1,6 +1,6 @@
 # AlgoBot AI training dispatcher — Cloudflare setup
 
-This Worker owns the external retraining schedule and durable dispatch queue. It does **not** run Python, scikit-learn, XGBoost or LightGBM. It sends an authenticated request to the AlgoBot Django service, which enqueues the existing Celery task. The Python Celery worker inside the AlgoBot runtime performs model training.
+This Worker is the legacy external retraining scheduler and queue consumer. The unified scheduler in `../background-scheduler/` now owns the AI schedule definitions and routes them through the common authenticated task-dispatch endpoint. The legacy schedule is gated off by default (`AI_TRAINING_DISPATCH_ACTIVE=false`) so both schedulers must not be active at once. Keep this consumer and its webhook until existing queue messages have drained and the cutover is verified. It does **not** run Python, scikit-learn, XGBoost or LightGBM. It sends an authenticated request to the AlgoBot Django service, which enqueues the existing Celery task. The Python Celery worker inside the AlgoBot runtime performs model training.
 
 ## Cloudflare resources
 
@@ -13,7 +13,7 @@ Created in the connected Cloudflare account:
 
 The Worker has a secret binding named `AI_TRAINING_WEBHOOK_TOKEN`. Never put this value in source control.
 
-The Worker configuration contains four schedules: `15 */6 * * *` (model training every six hours), `30 2 * * *` (daily training at 02:30 UTC), `*/15 * * * *` (RSS sentiment ingestion every 15 minutes), and `* * * * *` (Level-2 snapshot polling every minute). Cloudflare schedules are the external scheduler; AI-related schedules are not duplicated in Celery Beat. The live Cloudflare schedules remain disabled until the webhook is deployed and verified. The repository configuration alone does not activate a deployed Worker.
+The legacy Worker retains its old four schedule definitions for reference, but its scheduled producer returns unless `AI_TRAINING_DISPATCH_ACTIVE=true`. The unified scheduler now emits the same training and external-signal task families through `algobot-background-tasks`. Existing deployed settings are not changed by a repository commit; verify live Worker variables and queue depth during cutover.
 
 ## Render webhook configuration
 

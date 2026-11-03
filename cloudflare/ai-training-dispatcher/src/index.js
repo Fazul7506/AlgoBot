@@ -10,6 +10,10 @@ const WEBHOOK_TIMEOUT_MS = 15_000;
 
 export default {
   async scheduled(controller, env, ctx) {
+    if (env.AI_TRAINING_DISPATCH_ACTIVE !== "true") {
+      console.log("Legacy AI dispatcher schedule disabled; unified background scheduler owns AI schedules");
+      return;
+    }
     // Keep cron events as queue producers only. Python model training runs in
     // AlgoBot's Celery runtime; Cloudflare Workers must never pretend to run
     // scikit-learn/XGBoost jobs themselves.
@@ -26,7 +30,16 @@ export default {
   },
 
   async queue(batch, env) {
+    const missing = [
+      "ALGOBOT_TRAINING_URL",
+      "AI_TRAINING_WEBHOOK_TOKEN",
+    ].filter(name => !String(env[name] || "").trim());
     for (const message of batch.messages) {
+      if (missing.length) {
+        console.error("Legacy AI dispatcher configuration missing; message retained", { missing });
+        message.retry({ delaySeconds: RETRY_DELAY_SECONDS });
+        continue;
+      }
       let response;
       try {
         response = await fetch(env.ALGOBOT_TRAINING_URL, {

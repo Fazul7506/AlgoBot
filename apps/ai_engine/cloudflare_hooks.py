@@ -8,6 +8,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+MAX_TRAINING_WEBHOOK_BODY_BYTES = 4096
+
 
 @csrf_exempt
 @require_POST
@@ -17,6 +19,8 @@ def cloudflare_training_dispatch(request):
     supplied = request.headers.get("Authorization", "")
     if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
         return JsonResponse({"status": "unauthorized"}, status=401)
+    if len(request.body) > MAX_TRAINING_WEBHOOK_BODY_BYTES:
+        return JsonResponse({"status": "payload_too_large"}, status=413)
     try:
         payload = json.loads(request.body or b"{}")
     except (TypeError, ValueError, UnicodeDecodeError):

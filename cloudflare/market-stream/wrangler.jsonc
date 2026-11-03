@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-31",
   "workers_dev": true,
   "vars": {
+    "CLOUDFLARE_MARKET_STREAM_ACTIVE": "false",
     "ALGOBOT_MARKET_SYMBOLS_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/market-symbols/",
     "ALGOBOT_MARKET_TICK_URL": "https://api.algobot.dpdns.org/api/internal/cloudflare/market-tick/",
     "DERIV_PUBLIC_WS_URL": "wss://api.derivws.com/trading/v1/options/ws/public"
@@ -19,7 +20,8 @@
   ],
   "queues": {
     "producers": [
-      { "binding": "MARKET_TICK_QUEUE", "queue": "algobot-market-ticks" }
+      { "binding": "MARKET_TICK_QUEUE", "queue": "algobot-market-ticks" },
+      { "binding": "MARKET_TICK_DLQ_QUEUE", "queue": "algobot-market-ticks-dlq" }
     ],
     "consumers": [
       {
