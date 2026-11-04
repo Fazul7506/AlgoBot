@@ -29,28 +29,11 @@
     const fx = /^(?:FRX)?([A-Z]{3})([A-Z]{3})$/.exec(upper); if (fx) return `${fx[1]}/${fx[2]}`;
     return 'Market instrument';
   };
-  const renderIcon = (select, name) => {
-    const symbol = select.value;
-    const row = {symbol, display_name: name};
-    return window.AlgoBotMarketAssets?.renderIcon?.(row) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
-  };
   const marketIcon = item => {
     const symbol = String((typeof item?.symbol === 'object' ? item.symbol.symbol : item?.symbol) || item?.underlying_symbol || item?.code || '');
     const supplied = String(item?.display_name || (typeof item?.symbol === 'object' ? item.symbol.display_name : '') || item?.name || '');
     const name = marketName({value:symbol,textContent:supplied || symbol});
     return window.AlgoBotMarketAssets?.renderIcon?.({...item,symbol,display_name:name}) || '<span class="market-avatar market-avatar-unmapped" aria-hidden="true"><span class="material-symbols-rounded">show_chart</span></span>';
-  };
-  const ensureIcon = select => {
-    let icon = select.parentElement?.querySelector(':scope > .analysis-market-icon, :scope > .terminal-selected-market-icon, :scope > .market-picker-icon');
-    if (!icon) {
-      const wrap = document.createElement('span');
-      wrap.className = 'market-picker-control';
-      icon = document.createElement('span'); icon.className = 'market-picker-icon'; icon.setAttribute('aria-hidden', 'true');
-      select.parentNode.insertBefore(wrap, select); wrap.append(icon, select);
-    }
-    const selected = select.selectedOptions?.[0];
-    const html = selected && selected.value ? renderIcon(select, marketName(selected)) : '';
-    if (icon.innerHTML !== html) icon.innerHTML = html;
   };
   const enhanceDisplay = node => {
     if (!node || !node.isConnected) return;
@@ -69,19 +52,15 @@
     const html = marketIcon({symbol,display_name:name});
     if (icon.innerHTML !== html) icon.innerHTML = html;
   };
+  // This module normalizes option labels only. The global anchored-select
+  // renderer exclusively owns the visible picker, selected icon and dropdown.
   const enhance = select => {
     if (!select || !select.isConnected) return;
     const options = [...select.options].filter(option => option.value && option.value.trim());
-    if (!options.length) return;
     for (const option of options) {
       const name = marketName(option);
       if (name && option.textContent !== name) option.textContent = name;
     }
-    if (!select.dataset.marketPickerBound) {
-      select.addEventListener('change', () => ensureIcon(select));
-      select.dataset.marketPickerBound = 'true';
-    }
-    ensureIcon(select);
   };
   const selector = 'select#symbol, select[name="symbol"], select[data-symbol], select[data-ai-symbol], select#symbolFilter, select[data-instrument-symbol], select[data-market-symbol], select[data-history-symbol]';
   const scan = root => {
