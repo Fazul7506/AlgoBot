@@ -213,7 +213,7 @@
     }
     const instrumentSelect = isInstrumentSelect(select);
     if (instrumentSelect) {
-      select.parentElement?.querySelectorAll(':scope > .market-picker-icon, :scope > .terminal-selected-market-icon, :scope > .analysis-market-icon').forEach(icon => { icon.hidden = true; });
+      select.parentElement?.querySelectorAll(':scope > .terminal-selected-market-icon, :scope > .analysis-market-icon').forEach(icon => { icon.hidden = true; });
     }
     const root = document.createElement('div');
     root.className = 'ab-select-root' + (instrumentSelect ? ' ab-select-root--instrument' : '') + (isWideCountryMenu(select) ? ' ab-select-root--country-phone' : '');
