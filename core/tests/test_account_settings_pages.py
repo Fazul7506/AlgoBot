@@ -466,7 +466,7 @@ class AccountSettingsPagesTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 200, response.content)
                 self.user.refresh_from_db()
-                self.assertEqual(self.user.profile.account_preferences["theme"], theme)
+                self.assertEqual(UserProfile.objects.get(user=self.user).account_preferences["theme"], theme)
 
                 # A fresh GET must return the account's saved value, not a browser default.
                 read_back = self.client.get(reverse("account_settings_api"))
