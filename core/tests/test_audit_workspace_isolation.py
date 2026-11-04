@@ -28,6 +28,11 @@ class AuditLogWorkspaceIsolationTests(TestCase):
         user = get_user_model().objects.create_user(username="audit-trader", password="test-password")
         AuditLog.objects.create(user=user, action="get_failed", module="analysis", resource="/api/analysis/markets/ | status=404 | request_id=abc")
         AuditLog.objects.create(user=user, action="post_completed", module="execution", resource="/api/orders/submit/ | status=201 | request_id=def")
+        from apps.observability.models import AuditEvent
+        AuditEvent.objects.create(
+            actor_id=user.pk, action="get_failed", resource_type="analysis",
+            resource_id="/api/analysis/data/ | status=500", outcome="failed",
+        )
         business_event = AuditLog.objects.create(user=user, action="order_submitted", module="trading", resource="Order submitted")
         self.client.force_login(user)
         response = self.client.get("/operations/audit/")
@@ -35,6 +40,7 @@ class AuditLogWorkspaceIsolationTests(TestCase):
         events = list(response.context["events"])
         self.assertEqual([event.pk for event in events], [business_event.pk])
         self.assertNotContains(response, "/api/analysis/markets/")
+        self.assertNotContains(response, "/api/analysis/data/")
         self.assertNotContains(response, "request_id=")
         self.assertNotContains(response, "IP Address")
         self.assertNotContains(response, "Integrity reference")

@@ -36,7 +36,7 @@ def audit_workspace(request):
 
     request_noise = tuple(f"{method}_{outcome}" for method in ("get", "head", "options", "post", "put", "patch", "delete") for outcome in ("completed", "failed"))
     structured = AuditLog.objects.filter(user=request.user).exclude(action__in=request_noise)
-    application = AuditEvent.objects.filter(actor_id=request.user.pk)
+    application = AuditEvent.objects.filter(actor_id=request.user.pk).exclude(action__in=request_noise)
     action = request.GET.get("action", "").strip()[:120]
     module = request.GET.get("module", "").strip()[:120]
     search = request.GET.get("q", "").strip()[:160]

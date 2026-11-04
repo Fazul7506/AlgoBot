@@ -594,7 +594,7 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         self.assertIn("timeout=25000", script)
         self.assertIn("result[2].value===null", script)
         template = Path("templates/core/backtesting.html").read_text(encoding="utf-8")
-        self.assertIn("v=20261027-reliability1", template)
+        self.assertIn("v=20261104-queue-recovery1", template)
 
     def test_frontend_contract_coalesces_repeated_catalog_and_account_reads(self):
         from pathlib import Path

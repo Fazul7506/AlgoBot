@@ -10,7 +10,6 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 
 from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
-from apps.brokers.models import BrokerAccount, BrokerConnection, Position
 from .serializers import AlertSerializer, AuditLogSerializer, BrokerHealthSerializer, IncidentSerializer, LogEntrySerializer, MetricSerializer, SystemHealthSerializer, TraceSpanSerializer
 from .services import MonitoringEngine
 
@@ -20,21 +19,7 @@ logger = logging.getLogger(__name__)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def dashboard(request):
-    data = MonitoringEngine().dashboard()
-    if not request.user.is_staff:
-        data["overall_system_health"] = "available"
-    account_ids = BrokerAccount.objects.filter(user=request.user, status="active").values_list("id", flat=True)
-    data["broker_status"] = (
-        "connected"
-        if BrokerConnection.objects.filter(broker_account_id__in=account_ids, status="connected").exists()
-        else "not_connected"
-    )
-    data["current_trades"] = Position.objects.filter(account_id__in=account_ids, status="open").count()
-    data["active_alerts"] = Alert.objects.filter(user=request.user).exclude(status="resolved").count()
-    data["open_incidents"] = Incident.objects.filter(
-        Q(assigned_to=request.user) | Q(alert__user=request.user)
-    ).exclude(status="resolved").distinct().count()
-    return Response(data)
+    return Response(MonitoringEngine().dashboard(user=request.user))
 
 
 @api_view(["GET"])
@@ -52,25 +37,25 @@ def broker(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def trading(request):
-    return Response(MonitoringEngine().trading.snapshot())
+    return Response(MonitoringEngine().trading.snapshot(user=request.user))
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def strategies(request):
-    return Response(MonitoringEngine().strategy.snapshot())
+    return Response(MonitoringEngine().strategy.snapshot(user=request.user))
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def ai(request):
-    return Response(MonitoringEngine().ai.snapshot())
+    return Response(MonitoringEngine().ai.snapshot(user=request.user))
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def risk(request):
-    return Response(MonitoringEngine().risk.snapshot())
+    return Response(MonitoringEngine().risk.snapshot(user=request.user))
 
 
 @api_view(["GET"])
