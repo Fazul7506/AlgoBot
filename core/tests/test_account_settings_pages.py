@@ -507,6 +507,19 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("color:var(--muted)", security_css)
 
 
+    def test_preferences_bootstrap_waits_for_deferred_shared_api_client(self):
+        base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
+        settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
+        self.assertIn("const initializePreferences = () =>", settings_template)
+        self.assertIn("document.addEventListener('DOMContentLoaded', initializePreferences, {once: true})", settings_template)
+        self.assertIn("window.AlgoBotFrontendData", settings_template)
+        self.assertIn("client.request('/api/settings/'", settings_template)
+        self.assertLess(
+            base_template.index("frontend_data_contract.js"),
+            base_template.index("{% block extra_js %}"),
+            "The shared API contract must be loaded before page-specific deferred scripts.",
+        )
+
     def test_theme_preference_bootstrap_preserves_system_choice_across_navigation(self):
         base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
         shell_script = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text()
