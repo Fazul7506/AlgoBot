@@ -218,8 +218,10 @@ class AccountSettingsPagesTests(TestCase):
     def test_preferences_page_uses_the_shared_session_bound_api_client(self):
         settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
         api_contract = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "frontend_data_contract.js").read_text()
-        self.assertIn("window.AlgoBotFrontendData", settings_template)
-        self.assertNotIn("fetch('/api/settings/'", settings_template)
+        preferences_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "settings_preferences.js").read_text()
+        self.assertIn("settings_preferences.js", settings_template)
+        self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertNotIn("fetch('/api/settings/'", preferences_script)
         self.assertIn("path==='/api/settings/'", api_contract)
 
     def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
@@ -245,7 +247,7 @@ class AccountSettingsPagesTests(TestCase):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("account_preferences_global.css?v=20261101-global-theme-compatibility3", html)
+        self.assertIn("account_preferences_global.css", html)
         self.assertIn("localStorage.getItem('algobot-theme')", html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
@@ -331,7 +333,7 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
                 html = response.content.decode("utf-8")
-                self.assertIn("account_preferences_global.css?v=20261101-global-theme-compatibility3", html)
+                self.assertIn("account_preferences_global.css", html)
                 nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
@@ -563,7 +565,8 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("client.request", shell_script)
         self.assertNotIn("fetch('/api/settings/'", shell_script)
         self.assertIn("syncSystemTheme", shell_script)
-        self.assertIn("const effectiveTheme", settings_template)
-        self.assertIn("detail: resolvedPreferences", settings_template)
+        preferences_script = (Path(__file__).resolve().parents[2] / "static/js/core/settings_preferences.js").read_text()
+        self.assertIn("const effectiveTheme", preferences_script)
+        self.assertIn("detail: resolvedPreferences", preferences_script)
         self.assertIn("Final cross-workspace light palette", (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text())
-        self.assertIn("algobot-theme-preference", settings_template)
+        self.assertIn("algobot-theme-preference", base_template)

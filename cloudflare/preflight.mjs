@@ -75,6 +75,7 @@ const requiredSchedules = [
   ["ai-data-health-every-15-minutes", "apps.ai_engine.tasks.check_ai_data_health"],
   ["ai-model-degradation-every-15-minutes", "apps.ai_engine.tasks.check_model_degradation"],
   ["ai-resolve-predictions-every-5-minutes", "apps.ai_engine.tasks.resolve_prediction_outcomes"],
+  ["backtest-queue-recovery-every-minute", "apps.backtesting.tasks.reconcile_backtest_queue"],
   ["telegram-watchdog-every-minute", "apps.notifications.tasks.telegram_watchdog"],
   ["telegram-recover-stuck-every-5-minutes", "apps.notifications.tasks.recover_stuck_notifications"],
   ["automation-due-schedules-every-30-seconds", "apps.automation.tasks.process_due_scheduled_tasks"],

@@ -34,7 +34,8 @@ def audit_workspace(request):
     from datetime import timedelta
     from django.utils.dateparse import parse_date
 
-    structured = AuditLog.objects.filter(user=request.user)
+    request_noise = tuple(f"{method}_{outcome}" for method in ("get", "head", "options", "post", "put", "patch", "delete") for outcome in ("completed", "failed"))
+    structured = AuditLog.objects.filter(user=request.user).exclude(action__in=request_noise)
     application = AuditEvent.objects.filter(actor_id=request.user.pk)
     action = request.GET.get("action", "").strip()[:120]
     module = request.GET.get("module", "").strip()[:120]
@@ -72,32 +73,18 @@ def audit_workspace(request):
     # Bound cross-model merging to the most recent 1,000 matching records.
     structured_events = list(structured.order_by("-timestamp", "-id")[:500])
     application_events = list(application.order_by("-created_at", "-id")[:500])
-    actor_ids = {event.actor_id for event in application_events if event.actor_id}
-    if actor_ids:
-        from django.contrib.auth import get_user_model
-        actor_names = {
-            user.pk: user.get_username()
-            for user in get_user_model().objects.filter(pk__in=actor_ids)
-        }
-    else:
-        actor_names = {}
     merged = [
         SimpleNamespace(
             pk=event.pk, action=event.action, module=event.module, resource=event.resource,
-            timestamp=event.timestamp, hash=event.hash, source="Structured audit",
-            username=event.user.get_username() if event.user_id else "System",
-            ip_address=event.ip_address, outcome="", severity="info",
+            timestamp=event.timestamp, outcome="recorded", severity="info",
         )
         for event in structured_events
     ]
     merged.extend(
         SimpleNamespace(
             pk=event.pk, action=event.action, module=event.resource_type or "application",
-            resource=f"{event.resource_id or '—'} · outcome={event.outcome}",
-            timestamp=event.created_at, hash="", source="Application event",
-            username=actor_names.get(event.actor_id, "System" if not event.actor_id else "Unknown user"),
-            ip_address=event.ip_address,
-            outcome=str(event.outcome or ""), severity="info",
+            resource=event.resource_id or "Account activity",
+            timestamp=event.created_at, outcome=str(event.outcome or "recorded"), severity="info",
         )
         for event in application_events
     )
@@ -119,15 +106,13 @@ def audit_workspace(request):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="algobot-audit-log.csv"'
         writer = csv.writer(response)
-        writer.writerow(["Timestamp", "Event", "User", "Source", "Details", "Severity"])
+        writer.writerow(["Time", "Activity", "Details", "Result"])
         for event in merged:
             writer.writerow([
                 event.timestamp.isoformat() if event.timestamp else "",
                 event.action,
-                request.user.get_username(),
-                event.source,
                 event.resource,
-                event.severity.title(),
+                event.outcome or "Recorded",
             ])
         return response
     summary = {

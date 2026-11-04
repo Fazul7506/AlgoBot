@@ -170,3 +170,45 @@ class CloudflareTaskDispatchTests(SimpleTestCase):
         )
         response = cloudflare_task_dispatch(request)
         self.assertEqual(response.status_code, 400)
+
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    @patch("apps.automation.cloudflare_hooks.cache")
+    @patch("apps.automation.cloudflare_hooks.current_app")
+    def test_backtest_queue_recovery_schedule_is_allowlisted_and_bounded(self, celery, cache):
+        cache.add.return_value = True
+        celery.send_task.return_value = Mock(id="backtest-recovery-task")
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=json.dumps({
+                "schedule_id": "backtest-queue-recovery-every-minute",
+                "task": "apps.backtesting.tasks.reconcile_backtest_queue",
+                "kwargs": {"limit": 50, "pending_after_seconds": 300, "running_after_seconds": 3600},
+                "scheduled_minute": 29_999_999,
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 202)
+        celery.send_task.assert_called_once_with(
+            "apps.backtesting.tasks.reconcile_backtest_queue",
+            kwargs={"limit": 50, "pending_after_seconds": 300, "running_after_seconds": 3600},
+            queue="celery",
+        )
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    def test_backtest_queue_recovery_rejects_unsafe_retry_windows(self):
+        request = self.factory.post(
+            "/api/internal/cloudflare/task-dispatch/",
+            data=json.dumps({
+                "schedule_id": "backtest-queue-recovery-every-minute",
+                "task": "apps.backtesting.tasks.reconcile_backtest_queue",
+                "kwargs": {"limit": 50, "pending_after_seconds": 1, "running_after_seconds": 3600},
+                "scheduled_minute": 29_999_999,
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        response = cloudflare_task_dispatch(request)
+        self.assertEqual(response.status_code, 400)

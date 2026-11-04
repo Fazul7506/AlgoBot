@@ -7,9 +7,9 @@
   <header class="audit-hero">
     <div class="audit-hero-main">
       <div class="audit-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V3h2z"/><path d="M14 3v6h5M8 13h8M8 17h8M8 9h2"/></svg></div>
-      <div><h1>Audit Log</h1><p class="audit-intro">Track recorded system events, account actions and security activity across AlgoBot.<br>Review a private, searchable audit trail for transparency and security.</p></div>
+      <div><h1>Audit Log</h1><p class="audit-intro">Review important trading, broker, account and security activity.</p></div>
     </div>
-    <div class="audit-status"><span class="audit-status-mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg></span><div><strong>Audit monitoring</strong><small>Persisted account-scoped records</small></div></div>
+    <div class="audit-status"><span class="audit-status-mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg></span><div><strong>Audit monitoring</strong><small>Account activity</small></div></div>
   </header>
 
   <div class="audit-layout">
@@ -17,12 +17,12 @@
       <form method="get" class="audit-filters" role="search">
         <label><span>◷ Date range</span><select name="range"><option value="24h" {% if audit_filters.range == "24h" %}selected{% endif %}>Last 24 hours</option><option value="7d" {% if audit_filters.range == "7d" or not audit_filters.range %}selected{% endif %}>Last 7 days</option><option value="30d" {% if audit_filters.range == "30d" %}selected{% endif %}>Last 30 days</option><option value="all" {% if audit_filters.range == "all" %}selected{% endif %}>All available</option></select></label>
         <label><span>◈ Event type</span><input name="action" value="{{ audit_filters.action }}" placeholder="All events / action"></label>
-        <label><span>♙ User scope</span><select aria-label="User scope" disabled><option>Current account only</option></select></label>
+
         <label><span>⚠ Severity</span><select name="severity"><option value="">All levels</option><option value="info" {% if audit_filters.severity == "info" %}selected{% endif %}>Info</option><option value="low" {% if audit_filters.severity == "low" %}selected{% endif %}>Low</option><option value="medium" {% if audit_filters.severity == "medium" %}selected{% endif %}>Medium</option><option value="high" {% if audit_filters.severity == "high" %}selected{% endif %}>High</option></select></label>
         <button type="submit">⌕ Filter</button>
         <div class="audit-filter-extra">
           <label><span>⌕ Search activity</span><input type="search" name="q" value="{{ audit_filters.q }}" placeholder="Action, resource, outcome…"></label>
-          <label><span>▤ Service / module</span><input name="module" value="{{ audit_filters.module }}" placeholder="Brokers, execution…"></label>
+          <label><span>Category</span><input name="module" value="{{ audit_filters.module }}" placeholder="Trading, broker, security…"></label>
           <label><span>From date</span><input type="date" name="start" value="{{ audit_filters.start }}"></label>
           <label><span>To date</span><input type="date" name="end" value="{{ audit_filters.end }}"></label>
           <a class="audit-btn secondary" href="{% url 'audit_center' %}">Clear filters</a>
@@ -32,13 +32,13 @@
       <section class="audit-section">
         <div class="audit-section-head"><div><h2>Recorded Events</h2><span class="audit-sub">Latest matching records · private to your account</span></div><div class="audit-event-actions"><button class="audit-btn secondary" type="button" id="audit-copy">Copy visible rows</button><button class="audit-btn" type="button" id="audit-export">↓ Export current page</button><a class="audit-btn secondary" href="?range={{ audit_filters.range|urlencode }}&action={{ audit_filters.action|urlencode }}&q={{ audit_filters.q|urlencode }}&module={{ audit_filters.module|urlencode }}&start={{ audit_filters.start|urlencode }}&end={{ audit_filters.end|urlencode }}&severity={{ audit_filters.severity|urlencode }}&export=csv">Export all filtered CSV</a></div></div>
         <div class="audit-table-wrap"><table class="audit-table" id="audit-events-table">
-          <thead><tr><th>Timestamp</th><th>Event</th><th>User</th><th>Details</th><th>IP Address</th><th>Severity</th></tr></thead>
+          <thead><tr><th>Time</th><th>Activity</th><th>Details</th><th>Result</th></tr></thead>
           <tbody>
           {% for e in events %}
-            <tr><td data-label="Timestamp"><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i:s' }}</time><small>{{ e.timestamp|timesince }} ago</small></td>
-              <td data-label="Event"><div class="audit-event"><span class="audit-event-icon {{ e.severity }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4z"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><strong>{{ e.action|title }}</strong><small>{{ e.module|title }}</small></div></div></td>
-              <td data-label="User"><strong>{{ e.username|default:request.user.get_username }}</strong><small>{% if e.username == "System" %}System event{% else %}Account user{% endif %}</small></td><td data-label="Details"><span class="audit-detail-text">{{ e.resource|default:"Account action" }}</span><small>{% if e.hash %}Integrity reference: {{ e.hash|truncatechars:20 }}{% else %}Recorded application event{% endif %}</small></td><td data-label="IP Address"><strong>{{ e.ip_address|default:"Unavailable" }}</strong><small>{{ e.source }}</small></td><td data-label="Severity"><span class="audit-severity sev-{{ e.severity }}">● {{ e.severity|title }}</span></td></tr>
-          {% empty %}<tr><td colspan="6"><div class="audit-empty"><strong>No recorded events match these filters.</strong><br><small>Try a wider date range or clear the filters. No sample events are fabricated.</small></div></td></tr>{% endfor %}
+            <tr><td data-label="Time"><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i' }}</time><small>{{ e.timestamp|timesince }} ago</small></td>
+              <td data-label="Activity"><div class="audit-event"><span class="audit-event-icon {{ e.severity }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v5c0 5 4 8 8 9 4-1 8-4 8-9V7l-8-4z"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><strong>{{ e.action|title }}</strong><small>{{ e.module|title }}</small></div></div></td>
+              <td data-label="Details"><span class="audit-detail-text">{{ e.resource|default:"Account activity" }}</span></td><td data-label="Result"><span class="audit-severity sev-{{ e.severity }}">● {{ e.outcome|default:"Recorded"|title }}</span></td></tr>
+          {% empty %}<tr><td colspan="4"><div class="audit-empty"><strong>No recorded events match these filters.</strong><br><small>Try a wider date range or clear the filters. No sample events are fabricated.</small></div></td></tr>{% endfor %}
           </tbody>
         </table></div>
         <div class="audit-pagination"><span>Showing {{ page_obj.start_index|default:0 }}–{{ page_obj.end_index|default:0 }} of {{ event_count }} matching records</span>
@@ -49,7 +49,7 @@
           </div>
         </div>
       </section>
-      <p class="audit-footnote">Audit records are restricted to your account and sourced from persisted platform audit streams. Severity is a display classification derived from recorded action text, not a separate security verdict. IP addresses and request bodies are not invented or exposed when unavailable.</p>
+      <p class="audit-footnote">Only meaningful account, broker, trading and security activity is shown here. Routine page requests and endpoint diagnostics remain in operational monitoring.</p>
     </main>
     <aside class="audit-side">
       <section class="audit-side-card"><h2>Event Summary</h2>
@@ -73,7 +73,7 @@
   function csv() {
     if (!table) return "";
     const rows = [...table.querySelectorAll("thead tr, tbody tr")]
-      .filter((row) => row.querySelectorAll("th, td").length === 6);
+      .filter((row) => row.querySelectorAll("th, td").length === 4);
     return rows.map((row) => [...row.querySelectorAll("th, td")]
       .map((cell) => '"' + cell.innerText.trim().replace(/\\s+/g, " ").replace(/"/g, '""') + '"')
       .join(",")).join("\\r\\n");

@@ -8,19 +8,20 @@
     <div class="billing-hero-copy"><p class="eyebrow">ACCOUNT · PAYMENTS</p><h1>Billing &amp; Payments</h1><p>Manage your subscription, review usage, and pay securely with AlgoBot.</p><small>Transparent pricing. Verified payment providers. Real usage data.</small></div>
     <div class="billing-account-status"><span class="billing-status-icon material-symbols-rounded" aria-hidden="true">verified_user</span><div><strong>Account Status</strong><small data-billing-account-status>Checking subscription status…</small></div><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></div>
   </header>
-  <nav class="billing-tabs" aria-label="Billing sections">
-    <a class="is-active" href="#billing-overview"><span class="material-symbols-rounded" aria-hidden="true">dashboard</span>Overview</a>
-    <a href="#billing-plans"><span class="material-symbols-rounded" aria-hidden="true">workspace_premium</span>Subscriptions</a>
-    <a href="#billing-invoices"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>Invoices</a>
-    <a href="#billing-payments"><span class="material-symbols-rounded" aria-hidden="true">payments</span>Payment Methods</a>
-    <a href="#billing-usage"><span class="material-symbols-rounded" aria-hidden="true">schedule</span>Usage</a>
-    <a href="#billing-settings"><span class="material-symbols-rounded" aria-hidden="true">settings</span>Billing Settings</a>
+  <nav class="billing-tabs" data-workspace-tabs role="tablist" aria-label="Billing sections">
+    <a class="is-active" href="#billing-overview" role="tab" aria-selected="true"><span class="material-symbols-rounded" aria-hidden="true">dashboard</span>Overview</a>
+    <a href="#billing-plans" role="tab" aria-selected="false" tabindex="-1"><span class="material-symbols-rounded" aria-hidden="true">workspace_premium</span>Subscriptions</a>
+    <a href="#billing-invoices" role="tab" aria-selected="false" tabindex="-1"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>Invoices</a>
+    <a href="#billing-payments" role="tab" aria-selected="false" tabindex="-1"><span class="material-symbols-rounded" aria-hidden="true">payments</span>Payment Methods</a>
+    <a href="#billing-usage" role="tab" aria-selected="false" tabindex="-1"><span class="material-symbols-rounded" aria-hidden="true">schedule</span>Usage</a>
+    <a href="#billing-settings" role="tab" aria-selected="false" tabindex="-1"><span class="material-symbols-rounded" aria-hidden="true">settings</span>Billing Settings</a>
     <button class="btn ghost" type="button" data-billing-refresh><span class="material-symbols-rounded" aria-hidden="true">refresh</span>Refresh</button>
   </nav>
   <section class="panel billing-alert" data-billing-alert hidden role="alert" aria-live="polite"></section>
   <form id="billing-checkout-form" action="{% url 'billing_checkout_start' %}" method="post" hidden>
     {% csrf_token %}<input type="hidden" name="plan" data-checkout-form-plan><input type="hidden" name="provider" data-checkout-form-provider>
   </form>
+  <div data-workspace-tab-content>
   <section id="billing-overview" class="billing-summary-grid" aria-label="Billing overview">
     <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">workspace_premium</span><span class="billing-state-pill" data-current-plan-state>Loading</span></div><small>Current Plan</small><h2 data-current-plan-name>Loading…</h2><p data-current-plan-description>Checking your active subscription.</p><strong class="billing-summary-value" data-current-plan-price>—</strong><a class="btn primary billing-summary-action" href="#billing-plans">Manage Subscription <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
     <article class="panel billing-summary-card"><div class="billing-summary-top"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">event</span></div><small>Next Billing / Expiry</small><h2 data-next-billing-date>Not supplied</h2><p data-next-billing-copy>Billing dates are shown only when provided by your subscription record.</p><a class="btn ghost billing-summary-action" href="#billing-invoices">View Invoices <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></article>
@@ -40,6 +41,7 @@
       <section class="billing-intasend-security panel" aria-label="IntaSend payment security"><p class="provider-label">IntaSend checkout security</p>{% include "core/partials/intasend_trust_badge.html" %}</section>
       <section class="panel billing-side-card billing-help-card"><span class="billing-summary-icon material-symbols-rounded" aria-hidden="true">help</span><h2>Need help choosing?</h2><p>Review plan features and limits before starting a checkout. Plan availability and prices come from the live catalog.</p><a class="billing-inline-link" href="#billing-plans">Explore plans <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></section>
     </aside>
+  </div>
   </div>
 </section>
 {% endblock %}

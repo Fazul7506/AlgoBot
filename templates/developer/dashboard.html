@@ -9,10 +9,12 @@
     <div class="dev-hero-status"><span class="dev-health"><i></i>{{ api_health|default:"operational"|title }}</span><strong>API Status</strong><small>Developer services overview</small><a href="/developer/api/status/">View service status <span aria-hidden="true">›</span></a></div>
   </header>
 
-  <nav class="dev-tabs" aria-label="Developer sections">
-    <a class="is-active" href="#dev-overview">Overview</a><a href="#dev-api-keys">API Keys</a><a href="#dev-documentation">Documentation</a><a href="#dev-webhooks">Webhooks</a><a href="#dev-code-examples">Code Examples</a>
+  <nav class="dev-tabs" data-workspace-tabs role="tablist" aria-label="Developer sections">
+    <a class="is-active" href="#dev-overview" role="tab" aria-selected="true">Overview</a><a href="#dev-api-keys" role="tab" aria-selected="false" tabindex="-1">API Keys</a><a href="#dev-documentation" role="tab" aria-selected="false" tabindex="-1">Documentation</a><a href="#dev-webhooks" role="tab" aria-selected="false" tabindex="-1">Webhooks</a><a href="#dev-code-examples" role="tab" aria-selected="false" tabindex="-1">Code Examples</a><a href="#dev-sandbox" role="tab" aria-selected="false" tabindex="-1">Sandbox</a>
   </nav>
 
+  <div data-workspace-tab-content>
+  <section id="dev-overview" class="dev-overview-panel" aria-label="Developer overview">
   <section class="dev-metrics" aria-label="API metrics">
     <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">monitoring</span>API calls today</span><strong>{{ analytics.api_calls_today|default:0 }}</strong><small>Current day · your account</small></article>
     <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">speed</span>Latency p95</span><strong>{{ analytics.latency_p95_ms|default:0 }} <small>ms</small></strong><small>Recorded API usage</small></article>
@@ -20,7 +22,7 @@
     <article class="panel dev-metric"><span><span class="material-symbols-rounded" aria-hidden="true">route</span>API reference</span><strong>{{ documentation_endpoint_count|default:0 }}</strong><small>Registered endpoints · {{ documentation.info.version|default:"v1" }}</small></article>
   </section>
 
-  <div class="dev-dashboard-layout" id="dev-overview">
+  <div class="dev-dashboard-layout">
     <div class="dev-main-column">
       <section class="panel dev-quickstart">
         <div class="dev-section-heading"><div><p class="eyebrow">GET STARTED</p><h2>Quick Start</h2><p>Get up and running with the AlgoBot API in minutes.</p></div><span class="dev-icon-tile" aria-hidden="true"><span class="material-symbols-rounded">rocket_launch</span></span></div>
@@ -68,6 +70,10 @@
           <a href="/developer/api/status/" class="dev-resource-card"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">health_and_safety</span></span><span><strong>API Status</strong><small>Current developer service status</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
           <a href="#dev-webhooks" class="dev-resource-card"><span class="dev-icon-tile"><span class="material-symbols-rounded" aria-hidden="true">webhook</span></span><span><strong>Webhook setup</strong><small>Configure event delivery endpoints</small></span><span class="material-symbols-rounded" aria-hidden="true">chevron_right</span></a>
         </div>
+  <section class="panel dev-management-section" aria-labelledby="dev-full-docs-title">
+    <div class="dev-section-heading"><div><p class="eyebrow">OPENAPI CONTRACT</p><h2 id="dev-full-docs-title">Registered API Contract</h2><p>Generated from registered Django routes; unavailable services are reported through normal page messages.</p></div><a class="btn ghost" href="/developer/api/explorer/">Open API Explorer ↗</a></div>
+    <pre class="dev-code dev-docs">{{ documentation|pprint }}</pre>
+  </section>
       </section>
     </div>
 
@@ -133,16 +139,12 @@
     {% empty %}<div class="dev-empty">No webhooks configured. Add an endpoint above to start receiving events.</div>{% endfor %}</div>
   </section>
 
-  <section class="panel dev-management-section" aria-labelledby="dev-sandbox-title">
+  <section class="panel dev-management-section" id="dev-sandbox" aria-labelledby="dev-sandbox-title">
     <div class="dev-section-heading"><div><p class="eyebrow">TESTING</p><h2 id="dev-sandbox-title">Sandbox</h2><p>Provision a temporary sandbox environment for safe integration checks.</p></div></div>
     <form action="/api/developer/browser/sandbox/provision/" method="post">{% csrf_token %}<button class="btn ghost" type="submit">Provision sandbox</button></form>
     <p class="dev-form-help">Provisioning runs server-side and reports its result through Django messages.</p>
   </section>
 
-  <section class="panel dev-management-section" aria-labelledby="dev-full-docs-title">
-    <div class="dev-section-heading"><div><p class="eyebrow">OPENAPI CONTRACT</p><h2 id="dev-full-docs-title">Registered API Contract</h2><p>Generated from registered Django routes; unavailable services are reported through normal page messages.</p></div><a class="btn ghost" href="/developer/api/explorer/">Open API Explorer ↗</a></div>
-    <pre class="dev-code dev-docs">{{ documentation|pprint }}</pre>
-  </section>
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261020-devapi3">{% endblock %}

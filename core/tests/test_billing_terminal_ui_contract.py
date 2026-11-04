@@ -269,7 +269,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("text-align: left !important", analysis_css, "Analysis must restore normal left-aligned content.")
         self.assertIn("grid-template-columns: minmax(0, 1fr) !important", analysis_css, "Analysis root must not collapse into a narrow inherited grid column.")
         self.assertIn(".app-content {\n  display: block !important;", analysis_css, "Analysis must use the full app-content column rather than a constrained shared grid track.")
-        self.assertIn("20261030-reference-layout5", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
+        self.assertIn("20261104-anchored-only1", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
         self.assertIn('sync_active_symbols()', api, "The backend must repopulate an empty catalogue from the authoritative Deriv feed.")
         self.assertIn('MARKET_CATALOGUE_UNAVAILABLE', api, "Catalogue failures must return an explicit diagnostic code.")
         self.assertIn("window.AlgoBotServices?.instruments?.list", analysis, "Analysis must use the shared connected-broker instrument service.")
@@ -624,3 +624,46 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
             "@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])",
             views,
         )
+
+
+class WorkspaceTabsContractTests(SimpleTestCase):
+    def test_backtesting_job_status_separates_queued_from_running(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        template = (root / "templates/core/backtesting.html").read_text()
+        script = (root / "static/js/backtesting_workspace_fix.js").read_text()
+        self.assertIn("data-backtest-pending", template)
+        self.assertIn("data-backtest-pending", script)
+        self.assertIn("rows.filter(x=>String(x.status).toLowerCase()==='running').length", script)
+        self.assertIn("rows.filter(x=>String(x.status).toLowerCase()==='pending').length", script)
+
+    def test_enterprise_workspace_bootstrap_does_not_call_missing_legacy_account_menu(self):
+        from pathlib import Path
+        script = (Path(__file__).resolve().parents[2] / "static/js/enterprise_templates.js").read_text()
+        self.assertNotIn("accountMenu();", script)
+        self.assertNotIn("async function tradingTerminal(", script)
+        self.assertNotIn("function drawCandles(", script)
+        self.assertIn("$$('.enterprise-page').forEach(page =>", script)
+        self.assertIn("$$('.data-page').forEach(dataPage)", script)
+        self.assertNotIn("function theme()", script)
+        self.assertNotIn("function shell()", script)
+
+    def test_billing_and_developer_navigation_use_in_place_workspace_tabs(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        script = (root / "static/js/workspace_tabs.js").read_text()
+        base = (root / "templates/base.html").read_text()
+        self.assertIn("workspace_tabs.js", base)
+        self.assertIn("data-workspace-tabs", script)
+        self.assertIn("aria-selected", script)
+        self.assertIn("history.replaceState", script)
+        for name, ids in (
+            ("templates/core/billing.html", ("billing-overview", "billing-plans", "billing-invoices", "billing-payments", "billing-usage", "billing-settings")),
+            ("templates/developer/dashboard.html", ("dev-overview", "dev-api-keys", "dev-documentation", "dev-webhooks", "dev-code-examples", "dev-sandbox")),
+        ):
+            template = (root / name).read_text()
+            self.assertIn("data-workspace-tab-content", template)
+            self.assertIn("data-workspace-tabs", template)
+            for panel_id in ids:
+                self.assertIn(f'href="#{panel_id}"', template)
+                self.assertIn(f'id="{panel_id}"', template)

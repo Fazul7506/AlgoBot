@@ -27,6 +27,12 @@ def _close_task_connections(*args, **kwargs):
 
 
 app.conf.beat_schedule = {} if os.environ.get("CLOUDFLARE_SCHEDULER_ACTIVE", "").lower() == "true" else {
+    "backtest-queue-recovery-every-minute": {
+        "task": "apps.backtesting.tasks.reconcile_backtest_queue",
+        "schedule": 60.0,
+        "kwargs": {"limit": 50, "pending_after_seconds": 300, "running_after_seconds": 3600},
+        "options": {"queue": "celery", "expires": 55},
+    },
     "automation-due-schedules-every-30-seconds": {
         "task": "apps.automation.tasks.process_due_scheduled_tasks",
         "schedule": 30.0,

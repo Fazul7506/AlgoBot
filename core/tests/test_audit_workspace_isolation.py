@@ -23,6 +23,22 @@ class AuditLogWorkspaceIsolationTests(TestCase):
         self.assertContains(response, "order:own")
         self.assertNotContains(response, "other-user")
 
+
+    def test_trader_audit_hides_routine_endpoint_requests_and_read_errors(self):
+        user = get_user_model().objects.create_user(username="audit-trader", password="test-password")
+        AuditLog.objects.create(user=user, action="get_failed", module="analysis", resource="/api/analysis/markets/ | status=404 | request_id=abc")
+        AuditLog.objects.create(user=user, action="post_completed", module="execution", resource="/api/orders/submit/ | status=201 | request_id=def")
+        business_event = AuditLog.objects.create(user=user, action="order_submitted", module="trading", resource="Order submitted")
+        self.client.force_login(user)
+        response = self.client.get("/operations/audit/")
+        self.assertEqual(response.status_code, 200)
+        events = list(response.context["events"])
+        self.assertEqual([event.pk for event in events], [business_event.pk])
+        self.assertNotContains(response, "/api/analysis/markets/")
+        self.assertNotContains(response, "request_id=")
+        self.assertNotContains(response, "IP Address")
+        self.assertNotContains(response, "Integrity reference")
+
     def test_activity_history_merges_application_events_without_leaking_other_users(self):
         from apps.observability.models import AuditEvent
 

@@ -22,11 +22,12 @@ async function scheduled(cron) {
   return { messages, coordinatorStarted };
 }
 
-test("every-minute cron starts the durable 30-second scheduler and dispatches Telegram watchdog", async () => {
+test("every-minute cron starts the durable scheduler and dispatches recovery and watchdog jobs", async () => {
   const { messages, coordinatorStarted } = await scheduled("* * * * *");
   assert.equal(coordinatorStarted, true);
   assert.deepEqual(messages.map(message => message.schedule_id).sort(), [
     "ai-orderbook-every-minute",
+    "backtest-queue-recovery-every-minute",
     "telegram-watchdog-every-minute",
   ]);
   assert.ok(messages.every(message => Number.isInteger(message.scheduled_minute)));

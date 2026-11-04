@@ -117,3 +117,9 @@
   #app-sidebar nav a, #app-sidebar .sidebar-new-trade { transition: none; }
 }
 
+
+/* Workspace section tabs replace long-page anchor scrolling on supported dashboards. */
+[data-workspace-tab-content] > [hidden],
+[data-workspace-tab-content] [hidden],
+.workspace-tab-hidden { display: none !important; }
+[data-workspace-tabs] [role="tab"]:focus-visible { outline: 2px solid var(--ds-accent, #6ea8ff); outline-offset: 3px; }
