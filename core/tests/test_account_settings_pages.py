@@ -510,10 +510,14 @@ class AccountSettingsPagesTests(TestCase):
     def test_preferences_bootstrap_waits_for_deferred_shared_api_client(self):
         base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
         settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
-        self.assertIn("const initializePreferences = () =>", settings_template)
-        self.assertIn("document.addEventListener('DOMContentLoaded', initializePreferences, {once: true})", settings_template)
-        self.assertIn("window.AlgoBotFrontendData", settings_template)
-        self.assertIn("client.request('/api/settings/'", settings_template)
+        preferences_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "settings_preferences.js").read_text()
+        self.assertIn("settings_preferences.js", settings_template)
+        self.assertIn(" defer></script>", settings_template)
+        self.assertNotIn("const initializePreferences = () =>", settings_template)
+        self.assertIn("const initializePreferences = () =>", preferences_script)
+        self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertIn("client.request('/api/settings/'", preferences_script)
+        self.assertIn("document.addEventListener('DOMContentLoaded', initializePreferences, {once: true})", preferences_script)
         self.assertLess(
             base_template.index("frontend_data_contract.js"),
             base_template.index("{% block extra_js %}"),
