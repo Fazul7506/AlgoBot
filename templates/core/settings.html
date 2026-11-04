@@ -80,7 +80,7 @@
   </div>
 </main>
 <script>
-(() => {
+const initializePreferences = () => {
   const root = document.querySelector('[data-settings-page]');
   if (!root) return;
   const form = root.querySelector('[data-settings-form]');
@@ -231,6 +231,13 @@
     message.textContent = error.message || 'Refresh the page to try again.';
     saveButton.disabled = true;
   });
-})();
+};
+// This inline block is parsed before the base template's deferred shared API scripts.
+// Wait until deferred scripts have executed so AlgoBotFrontendData is available.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializePreferences, {once: true});
+} else {
+  initializePreferences();
+}
 </script>
 {% endblock %}
