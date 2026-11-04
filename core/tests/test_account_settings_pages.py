@@ -456,6 +456,33 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(read_back["profile"]["account_preferences"]["density"], "comfortable")
         self.assertEqual(read_back["profile"]["account_preferences"]["default_page"], "markets")
 
+    def test_theme_choices_survive_reload_and_a_fresh_login(self):
+        for theme in ("light", "dark", "system"):
+            with self.subTest(theme=theme):
+                response = self.client.patch(
+                    reverse("account_settings_api"),
+                    data=json.dumps({"preferences": {"theme": theme}}),
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 200, response.content)
+                self.user.refresh_from_db()
+                self.assertEqual(self.user.profile.account_preferences["theme"], theme)
+
+                # A fresh GET must return the account's saved value, not a browser default.
+                read_back = self.client.get(reverse("account_settings_api"))
+                self.assertEqual(read_back.status_code, 200)
+                self.assertEqual(read_back.json()["profile"]["account_preferences"]["theme"], theme)
+
+                # Re-authenticating must not reset the persisted account preference.
+                self.client.logout()
+                self.assertTrue(self.client.login(
+                    username="profile-editor",
+                    password="A-strong-test-password-123!",
+                ))
+                after_login = self.client.get(reverse("account_settings_api"))
+                self.assertEqual(after_login.status_code, 200)
+                self.assertEqual(after_login.json()["profile"]["account_preferences"]["theme"], theme)
+
     def test_settings_api_rejects_unsupported_preference_without_partial_write(self):
         response = self.client.patch(
             reverse("account_settings_api"),
