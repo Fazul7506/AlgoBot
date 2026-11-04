@@ -33,7 +33,6 @@
     return "Market instrument";
   }
   function iconFor(row){return window.AlgoBotMarketAssets?.renderIcon?.({...row,display_name:marketName(row)})||'<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';}
-  function updateSelectedMarketIcon(){const select=$("symbol"),icon=$("analysisMarketIcon");if(!select||!icon)return;const row=A.markets.find(item=>String(item.symbol)===String(select.value));icon.innerHTML=row?iconFor(row):"";}
   function cacheKey(symbol,tf,limit){return "algobot:analysis:snapshot:v1:"+[symbol,tf,limit].join(":");}
   function restoreCached(symbol,tf,limit){A.cachedData=null;try{const raw=sessionStorage.getItem(cacheKey(symbol,tf,limit));const data=raw?JSON.parse(raw):null;if(data&&data.symbol===symbol&&Array.isArray(data.last_candles)){A.cachedData=data;A.data=data;render(data);setHealth(false,"SAVED DATA · REFRESHING");set("aFresh","SAVED DATA · NOT LIVE");const hero=$("heroFeedState");if(hero)hero.textContent="Showing saved analysis while refreshing";const stateNode=$("loadState");if(stateNode)stateNode.textContent="Showing last saved analysis; checking for current broker data…";return true;}}catch(_){}return false;}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
@@ -261,7 +260,6 @@
       const requested=new URLSearchParams(location.search).get("symbol");
       select.value=[previous,requested,A.markets[0].symbol].find(value=>A.markets.some(row=>row.symbol===value))||A.markets[0].symbol;
       select.disabled=false;
-      updateSelectedMarketIcon();
       const tf=$("timeframe").value,limit=$("limit").value,restored=restoreCached(select.value,tf,limit);
       showCatalogueStatus(payload?.stale===true?"Showing the last known broker catalogue; live refresh is unavailable.":"");
       void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
@@ -281,7 +279,7 @@
     $("prepareState").textContent="BLOCKED: "+(A.data.execution_gate?.reason||"Execution gates are not confirmed.");
   }
   function boot(){
-    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
+    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
     $("refresh")?.addEventListener("click",()=>{if(!A.markets.length){void markets({forceRefresh:true});return;}void load({refreshAccount:false,refreshMarket:true});});$("prepare")?.addEventListener("click",prepare);
     const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});

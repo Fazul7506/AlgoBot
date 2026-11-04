@@ -107,5 +107,3 @@
 
 /* Existing market-picker CSS declares display:flex on these icons; force hidden to win
    so the shared anchored selector never displays a second symbol badge. */
-.terminal-selected-market-icon[hidden],
-.analysis-market-icon[hidden] { display: none !important; }
