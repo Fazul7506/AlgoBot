@@ -137,14 +137,11 @@
     };
     const loadInstrumentCatalogue = async () => {
       const select=root.querySelector('[data-ai-symbol]');
-      if(!select)return;
+      if(!select || select.dataset.aiCatalogueLoading === 'true')return;
+      select.dataset.aiCatalogueLoading='true';
       select.setAttribute('aria-busy','true');
-      if(!root.querySelector('[data-ai-selected-market-icon]')){
-        const icon=document.createElement('span');icon.dataset.aiSelectedMarketIcon='';icon.className='ai-asset-icon ai-selected-market-icon';icon.setAttribute('aria-hidden','true');
-        select.insertAdjacentElement('beforebegin',icon);
-        select.addEventListener('change',()=>{const selected=select.selectedOptions?.[0];const symbol=selected?.value||'';const label=selected?.textContent||symbol;icon.innerHTML=symbol?marketAssetIcon(symbol, label, label):'';});
-      }
       select.innerHTML='<option value="">Loading connected broker instruments…</option>';
+      window.AlgoBotAnchoredSelects?.refresh?.(select);
       try {
         // Match the Terminal's single canonical connected-broker catalogue API.
         // Pass the timeout to the shared transport so the underlying fetch is
@@ -162,19 +159,17 @@
         if(current && instruments.some(x=>x.symbol===current))select.value=current;
         else if(instruments.length)select.selectedIndex=1;
         if(!instruments.length) throw new Error('Connected broker returned zero active instruments');
-        const icon=root.querySelector('[data-ai-selected-market-icon]');
-        if(icon){const selected=instruments.find(x=>x.symbol===select.value);icon.innerHTML=selected?marketAssetIcon(selected.symbol,selected.market||selected.sub_market,selected.display_name||selected.name):'';}
-        select.dataset.aiInstrumentCatalogueState='loaded'; const catalogueStatus=root.querySelector('[data-ai-catalogue-status]'); if(catalogueStatus) catalogueStatus.remove();
-        // Native <option> elements cannot render inline SVG. Provide an accessible
-        // all-market picker with a real SVG per instrument/category alongside it.
-        let marketList=root.querySelector('[data-ai-market-list]');
-        if(!marketList){marketList=document.createElement('div');marketList.dataset.aiMarketList='';marketList.className='ai-market-list';marketList.setAttribute('aria-label','All available broker markets');select.insertAdjacentElement('afterend',marketList);}
-        marketList.innerHTML=instruments.map(x=>'<button type="button" class="ai-market-option" data-ai-market-symbol="'+esc(x.symbol)+'" aria-pressed="'+(x.symbol===select.value?'true':'false')+'"><span class="ai-asset-icon">'+marketAssetIcon(x.symbol,x.market||x.sub_market||x.submarket,x.display_name||x.name)+'</span><span class="ai-market-option-label"><strong>'+esc(x.display_name||x.name||marketDisplayName(x.symbol,''))+'</strong><small>'+esc(x.market||x.sub_market||x.submarket||'Market')+'</small></span></button>').join('');
-        marketList.querySelectorAll('[data-ai-market-symbol]').forEach(button=>button.addEventListener('click',()=>{select.value=button.dataset.aiMarketSymbol;select.dispatchEvent(new Event('change',{bubbles:true}));marketList.querySelectorAll('[data-ai-market-symbol]').forEach(item=>item.setAttribute('aria-pressed',item===button?'true':'false'));const icon=root.querySelector('[data-ai-selected-market-icon]');const item=instruments.find(x=>x.symbol===select.value);if(icon&&item)icon.innerHTML=marketAssetIcon(item.symbol,item.market||item.sub_market,item.display_name||item.name);}));
+        // The global anchored-select renderer is the only instrument picker UI.
+        // Keep the native select as the canonical form value and refresh its one menu.
+        select.dataset.aiInstrumentCatalogueState='loaded';
+        window.AlgoBotAnchoredSelects?.refresh?.(select);
+        const catalogueStatus=root.querySelector('[data-ai-catalogue-status]'); if(catalogueStatus) catalogueStatus.remove();
+        root.querySelector('[data-ai-retry-instruments]')?.remove();
         if(select.value) await renderLiveChart(root,select.value,root.querySelector('[data-ai-timeframe]')?.value||'H1',[]);
       } catch (error) {
         select.dataset.aiInstrumentCatalogueState='error';
         select.innerHTML='<option value="">Instrument list unavailable — retry</option>';
+        window.AlgoBotAnchoredSelects?.refresh?.(select);
         let status=root.querySelector('[data-ai-catalogue-status]'); if(!status){status=document.createElement('p');status.className='ai-error';status.dataset.aiCatalogueStatus='';select.insertAdjacentElement('afterend',status);} status.textContent='Could not load connected broker instruments: '+String(error?.message||'unknown error')+'. Use Retry instrument list to try again.';
         let retry=root.querySelector('[data-ai-retry-instruments]');
         if(!retry){retry=document.createElement('button');retry.type='button';retry.className='ai-action';retry.textContent='Retry instrument list';retry.dataset.aiRetryInstruments='';select.insertAdjacentElement('afterend',retry);}
@@ -182,6 +177,7 @@
         retry.onclick=()=>{retry.disabled=true;retry.textContent='Retrying…';void loadInstrumentCatalogue().finally(()=>{retry.disabled=false;retry.textContent='Retry instrument list';});};
       } finally {
         select.removeAttribute('aria-busy');
+        select.dataset.aiCatalogueLoading='false';
       }
     };
   const load = async root => {
@@ -349,6 +345,6 @@
     `;
     document.head.appendChild(style);
   };
-  const run = async () => { const root=mount(); injectThemeStyle(); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} bind(root); };
+  const run = async () => { const root=mount(); injectThemeStyle(); bind(root); try{await load(root);}catch(e){const h=root.querySelector('[data-ai-history]');if(h)h.innerHTML=`<tr><td colspan="7">AI data unavailable: ${esc(e.message)}</td></tr>`;} };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true}); else run();
 })();
