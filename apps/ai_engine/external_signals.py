@@ -248,7 +248,7 @@ def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
         raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must be valid JSON") from exc
     if not isinstance(mapping, dict) or any(not isinstance(v, str) or not v.strip() for v in mapping.values()):
         raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must map internal symbols to provider symbol strings")
-    return provider, symbols, {str(k).strip(): v.strip().upper() for k, v in mapping.items()}
+    return provider, symbols, {str(k).strip().upper(): v.strip().upper() for k, v in mapping.items()}
 
 
 def ingest_orderbook_snapshots() -> dict[str, int]:
