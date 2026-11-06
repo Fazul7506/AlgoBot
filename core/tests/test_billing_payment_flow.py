@@ -76,6 +76,188 @@ class BillingPaymentFlowTests(TestCase):
         self.assertFalse(invoice.paid)
         self.assertFalse(Payment.objects.filter(external_id="PROVIDER-INVOICE-2").exists())
 
+
+    @override_settings(
+        PAYPAL_CLIENT_ID="sandbox-client", PAYPAL_CLIENT_SECRET="sandbox-secret",
+        PAYPAL_MODE="sandbox", PAYPAL_API_BASE_URL="https://api-m.sandbox.paypal.com", PAYPAL_WEBHOOK_ID="WH-TEST", PAYPAL_BILLING_CURRENCY="USD",
+    )
+    @patch("core.services.payment_service.cache.set")
+    @patch("core.services.payment_service.cache.get", return_value=None)
+    @patch("core.services.payment_service.requests.post")
+    def test_paypal_checkout_creates_server_priced_order_and_returns_approval_url(self, post, cache_get, cache_set):
+        oauth = Mock(ok=True)
+        oauth.json.return_value = {"access_token": "access-token", "expires_in": 3600}
+        order = Mock(ok=True)
+        order.json.return_value = {
+            "id": "ORDER123456",
+            "links": [{"rel": "payer-action", "href": "https://www.sandbox.paypal.com/checkoutnow?token=ORDER123456"}],
+        }
+        post.side_effect = [oauth, order]
+        reference = f"PY-{self.user.id}-BASIC-reference"
+        result = PaymentService().create_paypal_checkout(
+            self.user, CheckoutPlan(plan="BASIC", price_cents=99900, currency="USD", recurring=False, reference=reference, provider_request_id="checkout-ref-1"),
+        )
+        self.assertEqual(result["provider"], "paypal")
+        self.assertEqual(result["order_id"], "ORDER123456")
+        self.assertEqual(result["reference"], reference)
+        self.assertTrue(result["url"].startswith("https://www.sandbox.paypal.com/"))
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["intent"], "CAPTURE")
+        self.assertEqual(payload["purchase_units"][0]["amount"], {"currency_code": "USD", "value": "999.00"})
+        self.assertEqual(payload["purchase_units"][0]["custom_id"], reference)
+        self.assertEqual(post.call_args.kwargs["headers"]["PayPal-Request-Id"], "checkout-ref-1")
+
+    @override_settings(
+        PAYPAL_CLIENT_ID="sandbox-client", PAYPAL_CLIENT_SECRET="sandbox-secret",
+        PAYPAL_MODE="sandbox", PAYPAL_API_BASE_URL="https://api-m.sandbox.paypal.com", PAYPAL_WEBHOOK_ID="WH-TEST", PAYPAL_BILLING_CURRENCY="USD",
+    )
+    @patch("core.services.payment_service.PaymentService.get_paypal_order")
+    @patch("core.services.payment_service.PaymentService._paypal_access_token", return_value="access-token")
+    @patch("core.services.payment_service.requests.post")
+    def test_paypal_capture_activates_only_matching_completed_invoice(self, post, access_token, get_order):
+        reference = f"PY-{self.user.id}-BASIC-capture"
+        invoice = Invoice.objects.create(user=self.user, amount_cents=99900, currency="USD",
+            external_id="ORDER123456", metadata={"plan": "BASIC", "provider": "paypal", "reference": reference})
+        get_order.return_value = {"id": "ORDER123456", "status": "APPROVED", "purchase_units": [{
+            "custom_id": reference, "amount": {"currency_code": "USD", "value": "999.00"},
+        }]}
+        captured = Mock(ok=True)
+        captured.json.return_value = {"id": "ORDER123456", "status": "COMPLETED", "purchase_units": [{
+            "custom_id": reference, "amount": {"currency_code": "USD", "value": "999.00"},
+            "payments": {"captures": [{"id": "CAPTURE123", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "999.00"}}]},
+        }]}
+        post.return_value = captured
+        result = PaymentService().capture_paypal_order("ORDER123456")
+        invoice.refresh_from_db()
+        self.assertTrue(result["paid"])
+        self.assertTrue(invoice.paid)
+        self.assertEqual(invoice.external_id, "ORDER123456")
+        self.assertEqual(invoice.metadata["paypal_capture_id"], "CAPTURE123")
+        self.assertEqual(invoice.metadata["paypal_order_id"], "ORDER123456")
+        subscription = Subscription.objects.get(user=self.user)
+        self.assertEqual(subscription.provider, "paypal")
+        self.assertFalse(subscription.recurring)
+
+
+    @patch("core.services.payment_reconciler.PaymentService.get_paypal_order")
+    def test_verified_paypal_capture_webhook_reconciles_matching_order_once(self, get_order):
+        reference = f"PY-{self.user.id}-BASIC-webhook"
+        invoice = Invoice.objects.create(user=self.user, amount_cents=99900, currency="USD",
+            external_id="ORDERWEBHOOK", metadata={"plan": "BASIC", "provider": "paypal", "reference": reference, "paypal_order_id": "ORDERWEBHOOK"})
+        get_order.return_value = {"id": "ORDERWEBHOOK", "status": "COMPLETED", "purchase_units": [{"custom_id": reference, "amount": {"currency_code": "USD", "value": "999.00"}}]}
+        event = {"id": "WH-EVENT-1", "event_type": "PAYMENT.CAPTURE.COMPLETED", "resource": {
+            "id": "CAPTURE-WH-1", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "999.00"},
+            "supplementary_data": {"related_ids": {"order_id": "ORDERWEBHOOK"}},
+        }}
+        result = PaymentReconciler.handle_paypal_webhook(event)
+        invoice.refresh_from_db()
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertTrue(invoice.paid)
+        self.assertEqual(Payment.objects.get(external_id="CAPTURE-WH-1").status, "COMPLETED")
+        duplicate = PaymentReconciler.handle_paypal_webhook(event)
+        self.assertTrue(duplicate["duplicate"])
+
+    @override_settings(PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST")
+    @patch("core.services.payment_service.PaymentService._paypal_access_token", return_value="access-token")
+    @patch("core.services.payment_service.requests.post")
+    def test_paypal_webhook_verification_uses_paypal_verify_endpoint(self, post, access_token):
+        response = Mock(ok=True)
+        response.json.return_value = {"verification_status": "SUCCESS"}
+        post.return_value = response
+        headers = {"paypal-transmission-id": "tx-1", "paypal-transmission-time": "2026-11-06T10:00:00Z",
+                   "paypal-cert-url": "https://api-m.sandbox.paypal.com/cert", "paypal-auth-algo": "SHA256withRSA",
+                   "paypal-transmission-sig": "signature"}
+        event = {"id": "event-1", "event_type": "PAYMENT.CAPTURE.COMPLETED"}
+        self.assertTrue(PaymentService().verify_paypal_webhook(headers, event))
+        self.assertEqual(post.call_args.args[0], "https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature")
+        self.assertEqual(post.call_args.kwargs["json"]["webhook_id"], "WH-TEST")
+
+
+    @override_settings(PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST")
+    @patch("core.views_billing.PaymentService.get_paypal_order")
+    def test_paypal_order_without_capture_amount_is_not_reported_as_paid(self, get_order):
+        from core.views_billing import _reconcile_invoice
+        reference = f"PY-{self.user.id}-BASIC-no-amount"
+        invoice = Invoice.objects.create(user=self.user, amount_cents=99900, currency="USD", external_id="ORDERNOAMOUNT",
+            metadata={"plan": "BASIC", "provider": "paypal", "reference": reference, "paypal_order_id": "ORDERNOAMOUNT"})
+        get_order.return_value = {"id": "ORDERNOAMOUNT", "status": "COMPLETED", "purchase_units": [{
+            "custom_id": reference, "amount": {"currency_code": "USD", "value": "999.00"},
+            "payments": {"captures": [{"id": "CAPTURE-NO-AMOUNT", "status": "COMPLETED"}]},
+        }]}
+        result = _reconcile_invoice(invoice, "paypal")
+        invoice.refresh_from_db()
+        self.assertFalse(result["paid"])
+        self.assertFalse(invoice.paid)
+        self.assertEqual(result["state"], "CAPTURE_DETAILS_INCOMPLETE")
+
+    @override_settings(PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST")
+    @patch("core.views_billing.PaymentService.get_paypal_order")
+    def test_paypal_success_response_cannot_mark_mismatched_invoice_paid(self, get_order):
+        from core.views_billing import _reconcile_invoice
+        reference = f"PY-{self.user.id}-BASIC-mismatch"
+        invoice = Invoice.objects.create(user=self.user, amount_cents=99900, currency="USD", external_id="ORDERMISMATCH",
+            metadata={"plan": "BASIC", "provider": "paypal", "reference": reference, "paypal_order_id": "ORDERMISMATCH"})
+        get_order.return_value = {"id": "ORDERMISMATCH", "status": "COMPLETED", "purchase_units": [{
+            "custom_id": reference, "amount": {"currency_code": "USD", "value": "999.00"},
+            "payments": {"captures": [{"id": "CAPTURE-MISMATCH", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "1.00"}}]},
+        }]}
+        result = _reconcile_invoice(invoice, "paypal")
+        invoice.refresh_from_db()
+        self.assertFalse(result["paid"])
+        self.assertFalse(invoice.paid)
+        self.assertEqual(result["reconciled"]["rejected"], "amount_mismatch")
+
+    @override_settings(
+        ALGOBOT_BILLING_CURRENCY="KES", ALGOBOT_BASIC_PRICE_CENTS=250000,
+        PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST",
+        PAYPAL_MODE="sandbox", PAYPAL_BILLING_CURRENCY="USD", PAYPAL_BASIC_PRICE_CENTS=1999,
+    )
+    @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session", return_value={"url": "https://www.sandbox.paypal.com/checkoutnow?token=ORDER123", "session_id": "ORDER123", "reference": "PY-1-BASIC-ref"})
+    def test_paypal_checkout_uses_explicit_usd_price_without_converting_kes_catalogue(self, create_checkout):
+        from django.test import RequestFactory
+        from core.views_billing import _checkout
+        request = RequestFactory().post("/billing/checkout/start/")
+        request.user = self.user
+        url, error = _checkout(request, "BASIC", "paypal")
+        self.assertIsNone(error)
+        self.assertTrue(url.startswith("https://www.sandbox.paypal.com/"))
+        invoice = Invoice.objects.get(user=self.user, metadata__provider="paypal")
+        self.assertEqual((invoice.amount_cents, invoice.currency), (1999, "USD"))
+        checkout_plan = create_checkout.call_args.args[1]
+        self.assertEqual((checkout_plan.price_cents, checkout_plan.currency), (1999, "USD"))
+        self.assertFalse(checkout_plan.recurring)
+
+    @override_settings(
+        PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST",
+        PAYPAL_MODE="sandbox", PAYPAL_BILLING_CURRENCY="KES",
+    )
+    def test_paypal_checkout_rejects_unsupported_kes_currency(self):
+        result = PaymentService().create_paypal_checkout(
+            self.user, CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", recurring=False),
+        )
+        self.assertEqual(result["url"], "")
+        self.assertIn("does not support KES", result["error"])
+
+
+    @override_settings(
+        PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST",
+        PAYPAL_MODE="sandbox", PAYPAL_API_BASE_URL="https://attacker.example",
+    )
+    @patch("core.services.payment_service.requests.post")
+    def test_paypal_rejects_untrusted_api_host_before_sending_credentials(self, post):
+        service = PaymentService()
+        self.assertFalse(service.paypal_is_configured())
+        self.assertIsNone(service._paypal_access_token())
+        post.assert_not_called()
+
+    @override_settings(PAYPAL_CLIENT_ID="", PAYPAL_CLIENT_SECRET="")
+    def test_paypal_checkout_fails_closed_without_credentials(self):
+        result = PaymentService().create_paypal_checkout(
+            self.user, CheckoutPlan(plan="BASIC", price_cents=99900, currency="USD", recurring=False),
+        )
+        self.assertEqual(result["url"], "")
+        self.assertIn("PAYPAL_CLIENT_ID", result["error"])
+
     def test_provider_http_errors_are_safe_and_actionable(self):
         self.assertIn("payment credentials", PaymentService._checkout_http_error(PaymentService.INTASEND, 401, {}))
         self.assertIn("merchant configuration", PaymentService._checkout_http_error(PaymentService.INTASEND, 400, {}))
@@ -122,7 +304,7 @@ class BillingPaymentFlowTests(TestCase):
 
         result = PaymentService().create_intasend_checkout(
             self.user,
-            CheckoutPlan(plan="BASIC", price_cents=99900, currency="KES", recurring=False),
+            CheckoutPlan(plan="BASIC", price_cents=99900, currency="USD", recurring=False),
         )
 
         self.assertEqual(result["url"], "https://sandbox.intasend.com/checkout/test-session")
