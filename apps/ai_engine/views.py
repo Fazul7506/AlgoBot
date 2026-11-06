@@ -37,7 +37,7 @@ class StaffOnlyPermission(permissions.IsAdminUser):
 
 
 class AIModelViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = AIModel.objects.all()
+    queryset = AIModel.objects.order_by("-created_at", "-id")
     serializer_class = AIModelSerializer
     # Model catalog metadata is non-trading; keep it available to authenticated
     # users while gating predictions, recommendations, and execution APIs.
@@ -144,7 +144,7 @@ def model_governance(request):
         "previous_period_feature_vectors": previous_features,
     }
     return response.Response({
-        "models": AIModelSerializer(AIModel.objects.all(), many=True).data,
+        "models": AIModelSerializer(AIModel.objects.order_by("-created_at", "-id"), many=True).data,
         "versions": ModelVersionSerializer(versions, many=True).data,
         "calibration": calibration,
         "performance_7d": performance_7d,
