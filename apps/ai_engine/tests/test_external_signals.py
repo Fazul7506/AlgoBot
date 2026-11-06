@@ -61,7 +61,7 @@ class ExternalMarketSignalTests(SimpleTestCase):
         }
         query = Mock()
         query.values_list.return_value = ["BTCUSDT", "BTCUSD", "CRYBTCUSD", "R_100", "ETHUSDT"]
-        with patch.object(cache, "get", return_value=None), patch.object(cache, "set") as cache_set, patch(
+        with patch.object(cache, "get", side_effect=RuntimeError("Redis unavailable")), patch.object(cache, "set", side_effect=RuntimeError("Redis unavailable")) as cache_set, patch(
             "apps.ai_engine.external_signals.requests.get", return_value=response
         ), patch(
             "apps.market_data.services.MarketDataService.symbols.catalogue", return_value=query
