@@ -19,7 +19,9 @@
   const nativeFetch=window.fetch.bind(window),safeMethods=new Set(['GET','HEAD','OPTIONS']);
   let apiAccessToken=null;
   let apiTokenPromise=null;
-  const browserApiTokenUrl=()=>apiBase+'/api/auth/browser-token/';
+  // Bootstrap from the page origin so the browser sends the Django session cookie created by login.
+  // The returned short-lived JWT then authorizes requests to the dedicated API origin.
+  const browserApiTokenUrl=()=>window.location.origin+'/api/auth/browser-token/';
   async function ensureApiAccessToken(controller,force=false){
     if(apiAccessToken&&!force)return apiAccessToken;
     if(apiTokenPromise&&!force)return apiTokenPromise;
