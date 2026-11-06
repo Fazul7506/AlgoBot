@@ -1,8 +1,10 @@
 import asyncio
+import json
 import logging
 import time
 from types import SimpleNamespace
 from django.utils import timezone
+from django.core.serializers.json import DjangoJSONEncoder
 from .registry import registry
 from .repositories import StrategyRepository, StrategyExecutionRepository, StrategySignalRepository, StrategyPerformanceRepository
 from .validator import StrategyValidationService
@@ -183,9 +185,10 @@ class StrategyExecutionService:
             if not criteria_passed: result['signal'] = None; result['confidence'] = None; result['ai_blocked_by_criteria'] = True
             auto_execution = self._auto_execute_if_allowed(config, result)
             if auto_execution: result['auto_execution'] = auto_execution
-            execution.signal = result.get('signal'); execution.confidence = result.get('confidence'); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = result; execution.save()
+            safe_result = json.loads(json.dumps(result, cls=DjangoJSONEncoder))
+            execution.signal = result.get('signal'); execution.confidence = result.get('confidence'); execution.status = 'completed'; execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.context = safe_result; execution.save()
             if result.get('signal') in {'BUY', 'SELL'} and result.get('confidence') is not None:
-                StrategySignalRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, signal=result['signal'], confidence=result.get('confidence'), entry_price=result.get('entry_price'), stop_loss=result.get('stop_loss'), take_profit=result.get('take_profit'), metadata=result)
+                StrategySignalRepository().create(strategy=config.strategy, configuration=config, symbol=config.symbol, signal=result['signal'], confidence=result.get('confidence'), entry_price=result.get('entry_price'), stop_loss=result.get('stop_loss'), take_profit=result.get('take_profit'), metadata=safe_result)
             return execution
         except Exception as exc:
             execution.status = 'failed'; execution.error = str(exc); execution.completed_at = timezone.now(); execution.latency_ms = (time.perf_counter() - start) * 1000; execution.save(); log.exception('Strategy execution failed'); return execution
@@ -194,7 +197,3 @@ class StrategyExecutionService:
 class StrategyPerformanceService:
     def recalculate(self, strategy):
         perf = StrategyPerformanceRepository().for_strategy(strategy); qs = strategy.executions.filter(status='completed').exclude(signal='HOLD'); perf.total_trades = qs.count(); perf.wins = strategy.executions.filter(context__outcome='win').count(); perf.losses = strategy.executions.filter(context__outcome='loss').count(); perf.win_rate = (perf.wins / perf.total_trades * 100) if perf.total_trades else 0; perf.last_updated = timezone.now(); perf.save(); return perf
-
-
-class StrategyOptimizationService:
-    pass
