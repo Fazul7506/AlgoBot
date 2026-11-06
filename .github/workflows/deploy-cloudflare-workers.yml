@@ -82,6 +82,50 @@ jobs:
           printf '%s' "$MARKET_STREAM_CONTROL_TOKEN" | npx --yes wrangler secret put MARKET_STREAM_CONTROL_TOKEN --config cloudflare/market-stream/wrangler.jsonc
           printf '%s' "$CLOUDFLARE_TRAINING_WEBHOOK_TOKEN" | npx --yes wrangler secret put CLOUDFLARE_TRAINING_WEBHOOK_TOKEN --config cloudflare/ai-training-dispatcher/wrangler.jsonc
 
+      - name: Verify Django endpoints and matching Render secrets before activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.algobot.dpdns.org"
+          symbols="$(mktemp)"
+          status="$(curl --silent --show-error --output "$symbols" --write-out "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_MARKET_STREAM_TOKEN" \
+            "$api/api/internal/cloudflare/market-symbols/")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Market-symbol endpoint authentication/health check failed (HTTP $status). Workers will not be activated."
+            cat "$symbols"
+            exit 1
+          fi
+          SYMBOLS_RESPONSE="$(cat "$symbols")" node - <<'NODE'
+          const payload = JSON.parse(process.env.SYMBOLS_RESPONSE || "{}");
+          if (!Array.isArray(payload.symbols) || payload.symbols.length === 0) {
+            throw new Error("Market-symbol endpoint returned no active symbols");
+          }
+          console.log(`Verified authenticated active-symbol catalogue: ${payload.symbols.length} symbols`);
+          NODE
+          dispatch="$(mktemp)"
+          status="$(curl --silent --show-error --output "$dispatch" --write-out "%{http_code}" \
+            -X POST -H "Authorization: Bearer $CLOUDFLARE_TASK_DISPATCH_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"schedule_id":"__deployment_probe__","task":"__invalid__","kwargs":{},"scheduled_minute":0}' \
+            "$api/api/internal/cloudflare/task-dispatch/")"
+          if [[ "$status" != "400" ]] || ! grep -q '"invalid_payload"' "$dispatch"; then
+            echo "::error::Task-dispatch authentication/routing probe failed (HTTP $status). No task was enqueued."
+            cat "$dispatch"
+            exit 1
+          fi
+          training="$(mktemp)"
+          status="$(curl --silent --show-error --output "$training" --write-out "%{http_code}" \
+            -X POST -H "Authorization: Bearer $CLOUDFLARE_TRAINING_WEBHOOK_TOKEN" \
+            -H "Content-Type: application/json" --data '{"kind":"__deployment_probe__"}' \
+            "$api/api/internal/cloudflare/ai-training/")"
+          if [[ "$status" != "400" ]] || ! grep -q '"unsupported_kind"' "$training"; then
+            echo "::error::Legacy training webhook authentication/routing probe failed (HTTP $status). No task was enqueued."
+            cat "$training"
+            exit 1
+          fi
+          echo "Verified authenticated Django endpoints and matching Render-side secrets; invalid probes enqueued no tasks."
+
       - name: Activate the unified scheduler and Deriv market stream
         run: |
           set -euo pipefail
