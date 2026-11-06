@@ -248,7 +248,8 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
         self.assertIn("account_preferences_global.css", html)
-        self.assertIn("localStorage.getItem('algobot-theme')", html)
+        self.assertIn('localStorage.getItem("algobot-theme-preference")', html)
+        self.assertIn('localStorage.getItem("algobot-theme")', html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
             self.assertIn(f'html[data-theme="{theme}"]', css)
