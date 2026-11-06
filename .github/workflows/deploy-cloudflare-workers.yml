@@ -135,6 +135,28 @@ jobs:
           fi
           echo "Verified authenticated Django endpoints and matching Render-side secrets; invalid probes enqueued no tasks."
 
+      - name: Require a live Celery execution worker before activation
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(mktemp)"
+          status="$(curl --silent --show-error --output "$health" --write-out "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_TASK_DISPATCH_TOKEN" \
+            "https://api.algobot.dpdns.org/api/internal/cloudflare/task-dispatch/health/")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::No live Celery execution worker responded (HTTP $status). Scheduler activation is blocked to prevent queue backlog."
+            cat "$health"
+            exit 1
+          fi
+          HEALTH_RESPONSE="$(cat "$health")" node - <<'NODE'
+          const payload = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+          if (payload.status !== "ready" || !Number.isInteger(payload.worker_count) || payload.worker_count < 1) {
+            throw new Error("Celery execution worker readiness check did not pass");
+          }
+          console.log(`Verified ${payload.worker_count} live Celery worker(s) before activating schedules`);
+          NODE
+
       - name: Activate the unified scheduler and Deriv market stream
         if: github.event_name != 'pull_request'
         run: |
