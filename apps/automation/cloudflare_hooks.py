@@ -9,7 +9,7 @@ from celery import current_app
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 
 # Deliberately allowlisted: never accept arbitrary task names from a public webhook.
@@ -153,3 +153,21 @@ def cloudflare_task_dispatch(request):
         {"status": "queued", "schedule_id": schedule_id, "task": task_name, "task_id": result.id},
         status=202,
     )
+
+
+
+@require_GET
+def cloudflare_task_dispatch_health(request):
+    """Confirm the authenticated Celery execution path has a live worker."""
+    expected = os.environ.get("CLOUDFLARE_TASK_DISPATCH_TOKEN", "")
+    supplied = request.headers.get("Authorization", "")
+    if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
+        return JsonResponse({"status": "unauthorized"}, status=401)
+
+    try:
+        responses = current_app.control.inspect(timeout=2.0).ping() or {}
+    except Exception:
+        responses = {}
+    if not responses:
+        return JsonResponse({"status": "celery_worker_unavailable"}, status=503)
+    return JsonResponse({"status": "ready", "worker_count": len(responses)})
