@@ -298,22 +298,28 @@ def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
 
 
 def ingest_orderbook_snapshots() -> dict[str, int]:
-    """Poll genuine provider Level-2 depth for explicitly mapped instruments only."""
+    """Poll genuine provider Level-2 depth for verified, supported instruments."""
     provider, configured_symbols, symbol_map = _orderbook_symbol_configuration()
     token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
     endpoint = os.environ.get("ORDER_BOOK_API_URL", "").strip()
 
-    # Binance can be enabled without hand-maintained environment mappings.
-    # Discover only exact active/tradable Crypto catalogue symbols that Binance
-    # independently reports as live Spot pairs. This is a strict intersection,
-    # not a guessed alias map; unsupported instruments remain unavailable.
-    if provider == "binance_spot" and not configured_symbols:
+    # Binance is catalogue-driven by default. The intersection of active,
+    # tradable AlgoBot Crypto symbols and Binance's live Spot exchangeInfo is
+    # the allowlist. No symbol conversion is inferred: a configured list can
+    # only narrow this exact-match set, never add aliases such as BTCUSD->BTCUSDT.
+    if provider == "binance_spot":
         try:
-            symbol_map = _discover_binance_spot_symbols()
-            configured_symbols = list(symbol_map)
+            verified_map = _discover_binance_spot_symbols()
         except (requests.RequestException, ValueError, TypeError) as exc:
             logger.warning("Binance Spot instrument discovery unavailable: %s", str(exc)[:200])
             return {"symbols": 0, "snapshots": 0, "configured": 0}
+        if configured_symbols:
+            requested = {item.upper() for item in configured_symbols}
+            verified_map = {key: value for key, value in verified_map.items() if key in requested}
+        if any(key.upper() != value.upper() for key, value in symbol_map.items()):
+            logger.warning("Ignoring non-exact Binance symbol aliases; only verified exact Spot pairs are polled")
+        symbol_map = verified_map
+        configured_symbols = list(verified_map)
 
     if not configured_symbols:
         return {"symbols": 0, "snapshots": 0, "configured": 0}
