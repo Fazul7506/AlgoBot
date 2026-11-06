@@ -54,6 +54,8 @@ jobs:
           python manage.py shell <<'PY'
           import os
           from django.contrib.auth import get_user_model
+          from django.utils import timezone
+          from core.models import UserProfile
 
           User = get_user_model()
           username = os.environ["ALGOBOT_VISUAL_USERNAME"]
@@ -67,8 +69,17 @@ jobs:
           user.is_superuser = True
           user.set_password(password)
           user.save()
+          UserProfile.objects.update_or_create(
+              user=user,
+              defaults={
+                  "email_verified": True,
+                  "email_verified_at": timezone.now(),
+                  "terms_accepted_at": timezone.now(),
+              },
+          )
           print("Created isolated CI-only browser test account.")
           PY
+          echo "::add-mask::$ALGOBOT_VISUAL_PASSWORD"
           {
             echo "ALGOBOT_VISUAL_USERNAME=$ALGOBOT_VISUAL_USERNAME"
             echo "ALGOBOT_VISUAL_PASSWORD=$ALGOBOT_VISUAL_PASSWORD"
