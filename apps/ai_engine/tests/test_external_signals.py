@@ -94,3 +94,20 @@ class ExternalMarketSignalTests(SimpleTestCase):
         with patch.dict("os.environ", {"ORDER_BOOK_PROVIDER": "binance_spot", "ORDER_BOOK_SYMBOLS": "CRYBTCUSD", "ORDER_BOOK_SYMBOL_MAP_JSON": "[]"}):
             with self.assertRaises(RuntimeError):
                 _orderbook_symbol_configuration()
+
+
+    def test_binance_adapter_requests_provider_mapped_level_two_depth(self):
+        from apps.ai_engine.external_signals import BinanceSpotOrderBookAdapter
+        payload = {"lastUpdateId": 123, "bids": [["100", "2"]], "asks": [["101", "3"]]}
+        response = __import__("unittest").mock.Mock()
+        response.json.return_value = payload
+        response.raise_for_status.return_value = None
+        with patch("apps.ai_engine.external_signals.requests.get", return_value=response) as get:
+            result = BinanceSpotOrderBookAdapter({"CRYBTCUSD": "BTCUSDT"}).fetch("CRYBTCUSD")
+        self.assertEqual(result, payload)
+        get.assert_called_once()
+        self.assertEqual(get.call_args.kwargs["params"], {"symbol": "BTCUSDT", "limit": 100})
+
+    def test_orderbook_rejects_non_finite_depth(self):
+        with self.assertRaises(ValueError):
+            normalize_orderbook({"bids": [[100, float("nan")]], "asks": [[101, 1]]})
