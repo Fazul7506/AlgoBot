@@ -81,13 +81,9 @@ def _catalogue_sentiment_keywords() -> dict[str, list[str]]:
         if not symbol:
             continue
         name = str(row["display_name"] or "").strip()
+        # Match the complete display name rather than isolated words such
+        # as "volatility" or "crash", which would contaminate unrelated assets.
         terms = {symbol, symbol.replace("_", " "), name}
-        # Add useful display-name phrases and non-trivial words. Avoid generic
-        # market labels (e.g. "index", "synthetic") that match unrelated news.
-        terms.update(
-            token for token in re.findall(r"[A-Za-z][A-Za-z0-9.-]{2,}", name)
-            if token.lower() not in {"index", "indices", "market", "synthetic", "derived"}
-        )
         result[symbol] = sorted(term for term in terms if term)
     return result
 
@@ -221,7 +217,7 @@ class BinanceSpotOrderBookAdapter:
         self.token = token
 
     def fetch(self, internal_symbol: str) -> dict[str, Any]:
-        provider_symbol = self.symbol_map.get(internal_symbol)
+        provider_symbol = self.symbol_map.get(str(internal_symbol).upper())
         if not provider_symbol:
             raise OrderBookProviderError("No verified Binance Spot symbol mapping exists")
         response = requests.get(
@@ -240,7 +236,7 @@ class BinanceSpotOrderBookAdapter:
 def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
     provider = os.environ.get("ORDER_BOOK_PROVIDER", "custom").strip().lower()
     symbols = list(dict.fromkeys(
-        item.strip().upper() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
+        item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
         if item.strip()
     ))
     raw_map = os.environ.get("ORDER_BOOK_SYMBOL_MAP_JSON", "{}").strip() or "{}"
@@ -278,7 +274,7 @@ def ingest_orderbook_snapshots() -> dict[str, int]:
             if provider == "binance_spot":
                 payload = adapter.fetch(symbol)
             else:
-                provider_symbol = symbol_map.get(symbol, symbol)
+                provider_symbol = symbol_map.get(symbol.upper(), symbol)
                 response = requests.get(
                     endpoint.replace("{symbol}", requests.utils.quote(provider_symbol, safe="")),
                     headers={"Authorization": f"Bearer {token}"} if token else {},
