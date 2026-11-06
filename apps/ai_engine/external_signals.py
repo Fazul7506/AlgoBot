@@ -257,6 +257,25 @@ def ingest_orderbook_snapshots() -> dict[str, int]:
 
     if not configured_symbols:
         return {"symbols": 0, "snapshots": 0, "configured": 0}
+
+    # Resolve configured names back to canonical catalogue casing and reject
+    # arbitrary provider symbols that are not AlgoBot instruments.
+    from apps.market_data.services import MarketDataService
+    catalogue_rows = MarketDataService.symbols.catalogue(
+        active=None, tradable=None
+    ).values_list("symbol", flat=True)
+    catalogue_by_upper = {str(value).upper(): str(value) for value in catalogue_rows}
+    canonical_symbols = []
+    for requested in configured_symbols:
+        canonical = catalogue_by_upper.get(requested.upper())
+        if canonical:
+            canonical_symbols.append(canonical)
+        else:
+            logger.warning("Order-book symbol is not present in the AlgoBot catalogue: %s", requested)
+    configured_symbols = list(dict.fromkeys(canonical_symbols))
+    if not configured_symbols:
+        return {"symbols": 0, "snapshots": 0, "configured": 0}
+
     if provider == "binance_spot":
         adapter = BinanceSpotOrderBookAdapter(symbol_map, token=token)
     elif provider == "custom":
