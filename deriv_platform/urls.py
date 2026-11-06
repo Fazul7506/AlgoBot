@@ -33,7 +33,7 @@ from core.views import (
 from core.views_trade_history import trade_history_page
 from core.views_automation import workflow_templates_page
 from core.views_deriv_oauth_safe import callback
-from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback
+from core.views_payment import intasend_webhook, pesapal_webhook, pesapal_callback, paypal_webhook, paypal_return
 from core.views_billing import (
     billing_plans, billing_status, billing_checkout, billing_checkout_start,
     billing_change_plan, billing_cancel, billing_reconcile,
@@ -204,6 +204,8 @@ urlpatterns = [
     path("webhooks/intasend/", intasend_webhook, name="intasend_webhook"),
     path("webhooks/pesapal/", pesapal_webhook, name="pesapal_webhook"),
     path("payments/pesapal/callback/", pesapal_callback, name="pesapal_callback"),
+    path("webhooks/paypal/", paypal_webhook, name="paypal_webhook"),
+    path("payments/paypal/return/", paypal_return, name="paypal_return"),
 ]
 
 urlpatterns += [
