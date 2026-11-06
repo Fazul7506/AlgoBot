@@ -42,7 +42,7 @@ class PaymentReconciler:
     @staticmethod
     def _reference_parts(reference):
         parts = str(reference or "").split("-")
-        if len(parts) < 3 or parts[0] not in {"IS", "PP"}:
+        if len(parts) < 3 or parts[0] not in {"IS", "PP", "PY"}:
             return None, ""
         try:
             user_id = int(parts[1])
@@ -319,6 +319,47 @@ class PaymentReconciler:
         )
         if result is not None:
             cls._finish_webhook(event, result.get("status", ""))
+        return result
+
+    @classmethod
+    def handle_paypal_webhook(cls, payload):
+        """Reconcile verified PayPal capture events using server-fetched order data."""
+        raw = payload if isinstance(payload, bytes) else json.dumps(payload, sort_keys=True, default=str).encode()
+        data = PaymentService._parse_payload(payload)
+        event_type = str(data.get("event_type") or "").upper()
+        resource = data.get("resource") if isinstance(data.get("resource"), dict) else {}
+        if event_type not in {"PAYMENT.CAPTURE.COMPLETED", "PAYMENT.CAPTURE.PENDING", "PAYMENT.CAPTURE.DENIED"}:
+            return {"received": True, "provider": "paypal", "ignored": True, "event_type": event_type}
+        capture_id = str(resource.get("id") or "").strip()
+        related = resource.get("supplementary_data", {}).get("related_ids", {}) if isinstance(resource.get("supplementary_data"), dict) else {}
+        order_id = str(related.get("order_id") or "").strip() if isinstance(related, dict) else ""
+        if not capture_id or not order_id:
+            return None
+        event, created = cls._record_webhook("paypal", data, raw, capture_id, event_type)
+        if not created and event.processed_at:
+            return {"received": True, "duplicate": True, "provider": "paypal", "external_id": capture_id}
+        order = PaymentService().get_paypal_order(order_id)
+        if not order:
+            cls._finish_webhook(event, error="paypal_order_lookup_unavailable")
+            return {"received": True, "provider": "paypal", "retryable": True, "external_id": capture_id}
+        units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
+        unit = units[0] if units and isinstance(units[0], dict) else {}
+        reference = str(unit.get("custom_id") or unit.get("invoice_id") or "").strip()
+        amount = resource.get("amount") if isinstance(resource.get("amount"), dict) else {}
+        if not amount.get("value") or not amount.get("currency_code"):
+            cls._finish_webhook(event, error="paypal_capture_amount_missing")
+            return {"received": True, "provider": "paypal", "retryable": True, "external_id": capture_id}
+        status = "COMPLETED" if event_type == "PAYMENT.CAPTURE.COMPLETED" and str(resource.get("status", "")).upper() == "COMPLETED" else ("FAILED" if event_type == "PAYMENT.CAPTURE.DENIED" else "PENDING")
+        invoice = Invoice.objects.filter(metadata__reference=reference, metadata__provider="paypal").first() if reference else None
+        if not invoice:
+            cls._finish_webhook(event, error="matching_invoice_not_found")
+            return {"received": True, "provider": "paypal", "retryable": True, "unresolved_invoice": True}
+        result = cls.reconcile(provider="paypal", external_id=capture_id, status=status,
+            amount=amount.get("value"), currency=amount.get("currency_code", invoice.currency),
+            metadata={"reference": reference, "user_id": invoice.user_id, "plan": (invoice.metadata or {}).get("plan"), "order_id": order_id},
+            require_existing_invoice=True)
+        if result is not None:
+            cls._finish_webhook(event, result.get("status", ""), "" if not result.get("retryable") else "invoice_reconciliation_retryable")
         return result
 
     @classmethod
