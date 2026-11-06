@@ -2,6 +2,11 @@ name: Deploy and activate Cloudflare background workers
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "cloudflare/**"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
+      - "render.yaml"
   push:
     branches: [main]
     paths:
@@ -37,6 +42,7 @@ jobs:
           node-version: "22"
 
       - name: Require deployment credentials and matched Django secrets
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -71,9 +77,11 @@ jobs:
           npx --yes wrangler deploy --dry-run --config cloudflare/market-stream/wrangler.jsonc
 
       - name: Provision queues and deploy the initial safe configuration
+        if: github.event_name != 'pull_request'
         run: bash cloudflare/deploy-safe.sh --apply
 
       - name: Configure Worker secrets without exposing values
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -83,6 +91,7 @@ jobs:
           printf '%s' "$CLOUDFLARE_TRAINING_WEBHOOK_TOKEN" | npx --yes wrangler secret put CLOUDFLARE_TRAINING_WEBHOOK_TOKEN --config cloudflare/ai-training-dispatcher/wrangler.jsonc
 
       - name: Verify Django endpoints and matching Render secrets before activation
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -127,6 +136,7 @@ jobs:
           echo "Verified authenticated Django endpoints and matching Render-side secrets; invalid probes enqueued no tasks."
 
       - name: Activate the unified scheduler and Deriv market stream
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           npx --yes wrangler deploy --config cloudflare/background-scheduler/wrangler.jsonc --var CLOUDFLARE_SCHEDULER_ACTIVE:true --var ENABLE_EXECUTION_QUEUE_RECOVERY:false
@@ -135,6 +145,7 @@ jobs:
           npx --yes wrangler deploy --config cloudflare/ai-training-dispatcher/wrangler.jsonc --var AI_TRAINING_DISPATCH_ACTIVE:false
 
       - name: Verify deployed Worker scripts and Queue resources
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
