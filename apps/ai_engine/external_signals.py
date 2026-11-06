@@ -273,7 +273,7 @@ def _discover_binance_spot_symbols() -> dict[str, str]:
         active=True, tradable=True, market="Crypto"
     ).values_list("symbol", flat=True)
     verified = {
-        str(symbol): str(symbol).upper()
+        str(symbol).upper(): str(symbol).upper()
         for symbol in catalogue_symbols
         if str(symbol).upper() in available
     }
