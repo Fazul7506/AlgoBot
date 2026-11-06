@@ -38,3 +38,25 @@ PESAPAL_CONSUMER_KEY = os.getenv("PESAPAL_CONSUMER_KEY", "").strip()
 PESAPAL_CONSUMER_SECRET = os.getenv("PESAPAL_CONSUMER_SECRET", "").strip()
 PESAPAL_NOTIFICATION_ID = os.getenv("PESAPAL_NOTIFICATION_ID", "").strip()
 PESAPAL_API_BASE_URL = os.getenv("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").strip()
+
+# PayPal Checkout (Orders v2). Keep sandbox as the safe default until live
+# merchant credentials and the production webhook are configured.
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "").strip()
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "").strip()
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "").strip()
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox").strip().lower()
+PAYPAL_API_BASE_URL = os.getenv("PAYPAL_API_BASE_URL", "").strip().rstrip("/") or (
+    "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
+)
+PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "").strip()
+PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "").strip()
+PAYPAL_BILLING_CURRENCY = os.getenv("PAYPAL_BILLING_CURRENCY", "USD").strip().upper()
+def _paypal_price_cents(plan_name):
+    try:
+        value = int(os.getenv(f"PAYPAL_{plan_name}_PRICE_CENTS", ""))
+        return value if value > 0 else None
+    except (TypeError, ValueError):
+        return None
+PAYPAL_BASIC_PRICE_CENTS = _paypal_price_cents("BASIC")
+PAYPAL_PRO_PRICE_CENTS = _paypal_price_cents("PRO")
+PAYPAL_ENTERPRISE_PRICE_CENTS = _paypal_price_cents("ENTERPRISE")
