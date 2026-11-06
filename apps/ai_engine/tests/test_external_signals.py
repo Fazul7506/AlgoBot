@@ -37,6 +37,7 @@ class ExternalMarketSignalTests(SimpleTestCase):
         with patch.dict(
             "os.environ",
             {
+                "ORDER_BOOK_PROVIDER": "custom",
                 "ORDER_BOOK_API_URL": "https://provider.example/book/{symbol}",
                 "ORDER_BOOK_SYMBOLS": "",
             },
@@ -54,7 +55,6 @@ class ExternalMarketSignalTests(SimpleTestCase):
             "symbols": [
                 {"symbol": "BTCUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
                 {"symbol": "ETHUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
-                {"symbol": "BTCUSD", "status": "TRADING", "isSpotTradingAllowed": True},
                 {"symbol": "BNBUSDT", "status": "BREAK", "isSpotTradingAllowed": True},
                 {"symbol": "SOLUSDT", "status": "TRADING", "isSpotTradingAllowed": False},
             ]
