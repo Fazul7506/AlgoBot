@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -99,7 +100,7 @@ class ExternalMarketSignalTests(SimpleTestCase):
     def test_binance_adapter_requests_provider_mapped_level_two_depth(self):
         from apps.ai_engine.external_signals import BinanceSpotOrderBookAdapter
         payload = {"lastUpdateId": 123, "bids": [["100", "2"]], "asks": [["101", "3"]]}
-        response = __import__("unittest").mock.Mock()
+        response = Mock()
         response.json.return_value = payload
         response.raise_for_status.return_value = None
         with patch("apps.ai_engine.external_signals.requests.get", return_value=response) as get:
@@ -111,3 +112,22 @@ class ExternalMarketSignalTests(SimpleTestCase):
     def test_orderbook_rejects_non_finite_depth(self):
         with self.assertRaises(ValueError):
             normalize_orderbook({"bids": [[100, float("nan")]], "asks": [[101, 1]]})
+
+
+    def test_ai_symbol_discovery_is_scoped_to_selected_broker(self):
+        from apps.ai_engine.views import _discover_symbol
+        request = SimpleNamespace(data={"symbol": "R_100"})
+        account = SimpleNamespace(broker=SimpleNamespace(broker_type="deriv"))
+        with patch("apps.ai_engine.views.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.filter.return_value.exists.return_value = True
+            self.assertEqual(_discover_symbol(request, account), "R_100")
+            catalogue.assert_called_once_with(broker="deriv", active=True, tradable=True)
+
+    def test_ai_symbol_discovery_rejects_instrument_not_supported_by_selected_broker(self):
+        from apps.ai_engine.views import _discover_symbol
+        request = SimpleNamespace(data={"symbol": "BTCUSDT"})
+        account = SimpleNamespace(broker=SimpleNamespace(broker_type="deriv"))
+        with patch("apps.ai_engine.views.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.filter.return_value.exists.return_value = False
+            with self.assertRaises(ValueError):
+                _discover_symbol(request, account)
