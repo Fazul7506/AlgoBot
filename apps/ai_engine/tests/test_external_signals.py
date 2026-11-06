@@ -33,7 +33,7 @@ class ExternalMarketSignalTests(SimpleTestCase):
             normalize_orderbook({"bids": [], "asks": [[100.0, 1.0]]})
 
 
-    def test_orderbook_ingestion_requires_an_explicit_provider_symbol_allowlist(self):
+    def test_custom_orderbook_provider_requires_an_explicit_symbol_allowlist(self):
         with patch.dict(
             "os.environ",
             {
@@ -44,6 +44,33 @@ class ExternalMarketSignalTests(SimpleTestCase):
         ):
             result = ingest_orderbook_snapshots()
         self.assertEqual(result, {"symbols": 0, "snapshots": 0, "configured": 0})
+
+    def test_binance_discovery_intersects_exact_active_crypto_catalogue_symbols(self):
+        from apps.ai_engine.external_signals import _discover_binance_spot_symbols
+        from django.core.cache import cache
+
+        response = Mock()
+        response.json.return_value = {
+            "symbols": [
+                {"symbol": "BTCUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
+                {"symbol": "ETHUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
+                {"symbol": "BTCUSD", "status": "TRADING", "isSpotTradingAllowed": True},
+                {"symbol": "BNBUSDT", "status": "BREAK", "isSpotTradingAllowed": True},
+                {"symbol": "SOLUSDT", "status": "TRADING", "isSpotTradingAllowed": False},
+            ]
+        }
+        query = Mock()
+        query.values_list.return_value = ["BTCUSDT", "BTCUSD", "CRYBTCUSD", "R_100", "ETHUSDT"]
+        with patch.object(cache, "get", return_value=None), patch.object(cache, "set") as cache_set, patch(
+            "apps.ai_engine.external_signals.requests.get", return_value=response
+        ), patch(
+            "apps.market_data.services.MarketDataService.symbols.catalogue", return_value=query
+        ) as catalogue:
+            mapping = _discover_binance_spot_symbols()
+
+        catalogue.assert_called_once_with(active=True, tradable=True, market="Crypto")
+        self.assertEqual(mapping, {"BTCUSDT": "BTCUSDT", "ETHUSDT": "ETHUSDT"})
+        cache_set.assert_called_once()
 
     def test_rss_parser_supports_atom_entries(self):
         payload = b"""<?xml version="1.0"?>
