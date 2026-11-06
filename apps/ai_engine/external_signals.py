@@ -247,7 +247,13 @@ def _discover_binance_spot_symbols() -> dict[str, str]:
     from apps.market_data.services import MarketDataService
 
     cache_key = "ai:binance-spot:verified-catalogue-symbols:v1"
-    cached = cache.get(cache_key)
+    try:
+        cached = cache.get(cache_key)
+    except Exception as exc:
+        # Redis is an optimization here, not a prerequisite for a real provider
+        # response. Continue with a fresh exchangeInfo request if cache is down.
+        logger.warning("Binance Spot discovery cache unavailable: %s", str(exc)[:160])
+        cached = None
     if isinstance(cached, dict):
         return cached
 
@@ -277,7 +283,10 @@ def _discover_binance_spot_symbols() -> dict[str, str]:
         for symbol in catalogue_symbols
         if str(symbol).upper() in available
     }
-    cache.set(cache_key, verified, timeout=60 * 60)
+    try:
+        cache.set(cache_key, verified, timeout=60 * 60)
+    except Exception as exc:
+        logger.warning("Binance Spot discovery cache write unavailable: %s", str(exc)[:160])
     return verified
 
 
