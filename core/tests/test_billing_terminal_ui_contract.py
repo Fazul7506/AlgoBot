@@ -13,13 +13,13 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "Billing &amp; Payments", "billing-summary-grid", "billing-plan-grid",
             "billing-payment-table", "billing-usage-grid", "billing-account-status",
             'id="billing-checkout-form"', "{% csrf_token %}",
-            'data-provider="pesapal"', 'data-provider="intasend"',
+            'data-provider="pesapal"', 'data-provider="intasend"', 'data-provider="paypal"',
             "data-cancel-subscription", "data-billing-refresh",
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
             "Usage is measured from persisted platform audit/database records",
-            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase())",
+            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, template)
@@ -39,9 +39,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("Contact sales", template)
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
-        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase())", template)
+        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
         self.assertIn("Continue with Pesapal", template)
         self.assertIn("Continue with IntaSend", template)
+        self.assertIn("Continue with PayPal", template)
+        self.assertIn("PayPal setup pending", template)
         self.assertNotIn("Pay with IntaSend", template)
         self.assertNotIn("Pay with Pesapal", template)
         self.assertIn('Included with every account', template)
@@ -61,7 +63,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         billing = Path("core/views_billing.py").read_text(encoding="utf-8")
         self.assertIn('"ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))', billing)
-        self.assertIn('return Response({"plans": _plans()', billing)
+        self.assertIn('\"paypal\": service.paypal_is_configured()', billing)
+        self.assertIn('\"paypal_prices\":', billing)
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertNotIn("p.plan!=='ENTERPRISE'||admin", template)
         self.assertNotIn("if(name==='ENTERPRISE')", template)
