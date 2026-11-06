@@ -190,9 +190,6 @@ def scan_anomalies(symbol, features):
     return obj.id if obj else None
 
 
-@app.task
-def evaluate_model(model_id):
-    return {"model_id": model_id, "status": "evaluated"}
 
 
 @app.task
