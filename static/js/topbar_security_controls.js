@@ -51,13 +51,13 @@
     }
     const currentLabel = accountLabel(current);
     if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
-    if (meta) meta.textContent = currentLabel.type + ' · ' + currentLabel.currency + ' ' + (currentLabel.balance == null ? 'Balance unavailable' : Number(currentLabel.balance).toLocaleString(undefined,{maximumFractionDigits:8}));
+    if (meta) meta.textContent = currentLabel.type + ' · ' + (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(currentLabel.balance,currentLabel.currency||'USD') : '$'+(Number(currentLabel.balance)||0).toFixed(2));
     const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];
     if (options) {
       const eligible = accounts.filter(a => a?.id);
       options.innerHTML = eligible.length ? eligible.map(a => {
         const label = accountLabel(a), active = String(a.id) === String(current.id);
-        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '><span class="topbar-account-option-icon material-symbols-rounded" aria-hidden="true">' + (active ? 'check_circle' : 'account_balance_wallet') + '</span><span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe(label.type + ' · ' + label.currency + ' ' + (label.balance == null ? '—' : Number(label.balance).toLocaleString(undefined,{maximumFractionDigits:8}))) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '><span class="topbar-account-option-icon material-symbols-rounded" aria-hidden="true">' + (active ? 'check_circle' : 'account_balance_wallet') + '</span><span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe(label.type + ' · ' + (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(label.balance,label.currency||'USD') : '$'+(Number(label.balance)||0).toFixed(2))) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
       }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
     }
   }

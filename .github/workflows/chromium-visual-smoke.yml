@@ -1,7 +1,7 @@
 name: Chromium Visual Smoke
 
-# Browser smoke coverage runs against the Render Service Preview for each PR.
-# Manual runs remain available from the Actions tab for a configured base URL.
+# Run the browser audit against the exact PR checkout in an isolated CI
+# Django instance. Render PR previews are not enabled for this service.
 on:
   pull_request:
     branches: [main]
@@ -18,15 +18,92 @@ concurrency:
 jobs:
   chromium-screenshots:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      DJANGO_ENV: development
+      DJANGO_TESTING: "true"
+      USE_REDIS: "false"
+      SECRET_KEY: ci-visual-smoke-secret-key
+      CREDENTIALS_ENCRYPTION_KEY: ci-visual-smoke-credentials-key
+      DEBUG: "True"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     steps:
-      - name: Checkout
+      - name: Checkout exact PR code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: pip
+          cache-dependency-path: requirements/base.txt
+
+      - name: Install Django application dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt
+
+      - name: Apply migrations and create an isolated visual-test account
+        shell: bash
+        run: |
+          set -euo pipefail
+          python manage.py migrate --noinput
+          export ALGOBOT_VISUAL_USERNAME="visualqa"
+          export ALGOBOT_VISUAL_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          python manage.py shell <<'PY'
+          import os
+          from django.contrib.auth import get_user_model
+          from django.utils import timezone
+          from core.models import UserProfile
+
+          User = get_user_model()
+          username = os.environ["ALGOBOT_VISUAL_USERNAME"]
+          password = os.environ["ALGOBOT_VISUAL_PASSWORD"]
+          user, _ = User.objects.get_or_create(
+              username=username,
+              defaults={"email": "visualqa@example.invalid"},
+          )
+          user.is_active = True
+          user.is_staff = True
+          user.is_superuser = True
+          user.set_password(password)
+          user.save()
+          UserProfile.objects.update_or_create(
+              user=user,
+              defaults={
+                  "email_verified": True,
+                  "email_verified_at": timezone.now(),
+                  "terms_accepted_at": timezone.now(),
+              },
+          )
+          print("Created isolated CI-only browser test account.")
+          PY
+          echo "::add-mask::$ALGOBOT_VISUAL_PASSWORD"
+          {
+            echo "ALGOBOT_VISUAL_USERNAME=$ALGOBOT_VISUAL_USERNAME"
+            echo "ALGOBOT_VISUAL_PASSWORD=$ALGOBOT_VISUAL_PASSWORD"
+            echo "ALGOBOT_VISUAL_BASE_URL=http://127.0.0.1:8000"
+          } >> "$GITHUB_ENV"
+
+      - name: Start isolated Django server
+        run: |
+          nohup python manage.py runserver 0.0.0.0:8000 --noreload >/tmp/algobot-visual-django.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/login/ >/dev/null; then
+              echo "Django login endpoint is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/algobot-visual-django.log
+          echo "Django did not start successfully." >&2
+          exit 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Playwright and Chromium
         run: |
@@ -47,12 +124,6 @@ jobs:
 
       - name: Capture desktop, tablet, and mobile screenshots
         env:
-          # Render created this service for PR #464 after the render-preview
-          # label was applied. Override with a repository variable if the URL changes.
-          ALGOBOT_VISUAL_BASE_URL: ${{ github.event_name == 'pull_request' && (vars.ALGOBOT_VISUAL_BASE_URL || format('https://algobot-pr-{0}.onrender.com', github.event.pull_request.number)) || secrets.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.org' }}
-          ALGOBOT_VISUAL_USERNAME: ${{ secrets.ALGOBOT_VISUAL_USERNAME }}
-          ALGOBOT_VISUAL_PASSWORD: ${{ secrets.ALGOBOT_VISUAL_PASSWORD }}
-          ALGOBOT_VISUAL_TOTP_SECRET: ${{ secrets.ALGOBOT_VISUAL_TOTP_SECRET }}
           ALGOBOT_VISUAL_PATHS: ${{ format('{0},/profile/,/settings/,/account/identity/', vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/') }}
         run: node scripts/visual_smoke.mjs
 
@@ -64,3 +135,10 @@ jobs:
           path: artifacts/chromium/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish Django startup diagnostics
+        if: failure()
+        run: |
+          if [ -f /tmp/algobot-visual-django.log ]; then
+            tail -n 200 /tmp/algobot-visual-django.log
+          fi

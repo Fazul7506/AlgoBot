@@ -8,11 +8,16 @@ import os
 
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "intasend").strip().lower()
 PAYMENT_HTTP_TIMEOUT = int(os.getenv("PAYMENT_HTTP_TIMEOUT", "").strip() or "20")
-ALGOBOT_BILLING_CURRENCY = os.getenv("ALGOBOT_BILLING_CURRENCY", "KES").strip().upper()
-# KES cents. Deployment values override these defaults without a code change.
-ALGOBOT_BASIC_PRICE_CENTS = os.getenv("ALGOBOT_BASIC_PRICE_CENTS", "99900").strip() or None
-ALGOBOT_PRO_PRICE_CENTS = os.getenv("ALGOBOT_PRO_PRICE_CENTS", "499900").strip() or None
-ALGOBOT_ENTERPRISE_PRICE_CENTS = os.getenv("ALGOBOT_ENTERPRISE_PRICE_CENTS", "2499900").strip() or None
+ALGOBOT_BILLING_CURRENCY = "USD"  # Platform billing currency is fixed; broker-native amounts remain source-currency aware.
+# All providers share these explicit USD-cent values. The old unsuffixed
+# ALGOBOT_*_PRICE_CENTS variables represented KES cents and are deliberately
+# ignored so they can never be charged as dollars after the currency switch.
+def _usd_price_cents(plan_name):
+    return os.getenv(f"ALGOBOT_{plan_name}_PRICE_CENTS_USD", "").strip() or None
+
+ALGOBOT_BASIC_PRICE_CENTS = _usd_price_cents("BASIC")
+ALGOBOT_PRO_PRICE_CENTS = _usd_price_cents("PRO")
+ALGOBOT_ENTERPRISE_PRICE_CENTS = _usd_price_cents("ENTERPRISE")
 ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", "").strip() or "30")
 
 # Explicit application return URLs. Provider checkout URLs are dynamic and
@@ -38,3 +43,16 @@ PESAPAL_CONSUMER_KEY = os.getenv("PESAPAL_CONSUMER_KEY", "").strip()
 PESAPAL_CONSUMER_SECRET = os.getenv("PESAPAL_CONSUMER_SECRET", "").strip()
 PESAPAL_NOTIFICATION_ID = os.getenv("PESAPAL_NOTIFICATION_ID", "").strip()
 PESAPAL_API_BASE_URL = os.getenv("PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").strip()
+
+# PayPal Checkout (Orders v2). Keep sandbox as the safe default until live
+# merchant credentials and the production webhook are configured.
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "").strip()
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "").strip()
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "").strip()
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox").strip().lower()
+PAYPAL_API_BASE_URL = os.getenv("PAYPAL_API_BASE_URL", "").strip().rstrip("/") or (
+    "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
+)
+PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "").strip()
+PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "").strip()
+PAYPAL_BILLING_CURRENCY = "USD"

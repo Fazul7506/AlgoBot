@@ -42,7 +42,7 @@ class PaymentReconciler:
     @staticmethod
     def _reference_parts(reference):
         parts = str(reference or "").split("-")
-        if len(parts) < 3 or parts[0] not in {"IS", "PP"}:
+        if len(parts) < 3 or parts[0] not in {"IS", "PP", "PY"}:
             return None, ""
         try:
             user_id = int(parts[1])
@@ -76,7 +76,7 @@ class PaymentReconciler:
         return user_id, plan
 
     @classmethod
-    def reconcile(cls, *, provider, external_id, status, amount=None, currency="KES", metadata=None, require_existing_invoice=False):
+    def reconcile(cls, *, provider, external_id, status, amount=None, currency="USD", metadata=None, require_existing_invoice=False):
         metadata = metadata if isinstance(metadata, dict) else {}
         provider = str(provider or "").strip().lower()
         external_id = str(external_id or "").strip()
@@ -89,7 +89,7 @@ class PaymentReconciler:
 
         normalized = cls.normalize_status(status)
         amount_minor = cls._minor_units(amount)
-        currency = str(currency or "KES").upper()
+        currency = str(currency or "USD").upper()
         with transaction.atomic():
             invoice = Invoice.objects.select_for_update().filter(external_id=external_id).first()
             if not invoice:
@@ -118,8 +118,8 @@ class PaymentReconciler:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "invoice_owner_mismatch"}
 
             expected_amount = int(invoice.amount_cents or 0)
-            expected_currency = str(invoice.currency or "KES").upper()
-            received_currency = str(currency or "KES").upper()
+            expected_currency = str(invoice.currency or "USD").upper()
+            received_currency = str(currency or "USD").upper()
             if amount_minor < 0:
                 return {"received": True, "provider": provider, "status": normalized, "external_id": external_id, "rejected": "negative_amount"}
             if amount_minor and expected_amount and amount_minor != expected_amount:
@@ -234,7 +234,7 @@ class PaymentReconciler:
         if plan:
             subscription.plan = plan
         subscription.price_cents = invoice.amount_cents
-        subscription.currency = str(invoice.currency or "KES").lower()
+        subscription.currency = str(invoice.currency or "USD").upper()
         provider = str((invoice.metadata or {}).get("provider") or "").lower()
         provider_subscription_id = str((invoice.metadata or {}).get("subscription_id") or "").strip()
         subscription.provider = provider
@@ -291,7 +291,7 @@ class PaymentReconciler:
                 if not recurring_id:
                     continue
                 metadata = {"user_id": subscription.user_id, "plan": subscription.plan, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "subscription_event": True, "provider_payload": cls._sanitize_provider_payload(data)}
-                results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "KES"), metadata=metadata))
+                results.append(cls.reconcile(provider="intasend", external_id=str(recurring_id), status=invoice_data.get("state"), amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"), currency=invoice_data.get("currency", subscription.currency or "USD"), metadata=metadata))
             cls._finish_webhook(event, "RECURRING_PROCESSED")
             return {"received": True, "provider": "intasend", "subscription_id": str(data["subscription_id"]), "payments": results}
         invoice_id = data.get("invoice_id") or data.get("id")
@@ -308,17 +308,61 @@ class PaymentReconciler:
             return {"received": True, "provider": "intasend", "external_id": str(external_id), "retryable": True}
         invoice_data = verified.get("invoice") if isinstance(verified, dict) else {}
         invoice_data = invoice_data if isinstance(invoice_data, dict) else verified
+        matched_invoice = Invoice.objects.filter(metadata__reference=str(api_ref or "")).first() if api_ref else None
+        matched_invoice = matched_invoice or Invoice.objects.filter(external_id=str(invoice_id or "")).first()
+        verified_currency = invoice_data.get("currency") or (matched_invoice.currency if matched_invoice else "USD")
         result = cls.reconcile(
             provider="intasend",
             external_id=str(invoice_data.get("invoice_id") or invoice_data.get("id") or invoice_id),
             status=invoice_data.get("state"),
             amount=invoice_data.get("value") or invoice_data.get("amount") or invoice_data.get("net_amount"),
-            currency=invoice_data.get("currency", "KES"),
+            currency=verified_currency,
             metadata=cls._sanitize_provider_payload({**data, **invoice_data}),
             require_existing_invoice=True,
         )
         if result is not None:
             cls._finish_webhook(event, result.get("status", ""))
+        return result
+
+    @classmethod
+    def handle_paypal_webhook(cls, payload):
+        """Reconcile verified PayPal capture events using server-fetched order data."""
+        raw = payload if isinstance(payload, bytes) else json.dumps(payload, sort_keys=True, default=str).encode()
+        data = PaymentService._parse_payload(payload)
+        event_type = str(data.get("event_type") or "").upper()
+        resource = data.get("resource") if isinstance(data.get("resource"), dict) else {}
+        if event_type not in {"PAYMENT.CAPTURE.COMPLETED", "PAYMENT.CAPTURE.PENDING", "PAYMENT.CAPTURE.DENIED"}:
+            return {"received": True, "provider": "paypal", "ignored": True, "event_type": event_type}
+        capture_id = str(resource.get("id") or "").strip()
+        related = resource.get("supplementary_data", {}).get("related_ids", {}) if isinstance(resource.get("supplementary_data"), dict) else {}
+        order_id = str(related.get("order_id") or "").strip() if isinstance(related, dict) else ""
+        if not capture_id or not order_id:
+            return None
+        event, created = cls._record_webhook("paypal", data, raw, capture_id, event_type)
+        if not created and event.processed_at:
+            return {"received": True, "duplicate": True, "provider": "paypal", "external_id": capture_id}
+        order = PaymentService().get_paypal_order(order_id)
+        if not order:
+            cls._finish_webhook(event, error="paypal_order_lookup_unavailable")
+            return {"received": True, "provider": "paypal", "retryable": True, "external_id": capture_id}
+        units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
+        unit = units[0] if units and isinstance(units[0], dict) else {}
+        reference = str(unit.get("custom_id") or unit.get("invoice_id") or "").strip()
+        amount = resource.get("amount") if isinstance(resource.get("amount"), dict) else {}
+        if not amount.get("value") or not amount.get("currency_code"):
+            cls._finish_webhook(event, error="paypal_capture_amount_missing")
+            return {"received": True, "provider": "paypal", "retryable": True, "external_id": capture_id}
+        status = "COMPLETED" if event_type == "PAYMENT.CAPTURE.COMPLETED" and str(resource.get("status", "")).upper() == "COMPLETED" else ("FAILED" if event_type == "PAYMENT.CAPTURE.DENIED" else "PENDING")
+        invoice = Invoice.objects.filter(metadata__reference=reference, metadata__provider="paypal").first() if reference else None
+        if not invoice:
+            cls._finish_webhook(event, error="matching_invoice_not_found")
+            return {"received": True, "provider": "paypal", "retryable": True, "unresolved_invoice": True}
+        result = cls.reconcile(provider="paypal", external_id=capture_id, status=status,
+            amount=amount.get("value"), currency=amount.get("currency_code", invoice.currency),
+            metadata={"reference": reference, "user_id": invoice.user_id, "plan": (invoice.metadata or {}).get("plan"), "order_id": order_id},
+            require_existing_invoice=True)
+        if result is not None:
+            cls._finish_webhook(event, result.get("status", ""), "" if not result.get("retryable") else "invoice_reconciliation_retryable")
         return result
 
     @classmethod
@@ -336,7 +380,9 @@ class PaymentReconciler:
         ack = {"orderNotificationType": data.get("OrderNotificationType") or data.get("orderNotificationType") or "IPNCHANGE", "orderTrackingId": str(tracking_id), "orderMerchantReference": merchant_reference, "status": 200}
         if not created and event.processed_at:
             return {"received": True, "duplicate": True, "provider": "pesapal", "external_id": str(tracking_id), "ipn_ack": ack}
-        result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": verified},
+        matched_invoice = Invoice.objects.filter(metadata__reference=str(merchant_reference or "")).first() if merchant_reference else None
+        verified_currency = verified.get("currency") or (matched_invoice.currency if matched_invoice else "USD")
+        result = cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=verified.get("payment_status_description"), amount=verified.get("amount"), currency=verified_currency, metadata={"merchant_reference": merchant_reference, "pesapal": verified},
             require_existing_invoice=True,
         )
         if result is not None:
@@ -351,4 +397,6 @@ class PaymentReconciler:
         status = PaymentService().get_pesapal_transaction_status(str(tracking_id))
         if not status:
             return None
-        return cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=status.get("payment_status_description"), amount=status.get("amount"), currency=status.get("currency", "KES"), metadata={"merchant_reference": merchant_reference, "pesapal": status})
+        matched_invoice = Invoice.objects.filter(metadata__reference=str(merchant_reference or "")).first() if merchant_reference else None
+        verified_currency = status.get("currency") or (matched_invoice.currency if matched_invoice else "USD")
+        return cls.reconcile(provider="pesapal", external_id=str(tracking_id), status=status.get("payment_status_description"), amount=status.get("amount"), currency=verified_currency, metadata={"merchant_reference": merchant_reference, "pesapal": status})

@@ -109,3 +109,14 @@ if SENTRY_DSN:
         traces_sample_rate=float(env("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
         send_default_pii=False,
     )
+
+if PAYMENT_PROVIDER == "paypal":  # noqa: F405
+    validate_required_settings(
+        production=True,
+        values={
+            "PAYPAL_CLIENT_ID": PAYPAL_CLIENT_ID,  # noqa: F405
+            "PAYPAL_CLIENT_SECRET": PAYPAL_CLIENT_SECRET,  # noqa: F405
+            "PAYPAL_WEBHOOK_ID": PAYPAL_WEBHOOK_ID,  # noqa: F405
+            "ALGOBOT_BASIC_PRICE_CENTS": ALGOBOT_BASIC_PRICE_CENTS,  # noqa: F405
+        },
+    )

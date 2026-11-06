@@ -33,7 +33,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
-  const money = (value, currency = 'USD') => { if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = 'USD') => { if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
   const pct = value => value === null || value === undefined || value === '' ? '—' : `${Number(value).toFixed(1)}%`;
   const normalise = value => Array.isArray(value) ? value : (
     Array.isArray(value?.results) ? value.results : (
@@ -100,10 +100,10 @@
       const positions = $('[data-kpi="positions"]');
       const winrate = $('[data-kpi="winrate"]');
       const pnl = $('[data-kpi="pnl"]');
-      if (balance) balance.textContent = account ? `${account.currency || ''} ${money(account.balance)}`.trim() : '—';
+      if (balance) balance.textContent = account ? money(account.balance, account.currency || 'USD') : money(0, 'USD');
       if (positions) positions.textContent = stats.open_trades ?? '0';
       if (winrate) winrate.textContent = pct(stats.win_rate);
-      if (pnl) pnl.textContent = money(stats.total_pnl);
+      if (pnl) pnl.textContent = money(stats.total_pnl, account?.currency || 'USD');
       const terminalAccount = $('[data-terminal-account]');
       if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || data.account?.account_id || 'Not connected'}`;
       return { ...data, selectedAccount: account };
@@ -205,166 +205,6 @@
     }
   }
 
-  function drawCandles(canvas, candles) {
-    if (!canvas || !candles?.length) return;
-    canvas.__candles = candles;
-    const box = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(box.width, 300);
-    const height = Math.max(box.height, 250);
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    const data = candles.map(x => ({
-      o: +(x.open ?? x.o), h: +(x.high ?? x.h), l: +(x.low ?? x.l), c: +(x.close ?? x.c)
-    })).filter(x => [x.o, x.h, x.l, x.c].every(Number.isFinite));
-    if (!data.length) return;
-    const min = Math.min(...data.map(x => x.l));
-    const max = Math.max(...data.map(x => x.h));
-    const range = max - min || 1;
-    const step = width / data.length;
-    const bodyWidth = Math.max(2, step * 0.55);
-    const y = value => height - ((value - min) / range) * height * 0.86 - height * 0.04;
-    ctx.strokeStyle = 'rgba(143,164,194,.14)';
-    for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(0, height * i / 6); ctx.lineTo(width, height * i / 6); ctx.stroke(); }
-    data.forEach((item, i) => {
-      const x = i * step + step / 2;
-      const up = item.c >= item.o;
-      ctx.strokeStyle = up ? '#33d69f' : '#ff5c7a';
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.beginPath(); ctx.moveTo(x, y(item.h)); ctx.lineTo(x, y(item.l)); ctx.stroke();
-      const top = Math.min(y(item.o), y(item.c));
-      const bodyHeight = Math.max(1, Math.abs(y(item.c) - y(item.o)));
-      ctx.fillRect(x - bodyWidth / 2, top, bodyWidth, bodyHeight);
-    });
-  }
-
-  async function tradingTerminal(page) {
-    let direction = 'BUY';
-    let accountId = null;
-    const symbol = $('[data-symbol]', page);
-    const timeframe = $('[data-timeframe]', page);
-    const strategySelect = $('[name="strategy"]', page);
-    const load = async () => {
-      const s = encodeURIComponent(symbol.value);
-      const tf = encodeURIComponent(timeframe.value);
-      try {
-        const [chart, regime, snapshots, accounts, strategies] = await Promise.all([
-          json(`/api/market/price-history/chart_data/?symbol=${s}&timeframe=${tf}&days=1`),
-          json(`/api/market/regime/?symbol=${s}&timeframe=${tf}`),
-          json(`/api/market/snapshots/?symbol=${s}`),
-          json('/api/brokers/accounts/'),
-          json('/api/strategies/')
-        ]);
-        const candles = normalise(chart.candles || chart.data?.candles || chart);
-        drawCandles($('[data-candle-chart]', page), candles);
-        $('.chart-overlay', page).style.display = candles.length ? 'none' : 'grid';
-        const r = regime.data || regime;
-        $('[data-regime]', page).textContent = r.market_regime || r.regime || '—';
-        $('[data-trend]', page).textContent = r.trend_direction || r.trend || '—';
-        $('[data-volatility]', page).textContent = r.volatility != null ? Number(r.volatility).toFixed(2) : '—';
-        $('[data-recommended]', page).textContent = r.recommended_strategy || '—';
-        $('[data-structure]', page).textContent = typeof r.structure_insight === 'string' ? r.structure_insight : (r.structure_insight?.trend || '—');
-        $('[data-chart-title]', page).textContent = `${symbol.value} · ${timeframe.value}`;
-        const snapshot = normalise(snapshots)[0];
-        if (snapshot) {
-          $('[data-bid]', page).textContent = snapshot.bid_price ?? snapshot.bid ?? snapshot.price ?? '—';
-          $('[data-ask]', page).textContent = snapshot.ask_price ?? snapshot.ask ?? snapshot.price ?? '—';
-        }
-        const accountsList = normalise(accounts);
-        const account = accountsList.find(x => x.is_default) || accountsList[0];
-        accountId = account?.id || null;
-        const strategiesList = normalise(strategies);
-        if (strategySelect) {
-          const current = strategySelect.value;
-          strategySelect.innerHTML = '<option value="">Manual trade</option>';
-          strategiesList.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.name || item.slug;
-            option.textContent = `${item.name || item.slug}${item.enabled === false ? ' (disabled)' : ''}`;
-            option.disabled = item.enabled === false;
-            strategySelect.appendChild(option);
-          });
-          if (current) strategySelect.value = current;
-        }
-        $('[data-terminal-status]', page).textContent = account?.is_connected ? 'Ready to trade' : 'Broker account required';
-        $('[data-terminal-account]', page).textContent = `Account: ${account?.broker_account_id || 'Not connected'}`;
-        $('[data-risk-check]', page).textContent = account ? 'Pre-trade checks active' : 'Connect broker first';
-      } catch (error) {
-        $('[data-terminal-status]', page).textContent = 'Data unavailable';
-        toast(error.message, 'error');
-      }
-      await Promise.all([loadPositions(page), loadSignals(page), loadOrders(page), accountKPIs()]);
-    };
-
-    async function loadPositions(p) {
-      try {
-        const rows = normalise(await json('/api/positions/open/'));
-        $('[data-positions]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')}</strong><span>${escapeHtml(x.direction || '')}</span><b>${money(x.profit ?? x.pnl ?? x.profit_loss)}</b></div>`).join('') : '<div class="empty-state">No open positions.</div>';
-      } catch { $('[data-positions]', p).innerHTML = '<div class="empty-state">Unable to load positions.</div>'; }
-    }
-    async function loadSignals(p) {
-      try {
-        const rows = normalise(await json(`/api/dashboard/signals/?symbol=${encodeURIComponent(symbol.value)}&limit=8`));
-        $('[data-signals]', p).innerHTML = rows.length ? rows.map(x => `<div class="signal-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')} ${escapeHtml(x.direction || x.signal || 'HOLD')}</strong><span>${escapeHtml(x.strategy || 'Strategy')}</span><b>${pct(x.confidence)}</b></div>`).join('') : '<div class="empty-state">No recent signals.</div>';
-      } catch { $('[data-signals]', p).innerHTML = '<div class="empty-state">No signals available.</div>'; }
-    }
-    async function loadOrders(p) {
-      try {
-        const rows = normalise(await json('/api/orders/')).slice(0, 8);
-        $('[data-orders]', p).innerHTML = rows.length ? rows.map(x => `<div class="mini-row"><strong>${escapeHtml(window.AlgoBotMarketPicker?.marketName({value:x.symbol||'',textContent:x.display_name||x.symbol||''})||x.display_name||'Market instrument')}</strong><span>${escapeHtml(x.direction || '')}</span><b>${escapeHtml(x.status || '')}</b></div>`).join('') : '<div class="empty-state">No orders yet.</div>';
-      } catch { $('[data-orders]', p).innerHTML = '<div class="empty-state">No orders yet.</div>'; }
-    }
-
-    $$('[data-direction]', page).forEach(button => button.addEventListener('click', () => {
-      direction = button.dataset.direction;
-      $$('[data-direction]', page).forEach(item => item.classList.toggle('active', item === button));
-    }));
-
-    $('[data-order-form]', page)?.addEventListener('submit', async event => {
-      event.preventDefault();
-      if (!accountId) { toast('Connect a broker account before trading.', 'error'); return; }
-      const form = new FormData(event.currentTarget);
-      const payload = {
-        broker_account: accountId,
-        symbol: symbol.value,
-        direction,
-        order_type: form.get('order_type'),
-        stake: form.get('stake'),
-        strategy: form.get('strategy') || '',
-        client_request_id: `ui-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`
-      };
-      if (form.get('price')) payload.price = form.get('price');
-      const button = $('.execute-btn', page);
-      button.disabled = true;
-      button.textContent = 'Submitting…';
-      try {
-        const result = await json('/api/orders/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
-          body: JSON.stringify(payload)
-        });
-        const output = $('[data-order-result]', page);
-        output.hidden = false;
-        output.textContent = `Order ${result.id ? `#${result.id}` : ''} ${result.status || 'submitted'}.`;
-        toast('Order submitted to execution engine.', 'success');
-        await load();
-      } catch (error) {
-        toast(`Order rejected: ${error.message}`, 'error');
-      } finally {
-        button.disabled = false;
-        button.textContent = 'Place order';
-      }
-    });
-
-    $('[data-action="terminal-refresh"]', page)?.addEventListener('click', load);
-    symbol?.addEventListener('change', load);
-    timeframe?.addEventListener('change', load);
-    load();
-  }
-
   async function dataPage(page) {
     const id = page.dataset.dataPage;
     const map = {
@@ -400,40 +240,7 @@
     load();
   }
 
-  function theme() {
-    // Theme state is owned by base_shell.js. Keeping a second handler here
-    // caused every click to toggle twice and appear to do nothing.
-  }
-  function shell() {
-    const sidebar = $('.app-sidebar');
-    const accountButton = $('[data-account-menu]');
-    const accountDropdown = $('[data-account-dropdown]');
-    sidebar?.querySelectorAll('a').forEach(link => {
-      const linkPath = new URL(link.href, location.origin).pathname.replace(/\/+$/, '/') || '/';
-      const currentPath = location.pathname.replace(/\/+$/, '/') || '/';
-      if (linkPath === currentPath) link.setAttribute('aria-current', 'page');
-    });
-    const setAccount = open => {
-      if (!accountButton || !accountDropdown) return;
-      accountButton.setAttribute('aria-expanded', String(open));
-      accountDropdown.hidden = !open;
-    };
-    accountButton?.addEventListener('click', event => {
-      event.stopPropagation();
-      setAccount(accountDropdown.hidden);
-    });
-    document.addEventListener('click', event => {
-      if (accountDropdown && !accountDropdown.hidden && !event.target.closest('.account-menu')) setAccount(false);
-    });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') setAccount(false);
-    });
-  }
-
   async function init() {
-    theme();
-    shell();
-    accountMenu();
     $$('.enterprise-page').forEach(page => {
       genericWorkspace(page);
       $('[data-action="refresh"]', page)?.addEventListener('click', () => genericWorkspace(page));
@@ -459,6 +266,5 @@
     $$('.data-page').forEach(dataPage);
   }
 
-  window.addEventListener('resize', () => $$('[data-candle-chart]').forEach(canvas => canvas.__candles && drawCandles(canvas, canvas.__candles)));
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 })();

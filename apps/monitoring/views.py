@@ -4,7 +4,6 @@ from django.db import connection
 from django.db.models import Q
 from django.shortcuts import render
 
-from apps.brokers.models import BrokerAccount, BrokerConnection, Position, Order
 from .models import Alert, Incident, LogEntry, Metric, SystemHealth
 from apps.notifications.models import NotificationChannelConnection
 from .services import MonitoringEngine
@@ -32,45 +31,8 @@ def dashboard(request, template_name="monitoring/dashboard.html"):
             except Exception:
                 health_results.append(None)
 
-    dashboard = engine.dashboard()
-    dashboard.update(
-        trading=engine.trading.snapshot(),
-        strategy=engine.strategy.snapshot(),
-        ai=engine.ai.snapshot(),
-        risk=engine.risk.snapshot(),
-        health_checks=len([result for result in health_results if result is not None]),
-    )
-
-    # Prefer the authenticated user's broker account/connection state.  A
-    # BrokerConnection is linked to a Broker rather than directly to a user,
-    # so scope it through the user's BrokerAccount records.
-    user_accounts = BrokerAccount.objects.filter(user=request.user, status="active")
-    account_ids = user_accounts.values_list("id", flat=True)
-    connection_qs = BrokerConnection.objects.filter(
-        broker_account_id__in=account_ids,
-    ).order_by("-updated_at")
-    latest_connection = connection_qs.first()
-    if connection_qs.filter(status="connected").exists():
-        dashboard["broker_status"] = "connected"
-    elif latest_connection:
-        dashboard["broker_status"] = latest_connection.status
-    else:
-        dashboard["broker_status"] = "not_connected"
-
-    # Keep the headline counters tied to real records instead of hard-coded
-    # placeholders. Orders/positions are scoped to the user's broker accounts.
-    dashboard["current_trades"] = Position.objects.filter(
-        account_id__in=account_ids,
-        status="open",
-    ).count()
-    dashboard["active_alerts"] = Alert.objects.filter(user=request.user).exclude(status="resolved").count()
-    dashboard["open_incidents"] = Incident.objects.filter(
-        Q(assigned_to=request.user) | Q(alert__user=request.user)
-    ).exclude(status="resolved").distinct().count()
-    dashboard["trading"]["pending_orders"] = Order.objects.filter(
-        account_id__in=account_ids,
-        status__in=["created", "pending", "submitted"],
-    ).count()
+    dashboard = engine.dashboard(user=request.user)
+    dashboard["health_checks"] = len([result for result in health_results if result is not None])
 
     # Overall health includes every check shown here; a working database alone
     # must not mask a broken cache or unwritable storage.

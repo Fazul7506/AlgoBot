@@ -37,7 +37,7 @@ class StaffOnlyPermission(permissions.IsAdminUser):
 
 
 class AIModelViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = AIModel.objects.all()
+    queryset = AIModel.objects.order_by("-created_at", "-id")
     serializer_class = AIModelSerializer
     # Model catalog metadata is non-trading; keep it available to authenticated
     # users while gating predictions, recommendations, and execution APIs.
@@ -144,7 +144,7 @@ def model_governance(request):
         "previous_period_feature_vectors": previous_features,
     }
     return response.Response({
-        "models": AIModelSerializer(AIModel.objects.all(), many=True).data,
+        "models": AIModelSerializer(AIModel.objects.order_by("-created_at", "-id"), many=True).data,
         "versions": ModelVersionSerializer(versions, many=True).data,
         "calibration": calibration,
         "performance_7d": performance_7d,
@@ -168,17 +168,20 @@ def train(request):
         return response.Response({"detail": str(exc), "code": "AI_TRAINING_UNAVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
-def _discover_symbol(request):
+def _discover_symbol(request, account=None):
+    """Resolve only symbols active for the selected broker's catalogue."""
     symbol = str(request.data.get("symbol") or "").strip()
+    broker_type = getattr(getattr(account, "broker", None), "broker_type", None)
+    if not broker_type:
+        raise ValueError("Select a connected broker account before choosing an instrument.")
+    catalogue = MarketDataService.symbols.catalogue(
+        broker=broker_type, active=True, tradable=True,
+    )
     if symbol:
-        if not MarketDataService.symbols.catalogue(
-            active=True, tradable=True, symbol=symbol
-        ).exists():
-            raise ValueError("The selected symbol is not an active broker instrument.")
+        if not catalogue.filter(symbol=symbol).exists():
+            raise ValueError("The selected instrument is not supported and tradable for the connected broker account.")
         return symbol
-    return MarketDataService.symbols.catalogue(
-        active=True, tradable=True
-    ).values_list("symbol", flat=True).first()
+    return catalogue.values_list("symbol", flat=True).first()
 
 
 def _connected_account(user, request=None):
@@ -245,12 +248,12 @@ def predict(request):
     if not isinstance(request.data, dict):
         return response.Response({"detail": "A JSON object is required.", "code": "AI_CONTEXT_INVALID"}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        symbol = _discover_symbol(request)
-        if not symbol:
-            return response.Response({"detail": "No active broker market is available. Connect a broker and synchronize markets first.", "code": "NO_ACTIVE_MARKET"}, status=status.HTTP_409_CONFLICT)
         account = _connected_account(request.user, request=request)
         if not account:
             return response.Response({"detail": "Connect a broker before requesting AI analysis.", "code": "NO_CONNECTED_BROKER"}, status=status.HTTP_409_CONFLICT)
+        symbol = _discover_symbol(request, account=account)
+        if not symbol:
+            return response.Response({"detail": "No active tradable instruments are available for the selected broker account. Synchronize its market catalogue first.", "code": "NO_ACTIVE_MARKET"}, status=status.HTTP_409_CONFLICT)
         timeframe = str(request.data.get("timeframe") or "M1").upper()
         raw_context = _persisted_market_context(symbol, timeframe)
         context_source = raw_context.get("market_data", {}).get("source", "persisted_broker_tick") if raw_context else "live_broker_tick"

@@ -34,6 +34,11 @@ const SCHEDULES = {
     task: "apps.ai_engine.tasks.resolve_prediction_outcomes",
     kwargs: { timeframe: "M1", horizon_candles: 1, batch_size: 500 },
   },
+  "backtest-queue-recovery-every-minute": {
+    cron: "* * * * *",
+    task: "apps.backtesting.tasks.reconcile_backtest_queue",
+    kwargs: { limit: 50, pending_after_seconds: 300, running_after_seconds: 3600 },
+  },
   "telegram-watchdog-every-minute": {
     cron: "* * * * *",
     task: "apps.notifications.tasks.telegram_watchdog",

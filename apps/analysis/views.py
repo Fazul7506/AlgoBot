@@ -314,13 +314,13 @@ def analysis_data(request):
             adapter = BrokerRegistry().adapter(active_account.broker, active_account)
             is_tick_history = canonical_timeframe == "tick"
             granularity = None if is_tick_history else int(TIMEFRAMES[canonical_timeframe])
-            request = adapter.get_chart_history(
+            history_request = adapter.get_chart_history(
                 market.symbol,
                 mode="ticks" if is_tick_history else "candles",
                 count=min(max(limit, 50), 1000),
                 granularity=granularity,
             )
-            broker_data = asyncio.run(asyncio.wait_for(request, timeout=8.0))
+            broker_data = asyncio.run(asyncio.wait_for(history_request, timeout=8.0))
             if not isinstance(broker_data, dict) or broker_data.get("symbol") != market.symbol or not isinstance(broker_data.get("items"), list):
                 raise RuntimeError("The connected broker returned an invalid historical-data response.")
             if is_tick_history:
@@ -490,7 +490,7 @@ def analysis_data(request):
                 "source": prediction.payload.get("source"),
             }
         except Exception as exc:
-            log.warning(
+            logger.warning(
                 "Analysis AI inference unavailable",
                 extra={"symbol": market.symbol, "timeframe": canonical_timeframe, "error": str(exc)[:200]},
             )

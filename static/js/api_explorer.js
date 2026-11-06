@@ -192,10 +192,44 @@
   }
 
   function tabs() {
-    $$('[data-tab]').forEach(button => button.addEventListener('click', () => {
-      $$('[data-tab]').forEach(item => item.classList.toggle('active', item === button));
-      $$('[data-panel]').forEach(panel => { panel.hidden = panel.dataset.panel !== button.dataset.tab; });
-    }));
+    const buttons = $$('[data-tab]');
+    const panels = $$('[data-panel]');
+    const activate = (button, focus = false) => {
+      if (!button) return;
+      buttons.forEach(item => {
+        const active = item === button;
+        item.classList.toggle('active', active);
+        item.setAttribute('role', 'tab');
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+        const panel = panels.find(candidate => candidate.dataset.panel === item.dataset.tab);
+        if (panel) {
+          if (!panel.id) panel.id = 'api-panel-' + item.dataset.tab;
+          if (!item.id) item.id = 'api-tab-' + item.dataset.tab;
+          item.setAttribute('aria-controls', panel.id);
+          panel.setAttribute('role', 'tabpanel');
+          panel.setAttribute('aria-labelledby', item.id);
+          panel.hidden = !active;
+        }
+      });
+      if (focus) button.focus();
+    };
+    buttons.forEach(button => button.addEventListener('click', () => activate(button)));
+    const tablist = buttons[0]?.parentElement;
+    tablist?.setAttribute('role', 'tablist');
+    tablist?.addEventListener('keydown', event => {
+      const index = buttons.indexOf(document.activeElement);
+      if (index < 0) return;
+      let next = index;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % buttons.length;
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + buttons.length) % buttons.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = buttons.length - 1;
+      else return;
+      event.preventDefault();
+      activate(buttons[next], true);
+    });
+    activate(buttons.find(button => button.classList.contains('active')) || buttons[0]);
   }
 
   async function boot() {

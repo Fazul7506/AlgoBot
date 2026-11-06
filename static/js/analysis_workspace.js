@@ -33,7 +33,6 @@
     return "Market instrument";
   }
   function iconFor(row){return window.AlgoBotMarketAssets?.renderIcon?.({...row,display_name:marketName(row)})||'<span class="market-avatar market-avatar-unmapped" aria-hidden="true">•</span>';}
-  function updateSelectedMarketIcon(){const select=$("symbol"),icon=$("analysisMarketIcon");if(!select||!icon)return;const row=A.markets.find(item=>String(item.symbol)===String(select.value));icon.innerHTML=row?iconFor(row):"";}
   function cacheKey(symbol,tf,limit){return "algobot:analysis:snapshot:v1:"+[symbol,tf,limit].join(":");}
   function restoreCached(symbol,tf,limit){A.cachedData=null;try{const raw=sessionStorage.getItem(cacheKey(symbol,tf,limit));const data=raw?JSON.parse(raw):null;if(data&&data.symbol===symbol&&Array.isArray(data.last_candles)){A.cachedData=data;A.data=data;render(data);setHealth(false,"SAVED DATA · REFRESHING");set("aFresh","SAVED DATA · NOT LIVE");const hero=$("heroFeedState");if(hero)hero.textContent="Showing saved analysis while refreshing";const stateNode=$("loadState");if(stateNode)stateNode.textContent="Showing last saved analysis; checking for current broker data…";return true;}}catch(_){}return false;}
   function list(id,items,fn,empty="No observed evidence."){const e=$(id);if(e)e.innerHTML=items?.length?items.map(fn).join(""):'<span class="muted">'+esc(empty)+"</span>"}
@@ -46,7 +45,7 @@
       aiState:"UNAVAILABLE",aiDecision:"UNAVAILABLE",aiConfidence:"—",aiModels:"0",aiAgreement:"—",confluenceState:"UNAVAILABLE",confluenceDirection:"WAIT",confluenceScore:"—",
       validationState:"UNAVAILABLE",validationDirection:"WAIT",validationExpiry:"—",noLookAhead:"UNCONFIRMED",marketState:"UNAVAILABLE",marketSource:"—",marketAge:"—",candleCount:"—",
       keyCurrentPrice:"—",resistance1:"—",resistance2:"—",support1:"—",support2:"—",sma20:"—",sma50:"—",sma200:"—",ema:"— / —",rsi:"—",atr:"—",macd:"—",bb:"—",
-      account:"NO VERIFIED ACCOUNT CONTEXT",accountType:"—",currency:"—",balance:"—",riskBudget:"—",stake:"—",provenanceMarket:"—",provenanceCandles:"—",provenanceAnalysis:"—",provenanceExecution:"—",
+      account:"NO VERIFIED ACCOUNT CONTEXT",accountType:"—",currency:"USD",balance:"$0.00",riskBudget:"$0.00",stake:"$0.00",provenanceMarket:"—",provenanceCandles:"—",provenanceAnalysis:"—",provenanceExecution:"—",
       gateState:"BLOCKED",gateReason:"Fresh analysis evidence could not be confirmed.",heroFeedState:"Market feed unavailable",referenceUpdatedAt:"Last update unavailable",aiReason:"No verified AI analysis available"
     };
     Object.entries(values).forEach(([id,value])=>set(id,value));
@@ -182,7 +181,7 @@
     list("fvgs",d.fair_value_gaps,x=>'<div class="evidence-row"><span>'+esc(x.type)+" FVG</span><strong>"+num(x.low)+"–"+num(x.high)+"</strong></div>");
     list("zones",d.supply_demand,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+num(x.low)+"–"+num(x.high)+"</strong></div>");
     list("patterns",d.candlestick_patterns,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+esc(x.bias)+"</strong></div>");
-    set("account",acct.account_id||"NO ACTIVE ACCOUNT");set("accountType",acct.account_type||"—");set("currency",acct.currency||"—");set("balance",money(acct.balance,acct.currency));set("riskBudget",money(acct.risk_budget,acct.currency));set("stake",money(acct.recommended_stake,acct.currency));
+    set("account",acct.account_id||"NO ACTIVE ACCOUNT");set("accountType",acct.account_type||"—");set("currency",acct.currency||"USD");set("balance",money(acct.balance,acct.currency));set("riskBudget",money(acct.risk_budget,acct.currency));set("stake",money(acct.recommended_stake,acct.currency));
     set("provenanceMarket",d.data_provenance?.broker||"—");set("provenanceCandles",d.data_provenance?.candle_source||"—");set("provenanceAnalysis","AlgoBot technical + AI pipeline");set("provenanceExecution","Broker only");
     drawChart(d.last_candles||[]); drawIndicators(d.last_candles||[]);
   }
@@ -232,7 +231,7 @@
       list("predictionRows",[],()=>"", "No verified AI prediction is available.");
       list("sentimentNewsRows",[],()=>"", "No verified sentiment or news feed is available.");
       set("keyCurrentPrice","—");set("resistance1","—");set("resistance2","—");set("support1","—");set("support2","—");
-      set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
+      set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","USD");set("balance","$0.00");set("riskBudget","$0.00");set("stake","$0.00");
       drawChart([]); drawIndicators([]);
     } finally {
       if(A.requestController===controller)A.requestController=null;
@@ -261,7 +260,6 @@
       const requested=new URLSearchParams(location.search).get("symbol");
       select.value=[previous,requested,A.markets[0].symbol].find(value=>A.markets.some(row=>row.symbol===value))||A.markets[0].symbol;
       select.disabled=false;
-      updateSelectedMarketIcon();
       const tf=$("timeframe").value,limit=$("limit").value,restored=restoreCached(select.value,tf,limit);
       showCatalogueStatus(payload?.stale===true?"Showing the last known broker catalogue; live refresh is unavailable.":"");
       void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});
@@ -281,7 +279,7 @@
     $("prepareState").textContent="BLOCKED: "+(A.data.execution_gate?.reason||"Execution gates are not confirmed.");
   }
   function boot(){
-    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{updateSelectedMarketIcon();const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
+    ["symbol","timeframe","limit"].forEach(id=>$(id)?.addEventListener("change",()=>{const restored=restoreCached($("symbol").value,$("timeframe").value,$("limit").value);void load(restored?{refreshMarket:true,backgroundRefresh:true,refreshAccount:false}:{});}));
     $("refresh")?.addEventListener("click",()=>{if(!A.markets.length){void markets({forceRefresh:true});return;}void load({refreshAccount:false,refreshMarket:true});});$("prepare")?.addEventListener("click",prepare);
     const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});

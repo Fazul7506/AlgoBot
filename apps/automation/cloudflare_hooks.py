@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 # Deliberately allowlisted: never accept arbitrary task names from a public webhook.
 ALLOWED_TASKS = {
     "apps.automation.tasks.process_due_scheduled_tasks": {"limit"},
+    "apps.backtesting.tasks.reconcile_backtest_queue": {"limit", "pending_after_seconds", "running_after_seconds"},
     "apps.execution.process_execution_queue": {"batch_size"},
     "apps.ai_engine.tasks.check_ai_data_health": {"timeframe"},
     "apps.ai_engine.tasks.check_model_degradation": set(),
@@ -29,6 +30,7 @@ ALLOWED_TASKS = {
 }
 ALLOWED_SCHEDULES = {
     "automation-due-schedules-every-30-seconds": "apps.automation.tasks.process_due_scheduled_tasks",
+    "backtest-queue-recovery-every-minute": "apps.backtesting.tasks.reconcile_backtest_queue",
     "execution-queue-recovery-every-30-seconds": "apps.execution.process_execution_queue",
     "ai-data-health-every-15-minutes": "apps.ai_engine.tasks.check_ai_data_health",
     "ai-model-degradation-every-15-minutes": "apps.ai_engine.tasks.check_model_degradation",
@@ -68,6 +70,15 @@ def _validate_kwargs(task_name: str, kwargs: object) -> dict | None:
         isinstance(clean["horizon_candles"], bool) or not isinstance(clean["horizon_candles"], int) or not 1 <= clean["horizon_candles"] <= 100
     ):
         return None
+    for key, minimum, maximum in (
+        ("pending_after_seconds", 60, 86_400),
+        ("running_after_seconds", 300, 86_400),
+    ):
+        if key in clean and (
+            isinstance(clean[key], bool) or not isinstance(clean[key], int)
+            or not minimum <= clean[key] <= maximum
+        ):
+            return None
     if "timeframe" in clean and (
         not isinstance(clean["timeframe"], str) or clean["timeframe"] not in ALLOWED_TIMEFRAMES
     ):

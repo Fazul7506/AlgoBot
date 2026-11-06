@@ -1,4 +1,4 @@
-"""Provider-neutral payment integration for IntaSend and Pesapal."""
+"""Provider-neutral payment integration for IntaSend, Pesapal and PayPal."""
 from __future__ import annotations
 
 import logging
@@ -25,6 +25,8 @@ class PaymentService:
 
     INTASEND = "intasend"
     PESAPAL = "pesapal"
+    PAYPAL = "paypal"
+    PAYPAL_SUPPORTED_CURRENCIES = {"AUD", "CAD", "CZK", "DKK", "EUR", "HKD", "ILS", "MXN", "NZD", "NOK", "PHP", "PLN", "GBP", "SGD", "SEK", "CHF", "THB", "USD"}
 
     def __init__(self):
         self.provider = str(getattr(settings, "PAYMENT_PROVIDER", self.INTASEND)).lower().strip()
@@ -38,6 +40,12 @@ class PaymentService:
         self.pesapal_consumer_secret = getattr(settings, "PESAPAL_CONSUMER_SECRET", "")
         self.pesapal_notification_id = getattr(settings, "PESAPAL_NOTIFICATION_ID", "")
         self.pesapal_base_url = getattr(settings, "PESAPAL_API_BASE_URL", "https://pay.pesapal.com/v3").rstrip("/")
+        self.paypal_client_id = str(getattr(settings, "PAYPAL_CLIENT_ID", "") or "").strip()
+        self.paypal_client_secret = str(getattr(settings, "PAYPAL_CLIENT_SECRET", "") or "").strip()
+        self.paypal_webhook_id = str(getattr(settings, "PAYPAL_WEBHOOK_ID", "") or "").strip()
+        self.paypal_mode = str(getattr(settings, "PAYPAL_MODE", "sandbox") or "sandbox").lower().strip()
+        self.paypal_billing_currency = str(getattr(settings, "PAYPAL_BILLING_CURRENCY", "USD") or "USD").upper().strip()
+        self.paypal_base_url = str(getattr(settings, "PAYPAL_API_BASE_URL", "") or ("https://api-m.paypal.com" if self.paypal_mode == "live" else "https://api-m.sandbox.paypal.com")).rstrip("/")
         # A malformed deployment value must not make every checkout fail
         # before a request reaches the selected provider.
         self.timeout = self._request_timeout(getattr(settings, "PAYMENT_HTTP_TIMEOUT", 20))
@@ -49,10 +57,16 @@ class PaymentService:
             return self.create_intasend_checkout(user, subscription_plan)
         if selected == self.PESAPAL:
             return self.create_pesapal_checkout(user, subscription_plan)
+        if selected == self.PAYPAL:
+            return self.create_paypal_checkout(user, subscription_plan)
         return {"url": "", "provider": selected, "error": "Unsupported payment provider"}
 
     def create_intasend_checkout(self, user, subscription_plan):
-        if bool(getattr(subscription_plan, "recurring", False)):
+        amount, currency = self._amount_and_currency(subscription_plan)
+        # IntaSend subscription plans support only selected African local
+        # currencies; USD is supported by its hosted collections checkout.
+        # Do not send USD to the recurring-plan endpoint (it rejects it).
+        if bool(getattr(subscription_plan, "recurring", False)) and currency.upper() != "USD":
             return self.create_intasend_subscription(user, subscription_plan)
 
         if not self.intasend_public_key:
@@ -61,7 +75,6 @@ class PaymentService:
         if environment_error:
             logger.error("IntaSend environment configuration mismatch: %s", environment_error)
             return {"url": "", "provider": self.INTASEND, "error": environment_error}
-        amount, currency = self._amount_and_currency(subscription_plan)
         # The billing view creates an internal reference before it persists the
         # invoice.  Reusing it here is essential: IntaSend returns this value
         # in its webhook/redirect payload, and generating another value would
@@ -331,14 +344,10 @@ class PaymentService:
             return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
 
     def _intasend_subscription_api_base_url(self):
-        """Return the configured IntaSend API base for recurring subscriptions.
+        """Return the configured IntaSend API base for legacy subscriptions.
 
-        Do not silently rewrite the deployment's API host. IntaSend's current
-        documentation is inconsistent: the generic authentication page uses
-        ``payment.intasend.com`` while the subscription API reference publishes
-        ``api.intasend.com``. The application must honor the explicitly
-        configured endpoint so a provider-side host mismatch is observable
-        instead of becoming an opaque timeout.
+        New collection checkout uses the documented api.intasend.com host for
+        both test/live keys; the key determines the environment.
         """
         return self.intasend_base_url
 
@@ -413,6 +422,227 @@ class PaymentService:
             logger.exception("Pesapal checkout request failed")
             return {"url": "", "provider": self.PESAPAL, "error": "Payment provider is temporarily unreachable. Please try again."}
 
+    def paypal_price_for_plan(self, plan_name):
+        name = str(plan_name or "").upper().strip()
+        if name not in {"BASIC", "PRO", "ENTERPRISE"} or self.paypal_billing_currency != "USD":
+            return None
+        # All providers share one authoritative USD price catalogue.
+        value = getattr(settings, f"ALGOBOT_{name}_PRICE_CENTS", None)
+        try:
+            cents = int(value)
+        except (TypeError, ValueError):
+            return None
+        return {"price_cents": cents, "currency": self.paypal_billing_currency} if cents > 0 else None
+
+    def paypal_api_base_url_is_valid(self):
+        parsed = urlsplit(self.paypal_base_url)
+        expected_host = "api-m.paypal.com" if self.paypal_mode == "live" else "api-m.sandbox.paypal.com"
+        return bool(
+            self.paypal_mode in {"sandbox", "live"}
+            and parsed.scheme == "https"
+            and parsed.hostname == expected_host
+            and parsed.port is None
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.path in {"", "/"}
+            and not parsed.query
+            and not parsed.fragment
+        )
+
+    def paypal_is_configured(self):
+        return bool(
+            self.paypal_client_id and self.paypal_client_secret and self.paypal_webhook_id
+            and self.paypal_api_base_url_is_valid()
+            and self.paypal_billing_currency in self.PAYPAL_SUPPORTED_CURRENCIES
+        )
+
+    def create_paypal_checkout(self, user, subscription_plan):
+        """Create a server-priced PayPal Orders v2 CAPTURE order."""
+        if not self.paypal_client_id:
+            return self._configuration_error("PAYPAL_CLIENT_ID")
+        if not self.paypal_client_secret:
+            return self._configuration_error("PAYPAL_CLIENT_SECRET")
+        if not self.paypal_webhook_id:
+            return self._configuration_error("PAYPAL_WEBHOOK_ID")
+        if not self.paypal_api_base_url_is_valid():
+            return {"url": "", "provider": self.PAYPAL, "error": "PayPal API URL does not match the selected sandbox/live environment."}
+        amount, currency = self._amount_and_currency(subscription_plan)
+        if amount <= 0 or currency not in self.PAYPAL_SUPPORTED_CURRENCIES:
+            return {"url": "", "provider": self.PAYPAL, "error": f"PayPal does not support {currency or 'the configured currency'}. Configure a supported PayPal billing currency and explicit plan prices."}
+        reference = str(getattr(subscription_plan, "reference", "") or self._reference("PY", user, subscription_plan))
+        return_url = self._callback_url("PAYPAL_RETURN_URL", "/payments/paypal/return/")
+        cancel_url = self._callback_url("PAYPAL_CANCEL_URL", "/billing/cancel/", {"provider": self.PAYPAL})
+        token = self._paypal_access_token()
+        if not token:
+            return {"url": "", "provider": self.PAYPAL, "error": "Unable to authenticate with PayPal."}
+        payload = {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": str(getattr(subscription_plan, "plan", "SUBSCRIPTION"))[:64],
+                "custom_id": reference,
+                "invoice_id": reference[:127],
+                "description": f"AlgoBot {getattr(subscription_plan, 'plan', subscription_plan)} subscription"[:127],
+                "amount": {"currency_code": currency.upper(), "value": self._decimal_string(amount)},
+            }],
+            "payment_source": {"paypal": {"experience_context": {
+                "brand_name": "AlgoBot", "shipping_preference": "NO_SHIPPING",
+                "user_action": "PAY_NOW", "return_url": return_url, "cancel_url": cancel_url,
+            }}},
+        }
+        try:
+            response = requests.post(
+                f"{self.paypal_base_url}/v2/checkout/orders", json=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                         "Accept": "application/json", "PayPal-Request-Id": str(getattr(subscription_plan, "provider_request_id", "") or reference)[:108]},
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            if not response.ok:
+                logger.warning("PayPal create order rejected status=%s", response.status_code)
+                return {"url": "", "provider": self.PAYPAL, "error": self._checkout_http_error(self.PAYPAL, response.status_code, data)}
+            order_id = str(data.get("id") or "").strip()
+            links = data.get("links") if isinstance(data.get("links"), list) else []
+            approval = next((item.get("href") for item in links if isinstance(item, dict) and item.get("rel") in {"payer-action", "approve"}), "")
+            if not order_id or not self._is_paypal_approval_url(approval):
+                return {"url": "", "provider": self.PAYPAL, "error": "PayPal returned incomplete checkout information."}
+            return {"provider": self.PAYPAL, "session_id": order_id, "order_id": order_id, "reference": reference, "url": approval}
+        except requests.RequestException:
+            logger.warning("PayPal create order transport failed", exc_info=True)
+            return {"url": "", "provider": self.PAYPAL, "error": "PayPal is temporarily unavailable. Please try again."}
+
+    def _paypal_access_token(self):
+        if not self.paypal_client_id or not self.paypal_client_secret or not self.paypal_api_base_url_is_valid():
+            return None
+        cache_key = f"algobot:paypal:access_token:{self.paypal_mode}"
+        try:
+            cached = cache.get(cache_key)
+            if cached:
+                return str(cached)
+        except Exception:
+            logger.warning("PayPal token cache unavailable; requesting a fresh token")
+        try:
+            response = requests.post(
+                f"{self.paypal_base_url}/v1/oauth2/token",
+                data={"grant_type": "client_credentials"},
+                auth=(self.paypal_client_id, self.paypal_client_secret),
+                headers={"Accept": "application/json", "Accept-Language": "en_US"},
+                timeout=self.timeout,
+            )
+            data = self._json_or_error(response)
+            token = data.get("access_token") if response.ok and isinstance(data, dict) else None
+            if token:
+                try:
+                    cache.set(cache_key, token, timeout=max(60, int(data.get("expires_in", 300)) - 60))
+                except Exception:
+                    logger.warning("PayPal token cache write failed")
+            else:
+                logger.warning("PayPal OAuth failed status=%s", response.status_code)
+            return token
+        except requests.RequestException:
+            logger.warning("PayPal OAuth request failed", exc_info=True)
+            return None
+
+    def get_paypal_order(self, order_id):
+        token = self._paypal_access_token()
+        if not token or not order_id or not str(order_id).isalnum():
+            return None
+        try:
+            response = requests.get(f"{self.paypal_base_url}/v2/checkout/orders/{order_id}",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}, timeout=self.timeout)
+            data = self._json_or_error(response)
+            return data if response.ok and isinstance(data, dict) else None
+        except requests.RequestException:
+            logger.warning("PayPal order lookup failed", exc_info=True)
+            return None
+
+    def capture_paypal_order(self, order_id):
+        """Capture only an approved order that maps to an existing local invoice."""
+        from core.models import Invoice
+        from core.services.payment_reconciler import PaymentReconciler
+        order_id = str(order_id or "").strip()
+        if not order_id or not order_id.isalnum():
+            return {"paid": False, "state": "INVALID_ORDER"}
+        order = self.get_paypal_order(order_id)
+        if not order:
+            return {"paid": False, "state": "PROVIDER_UNAVAILABLE"}
+        units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
+        unit = units[0] if units and isinstance(units[0], dict) else {}
+        reference = str(unit.get("custom_id") or unit.get("invoice_id") or "").strip()
+        invoice = Invoice.objects.filter(metadata__reference=reference, metadata__provider=self.PAYPAL).first() if reference else None
+        if not invoice:
+            return {"paid": False, "state": "UNMATCHED_ORDER"}
+        amount = (unit.get("amount") or {})
+        if str(amount.get("currency_code", "")).upper() != str(invoice.currency).upper() or self._decimal_string(Decimal(str(amount.get("value", "0")))) != self._decimal_string(Decimal(invoice.amount_cents) / Decimal("100")):
+            return {"paid": False, "state": "ORDER_AMOUNT_MISMATCH"}
+        status = str(order.get("status") or "").upper()
+        if status == "APPROVED":
+            token = self._paypal_access_token()
+            if not token:
+                return {"paid": False, "state": "PROVIDER_UNAVAILABLE"}
+            try:
+                response = requests.post(f"{self.paypal_base_url}/v2/checkout/orders/{order_id}/capture", json={},
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                             "Accept": "application/json", "PayPal-Request-Id": f"capture-{order_id}"[:108]}, timeout=self.timeout)
+                captured = self._json_or_error(response)
+                if not response.ok or not isinstance(captured, dict):
+                    logger.warning("PayPal capture failed status=%s", response.status_code)
+                    return {"paid": False, "state": "CAPTURE_FAILED"}
+                order = captured
+                status = str(order.get("status") or "").upper()
+            except requests.RequestException:
+                logger.warning("PayPal capture transport failed", exc_info=True)
+                return {"paid": False, "state": "CAPTURE_UNKNOWN"}
+        capture_list = (((order.get("purchase_units") or [{}])[0].get("payments") or {}).get("captures") or [])
+        capture = next((item for item in capture_list if isinstance(item, dict)), {})
+        capture_id = str(capture.get("id") or "").strip()
+        capture_status = str(capture.get("status") or status).upper()
+        capture_amount = capture.get("amount") if isinstance(capture.get("amount"), dict) else {}
+        if not capture_id:
+            return {"paid": False, "state": capture_status or "CAPTURE_PENDING"}
+        if not capture_amount.get("value") or not capture_amount.get("currency_code"):
+            return {"paid": False, "state": "CAPTURE_DETAILS_INCOMPLETE"}
+        result = PaymentReconciler.reconcile(
+            provider=self.PAYPAL, external_id=capture_id, status=capture_status,
+            amount=capture_amount.get("value"),
+            currency=capture_amount.get("currency_code"),
+            metadata={"reference": reference, "user_id": invoice.user_id,
+                      "plan": (invoice.metadata or {}).get("plan"), "order_id": order_id},
+            require_existing_invoice=True,
+        )
+        invoice.refresh_from_db()
+        invoice.metadata = {**(invoice.metadata or {}), "paypal_order_id": order_id, "paypal_capture_id": capture_id}
+        invoice.save(update_fields=["metadata"])
+        return {"paid": bool(invoice.paid), "state": capture_status, "invoice": invoice, "reconciled": result, "capture_id": capture_id}
+
+    def verify_paypal_webhook(self, headers, event):
+        token = self._paypal_access_token()
+        if not token or not self.paypal_webhook_id:
+            return False
+        payload = {
+            "transmission_id": headers.get("paypal-transmission-id", ""),
+            "transmission_time": headers.get("paypal-transmission-time", ""),
+            "cert_url": headers.get("paypal-cert-url", ""),
+            "auth_algo": headers.get("paypal-auth-algo", ""),
+            "transmission_sig": headers.get("paypal-transmission-sig", ""),
+            "webhook_id": self.paypal_webhook_id, "webhook_event": event,
+        }
+        if not all(payload[key] for key in ("transmission_id", "transmission_time", "cert_url", "auth_algo", "transmission_sig")):
+            return False
+        try:
+            response = requests.post(f"{self.paypal_base_url}/v1/notifications/verify-webhook-signature", json=payload,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"}, timeout=self.timeout)
+            data = self._json_or_error(response)
+            return bool(response.ok and isinstance(data, dict) and data.get("verification_status") == "SUCCESS")
+        except requests.RequestException:
+            logger.warning("PayPal webhook verification request failed", exc_info=True)
+            return False
+
+    def _is_paypal_approval_url(self, value):
+        parsed = urlsplit(str(value or "").strip())
+        host = (parsed.hostname or "").lower().rstrip(".")
+        expected_host = "www.paypal.com" if self.paypal_mode == "live" else "www.sandbox.paypal.com"
+        return parsed.scheme == "https" and host == expected_host and parsed.username is None and parsed.password is None
+
     def handle_webhook(self, payload: bytes | dict, sig_header: str = "", provider: str | None = None) -> Optional[dict]:
         """Compatibility entry point that delegates to the canonical reconciler."""
         from core.services.payment_reconciler import PaymentReconciler
@@ -421,6 +651,8 @@ class PaymentService:
             return PaymentReconciler.handle_intasend_webhook(payload)
         if selected == self.PESAPAL:
             return PaymentReconciler.handle_pesapal_webhook(payload)
+        if selected == self.PAYPAL:
+            return PaymentReconciler.handle_paypal_webhook(payload)
         logger.warning("Received webhook for unsupported provider %s", selected)
         return None
 
@@ -518,7 +750,7 @@ class PaymentService:
             logger.error("IntaSend subscription cancellation failed: %s", exc)
             return {"ok": False, "status": "network_error"}
 
-    def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
+    def create_invoice_record(self, user, amount_cents: int, currency: str = "USD"):
         from core.models import Invoice
         return Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)
 
@@ -554,12 +786,12 @@ class PaymentService:
 
     def _amount_and_currency(self, subscription_plan):
         raw_amount = getattr(subscription_plan, "price_cents", 0) if not isinstance(subscription_plan, str) else 0
-        currency = getattr(subscription_plan, "currency", "KES") if not isinstance(subscription_plan, str) else "KES"
+        currency = getattr(subscription_plan, "currency", "USD") if not isinstance(subscription_plan, str) else "USD"
         try:
             amount = Decimal(str(raw_amount or 0)) / Decimal("100")
         except (InvalidOperation, ValueError):
             amount = Decimal("0")
-        return amount, str(currency or "KES")
+        return amount, str(currency or "USD")
 
     def _base_url(self):
         raw = str(getattr(settings, "BASE_URL", "") or "").strip().strip('"').strip("'")
@@ -627,16 +859,19 @@ class PaymentService:
 
     def _intasend_environment_error(self):
         key = str(self.intasend_public_key or "").strip().lower()
-        base_host = (urlsplit(str(self.intasend_base_url or "")).hostname or "").lower()
-        is_sandbox = base_host == "sandbox.intasend.com" or base_host.endswith(".sandbox.intasend.com")
-        is_live = base_host in {"api.intasend.com", "payment.intasend.com"} or (base_host.endswith(".intasend.com") and not is_sandbox)
+        base_host = (urlsplit(str(self.intasend_base_url or "")).hostname or "").lower().rstrip(".")
         key_environment = "sandbox" if "test" in key else "live" if "live" in key else "unknown"
-        if key_environment == "sandbox" and not is_sandbox:
-            return "IntaSend test credentials require the IntaSend sandbox API URL."
-        if key_environment == "live" and not is_live:
-            return "IntaSend live credentials require the IntaSend live API URL."
-        if base_host and not (is_sandbox or is_live):
-            return "IntaSend API URL is not a recognized live or sandbox endpoint."
+        # Current IntaSend docs use api.intasend.com for both environments;
+        # the publishable key selects sandbox vs live. Legacy environment hosts
+        # remain accepted only when their key environment matches.
+        if key_environment == "unknown":
+            return "IntaSend public key must be an explicit test or live key."
+        if base_host == "sandbox.intasend.com" and key_environment != "sandbox":
+            return "IntaSend live credentials require the live API URL."
+        if base_host == "payment.intasend.com" and key_environment != "live":
+            return "IntaSend test credentials require the sandbox API URL."
+        if base_host not in {"api.intasend.com", "sandbox.intasend.com", "payment.intasend.com"}:
+            return "IntaSend API URL is not a recognized official endpoint."
         return ""
 
     @staticmethod
@@ -717,15 +952,15 @@ class PaymentService:
             diagnostic["exception"] = type(exception).__name__
         logger.error("payment_provider_diagnostic=%s", diagnostic)
 
-    def _is_checkout_url(self, value, provider):
+    def _is_checkout_url(self, value, provider=PESAPAL):
         parsed = urlsplit(str(value or "").strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             return False
         host = parsed.hostname.lower().rstrip(".")
         if provider == self.INTASEND:
-            base_host = (urlsplit(self._intasend_subscription_api_base_url()).hostname or "").lower().rstrip(".")
-            allowed = {"payment.intasend.com", "sandbox.intasend.com"}
-            return host in allowed and ((base_host == "sandbox.intasend.com" and host == "sandbox.intasend.com") or (base_host != "sandbox.intasend.com" and host == "payment.intasend.com"))
+            key = str(self.intasend_public_key or "").strip().lower()
+            expected_host = "sandbox.intasend.com" if "test" in key else "payment.intasend.com" if "live" in key else ""
+            return bool(expected_host and host == expected_host)
         if provider == self.PESAPAL:
             base_host = (urlsplit(self.pesapal_base_url).hostname or "").lower().rstrip(".")
             return host == base_host

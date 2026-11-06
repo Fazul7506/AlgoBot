@@ -232,4 +232,5 @@ class DeveloperPlatformTests(TestCase):
 
         explorer = session.get("/developer/api/explorer/")
         self.assertEqual(explorer.status_code, 200)
-        self.assertIn("20261019-api3", explorer.content.decode())
+        self.assertIn("20261104-accessible-tabs1", explorer.content.decode())
+        self.assertRegex(explorer.content.decode(), r"developer_api_hardening\.css\?v=[A-Za-z0-9_-]+")

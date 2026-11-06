@@ -335,3 +335,97 @@ def calculate_statistics(trades):
 def run_benchmark_analysis(strategy_stats, benchmarks=None):
     from .services import BenchmarkService
     return BenchmarkService().compare(strategy_stats, benchmarks=benchmarks or ('buy_hold', 'random_entries', 'baseline', 'previous_version', 'ai_strategy', 'portfolio'))
+
+
+@_task
+def reconcile_backtest_queue(limit=50, pending_after_seconds=300, running_after_seconds=3600):
+    """Recover lost queued messages and close abandoned worker leases.
+
+    Backtest rows remain the source of truth. The durable cluster-job row is
+    used to republish pending work after a broker/worker interruption; worker
+    claims and result-version fencing make duplicate deliveries harmless.
+    """
+    from datetime import timedelta
+    from django.db import transaction
+    from django.utils import timezone
+    from .models import Backtest, BacktestClusterJob
+
+    now = timezone.now()
+    limit = min(100, max(1, int(limit)))
+    pending_cutoff = now - timedelta(seconds=max(60, int(pending_after_seconds)))
+    running_cutoff = now - timedelta(seconds=max(300, int(running_after_seconds)))
+    recovered_ids = []
+    timed_out = 0
+
+    with transaction.atomic():
+        stale_running = list(
+            BacktestClusterJob.objects.select_for_update()
+            .select_related("backtest")
+            .filter(status="running", locked_at__isnull=False, locked_at__lte=running_cutoff)
+            .order_by("locked_at")[:limit]
+        )
+        for job in stale_running:
+            backtest = Backtest.objects.select_for_update().filter(
+                pk=job.backtest_id, status="running"
+            ).first()
+            if backtest is None:
+                current_status = job.backtest.status
+                job.status = current_status if current_status in {"pending", "running", "completed", "failed", "cancelled"} else "failed"
+                job.locked_at = None
+                job.save(update_fields=["status", "locked_at"])
+                continue
+            backtest.status = "failed"
+            backtest.result_snapshot = {
+                "status": "failed",
+                "code": "BACKTEST_WORKER_TIMEOUT",
+                "error": "The backtest worker stopped reporting progress before the run completed.",
+                "user_message": "This historical test did not finish. You can retry it safely.",
+                "failure_source": "worker_timeout",
+                "start_date": backtest.start_date.isoformat(),
+                "end_date": backtest.end_date.isoformat(),
+            }
+            backtest.save(update_fields=["status", "result_snapshot", "updated_at"])
+            job.status = "failed"
+            job.locked_at = None
+            job.save(update_fields=["status", "locked_at"])
+            timed_out += 1
+
+        pending_jobs = list(
+            BacktestClusterJob.objects.select_for_update()
+            .select_related("backtest")
+            .filter(status="pending", scheduled_at__lte=pending_cutoff, backtest__status="pending")
+            .order_by("-priority", "scheduled_at")[:limit]
+        )
+        for job in pending_jobs:
+            job.scheduled_at = now
+            job.save(update_fields=["scheduled_at"])
+            recovered_ids.append(job.backtest_id)
+
+    from .tasks import execute_backtest
+    published = 0
+    failed = 0
+    for backtest_id in recovered_ids:
+        try:
+            execute_backtest.apply_async(args=(backtest_id,), retry=False)
+            published += 1
+        except Exception:
+            log.exception("BACKTEST_QUEUE_RECOVERY_PUBLISH_FAILED backtest_id=%s", backtest_id)
+            with transaction.atomic():
+                backtest = Backtest.objects.select_for_update().filter(
+                    pk=backtest_id, status="pending"
+                ).first()
+                if backtest is not None:
+                    backtest.status = "failed"
+                    backtest.result_snapshot = {
+                        "status": "failed",
+                        "code": "BACKTEST_QUEUE_UNAVAILABLE",
+                        "user_message": "The historical test could not be queued. Please retry when the worker is available.",
+                        "failure_source": "queue_recovery",
+                    }
+                    backtest.save(update_fields=["status", "result_snapshot", "updated_at"])
+                    BacktestClusterJob.objects.filter(backtest_id=backtest_id).update(
+                        status="failed", locked_at=None
+                    )
+            failed += 1
+
+    return {"requeued": published, "failed_to_requeue": failed, "timed_out": timed_out}

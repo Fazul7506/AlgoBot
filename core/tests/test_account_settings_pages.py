@@ -218,8 +218,10 @@ class AccountSettingsPagesTests(TestCase):
     def test_preferences_page_uses_the_shared_session_bound_api_client(self):
         settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
         api_contract = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "frontend_data_contract.js").read_text()
-        self.assertIn("window.AlgoBotFrontendData", settings_template)
-        self.assertNotIn("fetch('/api/settings/'", settings_template)
+        preferences_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "settings_preferences.js").read_text()
+        self.assertIn("settings_preferences.js", settings_template)
+        self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertNotIn("fetch('/api/settings/'", preferences_script)
         self.assertIn("path==='/api/settings/'", api_contract)
 
     def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
@@ -245,8 +247,9 @@ class AccountSettingsPagesTests(TestCase):
         response = self.client.get(reverse("settings_page"))
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
-        self.assertIn("account_preferences_global.css?v=20261101-global-theme-compatibility3", html)
-        self.assertIn("localStorage.getItem('algobot-theme')", html)
+        self.assertIn("account_preferences_global.css", html)
+        self.assertIn('localStorage.getItem("algobot-theme-preference")', html)
+        self.assertIn('localStorage.getItem("algobot-theme")', html)
         css = (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text()
         for theme in ("dark", "light"):
             self.assertIn(f'html[data-theme="{theme}"]', css)
@@ -331,7 +334,7 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertContains(response, "data-account-settings")
                 self.assertContains(response, "Login &amp; Identity")
                 html = response.content.decode("utf-8")
-                self.assertIn("account_preferences_global.css?v=20261101-global-theme-compatibility3", html)
+                self.assertIn("account_preferences_global.css", html)
                 nav_match = re.search(r'<nav class="account-nav"[^>]*>(.*?)</nav>', html, re.DOTALL)
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
@@ -456,6 +459,33 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(read_back["profile"]["account_preferences"]["density"], "comfortable")
         self.assertEqual(read_back["profile"]["account_preferences"]["default_page"], "markets")
 
+    def test_theme_choices_survive_reload_and_a_fresh_login(self):
+        for theme in ("light", "dark", "system"):
+            with self.subTest(theme=theme):
+                response = self.client.patch(
+                    reverse("account_settings_api"),
+                    data=json.dumps({"preferences": {"theme": theme}}),
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 200, response.content)
+                self.user.refresh_from_db()
+                self.assertEqual(UserProfile.objects.get(user=self.user).account_preferences["theme"], theme)
+
+                # A fresh GET must return the account's saved value, not a browser default.
+                read_back = self.client.get(reverse("account_settings_api"))
+                self.assertEqual(read_back.status_code, 200)
+                self.assertEqual(read_back.json()["profile"]["account_preferences"]["theme"], theme)
+
+                # Re-authenticating must not reset the persisted account preference.
+                self.client.logout()
+                self.assertTrue(self.client.login(
+                    username="profile-editor",
+                    password="A-strong-test-password-123!",
+                ))
+                after_login = self.client.get(reverse("account_settings_api"))
+                self.assertEqual(after_login.status_code, 200)
+                self.assertEqual(after_login.json()["profile"]["account_preferences"]["theme"], theme)
+
     def test_settings_api_rejects_unsupported_preference_without_partial_write(self):
         response = self.client.patch(
             reverse("account_settings_api"),
@@ -507,6 +537,23 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("color:var(--muted)", security_css)
 
 
+    def test_preferences_bootstrap_waits_for_deferred_shared_api_client(self):
+        base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
+        settings_template = (Path(__file__).resolve().parents[2] / "templates/core/settings.html").read_text()
+        preferences_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "settings_preferences.js").read_text()
+        self.assertIn("settings_preferences.js", settings_template)
+        self.assertIn(" defer></script>", settings_template)
+        self.assertNotIn("const initializePreferences = () =>", settings_template)
+        self.assertIn("const initializePreferences = () =>", preferences_script)
+        self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertIn("client.request('/api/settings/'", preferences_script)
+        self.assertIn("document.addEventListener('DOMContentLoaded', initializePreferences, {once: true})", preferences_script)
+        self.assertLess(
+            base_template.index("frontend_data_contract.js"),
+            base_template.index("{% block extra_js %}"),
+            "The shared API contract must be loaded before page-specific deferred scripts.",
+        )
+
     def test_theme_preference_bootstrap_preserves_system_choice_across_navigation(self):
         base_template = (Path(__file__).resolve().parents[2] / "templates/base.html").read_text()
         shell_script = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text()
@@ -515,9 +562,12 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("prefers-color-scheme: light", base_template)
         self.assertIn("algobot-theme-preference", shell_script)
         self.assertIn("algobot:preferences-loaded", shell_script)
-        self.assertIn("savedTheme=localStorage.getItem", shell_script)
+        self.assertIn("const initial=validThemes.has(storedPreference)", shell_script)
+        self.assertIn("client.request", shell_script)
+        self.assertNotIn("fetch('/api/settings/'", shell_script)
         self.assertIn("syncSystemTheme", shell_script)
-        self.assertIn("const effectiveTheme", settings_template)
-        self.assertIn("detail: resolvedPreferences", settings_template)
+        preferences_script = (Path(__file__).resolve().parents[2] / "static/js/core/settings_preferences.js").read_text()
+        self.assertIn("const effectiveTheme", preferences_script)
+        self.assertIn("detail: resolvedPreferences", preferences_script)
         self.assertIn("Final cross-workspace light palette", (Path(__file__).resolve().parents[2] / "static/css/account_preferences_global.css").read_text())
-        self.assertIn("algobot-theme-preference", settings_template)
+        self.assertIn("algobot-theme-preference", base_template)

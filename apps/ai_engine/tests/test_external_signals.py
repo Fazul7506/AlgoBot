@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -32,10 +33,11 @@ class ExternalMarketSignalTests(SimpleTestCase):
             normalize_orderbook({"bids": [], "asks": [[100.0, 1.0]]})
 
 
-    def test_orderbook_ingestion_requires_an_explicit_provider_symbol_allowlist(self):
+    def test_custom_orderbook_provider_requires_an_explicit_symbol_allowlist(self):
         with patch.dict(
             "os.environ",
             {
+                "ORDER_BOOK_PROVIDER": "custom",
                 "ORDER_BOOK_API_URL": "https://provider.example/book/{symbol}",
                 "ORDER_BOOK_SYMBOLS": "",
             },
@@ -43,6 +45,32 @@ class ExternalMarketSignalTests(SimpleTestCase):
         ):
             result = ingest_orderbook_snapshots()
         self.assertEqual(result, {"symbols": 0, "snapshots": 0, "configured": 0})
+
+    def test_binance_discovery_intersects_exact_active_crypto_catalogue_symbols(self):
+        from apps.ai_engine.external_signals import _discover_binance_spot_symbols
+        from django.core.cache import cache
+
+        response = Mock()
+        response.json.return_value = {
+            "symbols": [
+                {"symbol": "BTCUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
+                {"symbol": "ETHUSDT", "status": "TRADING", "isSpotTradingAllowed": True},
+                {"symbol": "BNBUSDT", "status": "BREAK", "isSpotTradingAllowed": True},
+                {"symbol": "SOLUSDT", "status": "TRADING", "isSpotTradingAllowed": False},
+            ]
+        }
+        query = Mock()
+        query.values_list.return_value = ["BTCUSDT", "BTCUSD", "CRYBTCUSD", "R_100", "ETHUSDT"]
+        with patch.object(cache, "get", side_effect=RuntimeError("Redis unavailable")), patch.object(cache, "set", side_effect=RuntimeError("Redis unavailable")) as cache_set, patch(
+            "apps.ai_engine.external_signals.requests.get", return_value=response
+        ), patch(
+            "apps.market_data.services.MarketDataService.symbols.catalogue", return_value=query
+        ) as catalogue:
+            mapping = _discover_binance_spot_symbols()
+
+        catalogue.assert_called_once_with(active=True, tradable=True, market="Crypto")
+        self.assertEqual(mapping, {"BTCUSDT": "BTCUSDT", "ETHUSDT": "ETHUSDT"})
+        cache_set.assert_called_once()
 
     def test_rss_parser_supports_atom_entries(self):
         payload = b"""<?xml version="1.0"?>
@@ -56,3 +84,77 @@ class ExternalMarketSignalTests(SimpleTestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["title"], "EUR/USD outlook")
         self.assertEqual(rows[0]["link"], "https://example.com/story")
+
+
+    def test_sentiment_keyword_catalogue_includes_inactive_and_untradable_symbols(self):
+        from apps.ai_engine.external_signals import _catalogue_sentiment_keywords
+        with patch("apps.market_data.services.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.values.return_value.iterator.return_value = iter([
+                {"symbol": "R_100", "display_name": "Volatility 100 Index", "market": "synthetic", "sub_market": ""},
+                {"symbol": "frxEURUSD", "display_name": "EUR/USD", "market": "forex", "sub_market": ""},
+            ])
+            keywords = _catalogue_sentiment_keywords()
+        self.assertIn("R_100", keywords)
+        self.assertIn("frxEURUSD", keywords)
+        self.assertIn("EUR/USD", keywords["frxEURUSD"])
+
+    def test_sentiment_overrides_are_additive_to_catalogue(self):
+        from apps.ai_engine.external_signals import sentiment_symbol_keywords
+        with patch("apps.ai_engine.external_signals._catalogue_sentiment_keywords", return_value={"R_100": ["R_100"]}), patch.dict(
+            "os.environ", {"AI_SENTIMENT_SYMBOL_KEYWORDS_JSON": '{"R_100":["Volatility 100"]}'}
+        ):
+            keywords = sentiment_symbol_keywords()
+        self.assertEqual(set(keywords["R_100"]), {"R_100", "Volatility 100"})
+
+    def test_sentiment_ticker_matching_uses_token_boundaries(self):
+        from apps.ai_engine.external_signals import _matches_keyword
+        self.assertTrue(_matches_keyword("Bitcoin BTC/USD rises", "BTC"))
+        self.assertFalse(_matches_keyword("whether markets rise", "ETH"))
+
+    def test_binance_orderbook_adapter_requires_explicit_symbol_mapping(self):
+        from apps.ai_engine.external_signals import BinanceSpotOrderBookAdapter, OrderBookProviderError
+        adapter = BinanceSpotOrderBookAdapter({})
+        with self.assertRaises(OrderBookProviderError):
+            adapter.fetch("CRYBTCUSD")
+
+    def test_orderbook_configuration_rejects_malformed_symbol_map(self):
+        from apps.ai_engine.external_signals import _orderbook_symbol_configuration
+        with patch.dict("os.environ", {"ORDER_BOOK_PROVIDER": "binance_spot", "ORDER_BOOK_SYMBOLS": "CRYBTCUSD", "ORDER_BOOK_SYMBOL_MAP_JSON": "[]"}):
+            with self.assertRaises(RuntimeError):
+                _orderbook_symbol_configuration()
+
+
+    def test_binance_adapter_requests_provider_mapped_level_two_depth(self):
+        from apps.ai_engine.external_signals import BinanceSpotOrderBookAdapter
+        payload = {"lastUpdateId": 123, "bids": [["100", "2"]], "asks": [["101", "3"]]}
+        response = Mock()
+        response.json.return_value = payload
+        response.raise_for_status.return_value = None
+        with patch("apps.ai_engine.external_signals.requests.get", return_value=response) as get:
+            result = BinanceSpotOrderBookAdapter({"CRYBTCUSD": "BTCUSDT"}).fetch("CRYBTCUSD")
+        self.assertEqual(result, payload)
+        get.assert_called_once()
+        self.assertEqual(get.call_args.kwargs["params"], {"symbol": "BTCUSDT", "limit": 100})
+
+    def test_orderbook_rejects_non_finite_depth(self):
+        with self.assertRaises(ValueError):
+            normalize_orderbook({"bids": [[100, float("nan")]], "asks": [[101, 1]]})
+
+
+    def test_ai_symbol_discovery_is_scoped_to_selected_broker(self):
+        from apps.ai_engine.views import _discover_symbol
+        request = SimpleNamespace(data={"symbol": "R_100"})
+        account = SimpleNamespace(broker=SimpleNamespace(broker_type="deriv"))
+        with patch("apps.ai_engine.views.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.filter.return_value.exists.return_value = True
+            self.assertEqual(_discover_symbol(request, account), "R_100")
+            catalogue.assert_called_once_with(broker="deriv", active=True, tradable=True)
+
+    def test_ai_symbol_discovery_rejects_instrument_not_supported_by_selected_broker(self):
+        from apps.ai_engine.views import _discover_symbol
+        request = SimpleNamespace(data={"symbol": "BTCUSDT"})
+        account = SimpleNamespace(broker=SimpleNamespace(broker_type="deriv"))
+        with patch("apps.ai_engine.views.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.filter.return_value.exists.return_value = False
+            with self.assertRaises(ValueError):
+                _discover_symbol(request, account)

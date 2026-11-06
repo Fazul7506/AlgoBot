@@ -26,9 +26,10 @@ from core.services.payment_service import PaymentService
 class CheckoutPlan:
     plan: str
     price_cents: int
-    currency: str = "KES"
-    recurring: bool = True
+    currency: str = "USD"
+    recurring: bool = False
     reference: str = ""
+    provider_request_id: str = ""
 
 
 class RequestBoundPaymentService(PaymentService):
@@ -55,11 +56,11 @@ def _safe_price(value):
 
 
 def _plans():
-    currency = str(getattr(settings, "ALGOBOT_BILLING_CURRENCY", "KES")).upper()
+    currency = "USD"
     configured = {"BASIC": _safe_price(getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None)), "PRO": _safe_price(getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None)), "ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))}
     plans = [{"plan": "FREE", "price_cents": 0, "currency": currency, "recurring": False, "configured": True}]
     for name, price in configured.items():
-        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": True, "configured": price is not None and price > 0})
+        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": False, "configured": price is not None and price > 0})
     return plans
 
 
@@ -83,6 +84,13 @@ def _provider_state(result, provider):
         data = {**data, **data["invoice"]}
     if provider == PaymentService.PESAPAL:
         return str(data.get("payment_status_description", "")).upper(), data
+    if provider == PaymentService.PAYPAL:
+        units = data.get("purchase_units") if isinstance(data.get("purchase_units"), list) else []
+        unit = units[0] if units and isinstance(units[0], dict) else {}
+        payments = unit.get("payments") if isinstance(unit.get("payments"), dict) else {}
+        captures = payments.get("captures") if isinstance(payments.get("captures"), list) else []
+        capture = next((item for item in captures if isinstance(item, dict)), {})
+        return str(capture.get("status") or data.get("status") or "").upper(), {**data, "capture": capture, "amount": capture.get("amount")}
     # IntaSend collection responses expose state while recurring subscription
     # responses expose status. Support both authoritative response shapes.
     return str(data.get("state") or data.get("status") or "").upper(), data
@@ -107,29 +115,50 @@ def _reconcile_invoice(invoice, provider):
             result = service.get_intasend_subscription_status(str(subscription_id))
         else:
             result = service.get_intasend_payment_status(invoice.external_id) if invoice.external_id else None
+    elif provider == service.PAYPAL:
+        order_id = (invoice.metadata or {}).get("paypal_order_id") or invoice.external_id
+        result = service.get_paypal_order(str(order_id)) if order_id else None
     else:
         return {"paid": False, "state": "UNSUPPORTED_PROVIDER", "invoice": invoice, "subscription": None}
+    if provider == service.PAYPAL and not result:
+        return {"paid": False, "state": "PROVIDER_UNAVAILABLE", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first()}
     provider_state, payload = _provider_state(result, provider)
+    if provider == service.PAYPAL:
+        capture = payload.get("capture") if isinstance(payload.get("capture"), dict) else {}
+        capture_amount = payload.get("amount") if isinstance(payload.get("amount"), dict) else {}
+        if not capture.get("id") or not capture_amount.get("value") or not capture_amount.get("currency_code"):
+            return {"paid": False, "state": "CAPTURE_DETAILS_INCOMPLETE", "invoice": invoice, "subscription": Subscription.objects.filter(user=invoice.user).first(), "provider_payload": payload}
     metadata = {**(invoice.metadata or {}), "provider": provider, "user_id": invoice.user_id, "plan": plan["plan"], "provider_status": payload}
     if provider == service.PESAPAL:
         metadata["merchant_reference"] = metadata.get("reference") or metadata.get("merchant_reference")
         metadata["tracking_id"] = (invoice.metadata or {}).get("tracking_id") or invoice.external_id
+    elif provider == service.PAYPAL:
+        capture = payload.get("capture") if isinstance(payload.get("capture"), dict) else {}
+        metadata.update({"reference": (invoice.metadata or {}).get("reference"), "user_id": invoice.user_id, "plan": plan["plan"], "order_id": (invoice.metadata or {}).get("paypal_order_id") or invoice.external_id})
     # IntaSend recurring subscriptions report successful initial payment as
     # ACTIVE (and may also report COMPLETE). Translate only those success
     # states into the canonical payment state; never treat PENDING/PROCESSING
     # as paid.
     reconciler_state = "COMPLETE" if provider == service.INTASEND and provider_state in {"ACTIVE", "COMPLETE"} else provider_state
     normalized = PaymentReconciler.normalize_status(reconciler_state)
-    external_id = invoice.external_id or metadata.get("tracking_id")
-    reconciled = PaymentReconciler.reconcile(provider=provider, external_id=external_id, status=normalized, amount=payload.get("amount") or payload.get("value") or payload.get("net_amount"), currency=payload.get("currency") or invoice.currency, metadata=metadata)
+    external_id = (payload.get("capture") or {}).get("id") if provider == service.PAYPAL else (invoice.external_id or metadata.get("tracking_id"))
+    external_id = external_id or invoice.external_id or metadata.get("tracking_id")
+    amount_data = payload.get("amount") if isinstance(payload.get("amount"), dict) else {}
+    reconciled = PaymentReconciler.reconcile(provider=provider, external_id=external_id, status=normalized, amount=amount_data.get("value") or payload.get("value") or payload.get("net_amount"), currency=amount_data.get("currency_code") or payload.get("currency") or invoice.currency, metadata=metadata)
+    reconciled_invoice = Invoice.objects.get(pk=invoice.pk)
     subscription = Subscription.objects.filter(user=invoice.user).first()
-    return {"paid": normalized == "COMPLETED", "state": provider_state or normalized, "invoice": Invoice.objects.get(pk=invoice.pk), "subscription": subscription, "provider_payload": payload, "reconciled": reconciled}
+    # A provider's COMPLETED status is not enough: the canonical reconciler
+    # must also accept the invoice owner, amount and currency before access
+    # can be reported as paid.
+    return {"paid": bool(reconciled_invoice.paid), "state": provider_state or normalized, "invoice": reconciled_invoice, "subscription": subscription, "provider_payload": payload, "reconciled": reconciled}
 
 
 def _find_callback_invoice(request, reference="", tracking_id=""):
     qs = Invoice.objects.filter(user=request.user) if request.user.is_authenticated else Invoice.objects.none()
     if tracking_id:
-        invoice = qs.filter(external_id=tracking_id).first() or qs.filter(metadata__tracking_id=tracking_id).first()
+        invoice = (qs.filter(external_id=tracking_id).first()
+                   or qs.filter(metadata__tracking_id=tracking_id).first()
+                   or qs.filter(metadata__paypal_capture_id=tracking_id).first())
         if invoice:
             return invoice
     if reference:
@@ -174,8 +203,28 @@ def _checkout(request, plan_name, provider=None):
     if not plan["configured"]:
         return None, f"{plan['plan']} is not configured for checkout yet."
     selected = str(provider or getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower().strip()
-    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL}:
+    if selected not in {PaymentService.INTASEND, PaymentService.PESAPAL, PaymentService.PAYPAL}:
         return None, "Unsupported payment provider."
+
+    checkout_price_cents = plan["price_cents"]
+    checkout_currency = plan["currency"]
+    checkout_recurring = plan["recurring"]
+    if selected == PaymentService.PAYPAL:
+        paypal_price = PaymentService().paypal_price_for_plan(plan["plan"])
+        if not paypal_price:
+            return None, "PayPal is not ready for this plan. Configure PayPal credentials and webhook ID."
+        checkout_price_cents = paypal_price["price_cents"]
+        checkout_currency = "USD"
+        checkout_recurring = False  # Orders v2 capture is a one-time charge, not automatic renewal.
+    elif selected == PaymentService.INTASEND:
+        # IntaSend's recurring subscription-plan endpoint does not accept USD.
+        # Its hosted collections checkout supports USD, so use a verified
+        # one-time collection and let AlgoBot's subscription expiry govern access.
+        checkout_currency = "USD"
+        checkout_recurring = False
+    else:
+        checkout_currency = "USD"
+        checkout_recurring = False
 
     active_subscription = Subscription.objects.filter(user=request.user).first()
     if active_subscription and active_subscription.plan != "FREE" and active_subscription.is_active and (
@@ -183,7 +232,9 @@ def _checkout(request, plan_name, provider=None):
     ):
         if active_subscription.plan == plan["plan"]:
             return None, "This plan is already active."
-        return None, "Your current paid access is still active. Cancel its renewal first, then start the new plan."
+        if active_subscription.recurring:
+            return None, "Your current recurring subscription is still active. Cancel its renewal first, then start the new plan."
+        return None, "Your current paid access is still active. Wait for it to expire before starting a different plan."
 
     # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
@@ -193,16 +244,20 @@ def _checkout(request, plan_name, provider=None):
         request_user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
         existing = (
             Invoice.objects.filter(
-                user=request_user,
-                paid=False,
-                amount_cents=plan["price_cents"],
-                currency=plan["currency"],
-                metadata__plan=plan["plan"],
-                metadata__provider=selected,
-            )
-            .order_by("-created_at")
-            .first()
+                user=request_user, paid=False, amount_cents=checkout_price_cents,
+                currency=checkout_currency, metadata__plan=plan["plan"], metadata__provider=selected,
+            ).order_by("-created_at").first()
         )
+        # A KES checkout may still be in flight from before the USD migration.
+        # Reconcile/resume that exact provider invoice before creating a new USD
+        # checkout; never reinterpret the historical KES amount as dollars.
+        if not existing:
+            existing = (
+                Invoice.objects.filter(
+                    user=request_user, paid=False, metadata__plan=plan["plan"],
+                    metadata__provider=selected, metadata__state="checkout_open",
+                ).order_by("-created_at").first()
+            )
         metadata = dict(existing.metadata or {}) if existing else {}
         # Hosted checkout URLs can contain bearer-like provider tokens. Never persist
         # or reuse them; a fresh provider response is required for each new checkout.
@@ -221,11 +276,12 @@ def _checkout(request, plan_name, provider=None):
                     return None, "A checkout is already being started. Please wait for the current checkout attempt."
             invoice = existing or Invoice.objects.create(
                 user=request_user,
-                amount_cents=plan["price_cents"],
-                currency=plan["currency"],
+                amount_cents=checkout_price_cents,
+                currency=checkout_currency,
                 metadata={"plan": plan["plan"], "provider": selected},
             )
-            reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+            prefix = {PaymentService.INTASEND: "IS", PaymentService.PESAPAL: "PP", PaymentService.PAYPAL: "PY"}[selected]
+            reference = str(metadata.get("reference") or PaymentService._reference(prefix, request_user, plan["plan"]))
             invoice.metadata = {
                 **metadata,
                 "plan": plan["plan"],
@@ -276,6 +332,11 @@ def _checkout(request, plan_name, provider=None):
             if not invoice:
                 return None, "The existing checkout changed while it was being checked. Refresh billing and try again."
             metadata = dict(invoice.metadata or {})
+            # Once a legacy non-USD checkout is terminal, reuse its invoice row
+            # for the new attempt only after switching it to the current USD
+            # catalogue price. Its prior provider payment remains auditable.
+            invoice.amount_cents = checkout_price_cents
+            invoice.currency = checkout_currency
             if metadata.get("state") == "checkout_open":
                 now = timezone.now()
                 metadata.update({
@@ -285,7 +346,7 @@ def _checkout(request, plan_name, provider=None):
                     "error_classification": "",
                 })
                 invoice.metadata = metadata
-                invoice.save(update_fields=["metadata"])
+                invoice.save(update_fields=["amount_cents", "currency", "metadata"])
             elif metadata.get("state") == "checkout_attempting":
                 lock_until = metadata.get("checkout_lock_until")
                 try:
@@ -294,7 +355,8 @@ def _checkout(request, plan_name, provider=None):
                     lock_expiry = None
                 if lock_expiry and lock_expiry > timezone.now():
                     return None, "A checkout is already being started. Please wait for the current checkout attempt."
-            reference = str(metadata.get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+            prefix = {PaymentService.INTASEND: "IS", PaymentService.PESAPAL: "PP", PaymentService.PAYPAL: "PY"}[selected]
+            reference = str(metadata.get("reference") or PaymentService._reference(prefix, request_user, plan["plan"]))
             invoice.metadata = {
                 **metadata,
                 "plan": plan["plan"],
@@ -303,24 +365,26 @@ def _checkout(request, plan_name, provider=None):
                 "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
                 "checkout_lock_until": (timezone.now() + timedelta(seconds=lease_seconds)).isoformat(),
             }
-            invoice.save(update_fields=["metadata"])
+            invoice.save(update_fields=["amount_cents", "currency", "metadata"])
 
     else:
         invoice = locals().get("invoice")
         if invoice is None:
             return None, "Checkout could not be initialized. Please refresh and try again."
         request_user = get_user_model().objects.get(pk=request.user.pk)
-        reference = str((invoice.metadata or {}).get("reference") or PaymentService._reference("IS" if selected == PaymentService.INTASEND else "PP", request_user, plan["plan"]))
+        prefix = {PaymentService.INTASEND: "IS", PaymentService.PESAPAL: "PP", PaymentService.PAYPAL: "PY"}[selected]
+        reference = str((invoice.metadata or {}).get("reference") or PaymentService._reference(prefix, request_user, plan["plan"]))
 
     try:
         result = RequestBoundPaymentService(request).create_checkout_session(
             request.user,
             CheckoutPlan(
                 plan=plan["plan"],
-                price_cents=plan["price_cents"],
-                currency=plan["currency"],
-                recurring=plan["recurring"],
+                price_cents=checkout_price_cents,
+                currency=checkout_currency,
+                recurring=checkout_recurring,
                 reference=reference,
+                provider_request_id=f"{reference}-{int((invoice.metadata or {}).get('attempt_count') or 1)}",
             ),
             provider=selected,
         )
@@ -405,7 +469,16 @@ def billing_checkout_start(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def billing_plans(request): return Response({"plans": _plans(), "provider": str(getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower()})
+def billing_plans(request):
+    service = PaymentService()
+    return Response({
+        "plans": _plans(),
+        "provider": str(getattr(settings, "PAYMENT_PROVIDER", "intasend")).lower(),
+        "providers": {
+            "paypal": service.paypal_is_configured(),
+            "paypal_prices": {plan["plan"]: price for plan in _plans() if (price := service.paypal_price_for_plan(plan["plan"]))},
+        },
+    })
 
 
 @api_view(["GET"])

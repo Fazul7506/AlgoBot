@@ -13,13 +13,13 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "Billing &amp; Payments", "billing-summary-grid", "billing-plan-grid",
             "billing-payment-table", "billing-usage-grid", "billing-account-status",
             'id="billing-checkout-form"', "{% csrf_token %}",
-            'data-provider="pesapal"', 'data-provider="intasend"',
+            'data-provider="pesapal"', 'data-provider="intasend"', 'data-provider="paypal"',
             "data-cancel-subscription", "data-billing-refresh",
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
             "Usage is measured from persisted platform audit/database records",
-            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase())",
+            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, template)
@@ -33,15 +33,18 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertIn("ENTERPRISE", template)
-        self.assertIn("Custom pricing", template)
+        self.assertIn("currency='USD'", template)
+        self.assertIn("!Number.isFinite(raw)?0:raw", template)
         self.assertIn("Usage is measured from persisted platform audit/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
         self.assertNotIn("Contact sales", template)
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
-        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase())", template)
+        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
         self.assertIn("Continue with Pesapal", template)
         self.assertIn("Continue with IntaSend", template)
+        self.assertIn("Continue with PayPal", template)
+        self.assertIn("PayPal setup pending", template)
         self.assertNotIn("Pay with IntaSend", template)
         self.assertNotIn("Pay with Pesapal", template)
         self.assertIn('Included with every account', template)
@@ -61,7 +64,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         billing = Path("core/views_billing.py").read_text(encoding="utf-8")
         self.assertIn('"ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))', billing)
-        self.assertIn('return Response({"plans": _plans()', billing)
+        self.assertIn('\"paypal\": service.paypal_is_configured()', billing)
+        self.assertIn('\"paypal_prices\":', billing)
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertNotIn("p.plan!=='ENTERPRISE'||admin", template)
         self.assertNotIn("if(name==='ENTERPRISE')", template)
@@ -223,9 +227,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("window.AlgoBotServices?.instruments?.list", client, "Predictions must use the shared instrument service backed by the Terminal catalogue.")
         self.assertNotIn("getJSON('/api/market/catalogue/'", client, "Predictions must not bypass the shared instrument service.")
         self.assertNotIn("/api/market/broker-catalogue/", client, "Predictions must not call the legacy catalogue alias.")
-        self.assertIn("data-ai-market-list", client)
-        self.assertIn("MutationObserver", client)
-        self.assertIn("data-ai-market-symbol", client)
+        self.assertNotIn("data-ai-market-list", client, "AI Predictions must not render a second custom instrument list beside the global anchored dropdown.")
+        self.assertNotIn("data-ai-market-symbol", client, "The global anchored dropdown is the only instrument selection control.")
+        self.assertIn("window.AlgoBotAnchoredSelects?.refresh?.(select)", client, "Catalogue updates must refresh the single anchored dropdown.")
+        self.assertIn("bind(root); try{await load(root);}", client, "Instrument catalogue loading must start independently of AI model/history requests.")
+        self.assertIn("select.dataset.aiCatalogueLoading === 'true'", client, "Repeated catalogue triggers must be coalesced.")
         self.assertIn("const d = await catalogue({ timeout: 7000 });", client, "The prediction selector must use the shared instrument service with a bounded transport timeout.")
         self.assertNotIn("const boundedJSON", client, "Catalogue timeout must abort through the shared API transport, not leave an orphaned request.")
         self.assertNotIn("/api/market/symbols/", client, "Predictions must not fall back to a duplicate instrument API.")
@@ -247,7 +253,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         base = Path("templates/base.html").read_text(encoding="utf-8")
         api = Path("apps/analysis/views.py").read_text(encoding="utf-8")
         self.assertNotIn('analysis-markets-data', analysis_template, "Analysis must not bootstrap a second server-rendered instrument catalogue.")
-        self.assertIn('id="analysisMarketIcon"', analysis_template)
+        self.assertIn('id="symbol"', analysis_template)
+        self.assertNotIn('analysisMarketIcon', analysis_template, "Analysis must not render a second selected-instrument icon beside the anchored dropdown.")
         self.assertIn('marketOverviewRows', analysis)
         self.assertIn('analysis-market-cell', analysis)
         self.assertIn('hasModelEvidence', analysis)
@@ -266,7 +273,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("text-align: left !important", analysis_css, "Analysis must restore normal left-aligned content.")
         self.assertIn("grid-template-columns: minmax(0, 1fr) !important", analysis_css, "Analysis root must not collapse into a narrow inherited grid column.")
         self.assertIn(".app-content {\n  display: block !important;", analysis_css, "Analysis must use the full app-content column rather than a constrained shared grid track.")
-        self.assertIn("20261030-reference-layout5", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
+        self.assertIn("20261104-anchored-only1", analysis_template, "The shell-width stylesheet fix must bypass stale browser caches.")
         self.assertIn('sync_active_symbols()', api, "The backend must repopulate an empty catalogue from the authoritative Deriv feed.")
         self.assertIn('MARKET_CATALOGUE_UNAVAILABLE', api, "Catalogue failures must return an explicit diagnostic code.")
         self.assertIn("window.AlgoBotServices?.instruments?.list", analysis, "Analysis must use the shared connected-broker instrument service.")
@@ -342,7 +349,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('select[name="symbol"]', picker)
         self.assertIn('select[data-ai-symbol]', picker)
         self.assertIn('select[data-symbol]', picker)
-        self.assertIn('market-picker-icon', picker)
+        self.assertNotIn('market-picker-icon', picker, "The label normalizer must not create a second selector wrapper or selected-icon renderer.")
+        self.assertIn('global anchored-select', picker)
         self.assertIn('const marketIcon = item', picker)
         self.assertIn('const enhanceDisplay = node', picker)
         self.assertIn('select[data-history-symbol]', picker)
@@ -590,7 +598,7 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         self.assertIn("timeout=25000", script)
         self.assertIn("result[2].value===null", script)
         template = Path("templates/core/backtesting.html").read_text(encoding="utf-8")
-        self.assertIn("v=20261027-reliability1", template)
+        self.assertIn("v=20261104-queue-recovery1", template)
 
     def test_frontend_contract_coalesces_repeated_catalog_and_account_reads(self):
         from pathlib import Path
@@ -620,3 +628,46 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
             "@decorators.authentication_classes([JWTAuthentication, SessionAuthentication])",
             views,
         )
+
+
+class WorkspaceTabsContractTests(SimpleTestCase):
+    def test_backtesting_job_status_separates_queued_from_running(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        template = (root / "templates/core/backtesting.html").read_text()
+        script = (root / "static/js/backtesting_workspace_fix.js").read_text()
+        self.assertIn("data-backtest-pending", template)
+        self.assertIn("data-backtest-pending", script)
+        self.assertIn("rows.filter(x=>String(x.status).toLowerCase()==='running').length", script)
+        self.assertIn("rows.filter(x=>String(x.status).toLowerCase()==='pending').length", script)
+
+    def test_enterprise_workspace_bootstrap_does_not_call_missing_legacy_account_menu(self):
+        from pathlib import Path
+        script = (Path(__file__).resolve().parents[2] / "static/js/enterprise_templates.js").read_text()
+        self.assertNotIn("accountMenu();", script)
+        self.assertNotIn("async function tradingTerminal(", script)
+        self.assertNotIn("function drawCandles(", script)
+        self.assertIn("$$('.enterprise-page').forEach(page =>", script)
+        self.assertIn("$$('.data-page').forEach(dataPage)", script)
+        self.assertNotIn("function theme()", script)
+        self.assertNotIn("function shell()", script)
+
+    def test_billing_and_developer_navigation_use_in_place_workspace_tabs(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        script = (root / "static/js/workspace_tabs.js").read_text()
+        base = (root / "templates/base.html").read_text()
+        self.assertIn("workspace_tabs.js", base)
+        self.assertIn("data-workspace-tabs", script)
+        self.assertIn("aria-selected", script)
+        self.assertIn("history.replaceState", script)
+        for name, ids in (
+            ("templates/core/billing.html", ("billing-overview", "billing-plans", "billing-invoices", "billing-payments", "billing-usage", "billing-settings")),
+            ("templates/developer/dashboard.html", ("dev-overview", "dev-api-keys", "dev-documentation", "dev-webhooks", "dev-code-examples", "dev-sandbox")),
+        ):
+            template = (root / name).read_text()
+            self.assertIn("data-workspace-tab-content", template)
+            self.assertIn("data-workspace-tabs", template)
+            for panel_id in ids:
+                self.assertIn(f'href="#{panel_id}"', template)
+                self.assertIn(f'id="{panel_id}"', template)

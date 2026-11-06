@@ -159,7 +159,102 @@
     document.addEventListener('keydown',event=>{if(event.key==='Escape')setMobileOpen(false);}); window.addEventListener('resize',()=>{if(window.innerWidth>900)setMobileOpen(false);syncActiveNavigation({anchor:false});});
   }
 
-  function bindTheme(){const button=$('[data-theme-toggle]');if(!button||button.dataset.themeBound==='true')return;button.dataset.themeBound='true';const storageKey='algobot-theme';const apply=theme=>{const html=document.documentElement;html.dataset.theme=theme;button.setAttribute('aria-pressed',String(theme==='light'));const meta=$('meta[name="theme-color"]');if(meta)meta.content=theme==='light'?'#f3f7fc':'#07111f';const selected=document.querySelector('input[name="theme"][value="'+(html.dataset.themePreference||theme)+'"]');if(selected)selected.checked=true;};const applyPreferences=prefs=>{if(!prefs||typeof prefs!=='object')return;let savedTheme=null;try{savedTheme=localStorage.getItem('algobot-theme-preference')||localStorage.getItem(storageKey);}catch(_){}const existingTheme=document.documentElement.dataset.themePreference;const theme=['light','dark','system'].includes(prefs.theme)?prefs.theme:(['light','dark','system'].includes(existingTheme)?existingTheme:(['light','dark'].includes(savedTheme)?savedTheme:'dark'));document.documentElement.dataset.themePreference=theme;let resolved=theme;try{localStorage.setItem('algobot-theme-preference',theme);}catch(_){}if(theme==='system'){try{localStorage.removeItem(storageKey);}catch(_){}resolved=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}else{try{localStorage.setItem(storageKey,resolved);}catch(_){}}apply(resolved);if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;if(['cyan','blue','teal','violet','amber'].includes(prefs.accent))document.documentElement.dataset.accent=prefs.accent;if(['classic','wide','focus'].includes(prefs.layout))document.documentElement.dataset.layout=prefs.layout;if(['left','right','bottom'].includes(prefs.chart_position))document.documentElement.dataset.chartPosition=prefs.chart_position;if(['realtime','15s','30s','60s','5m','manual'].includes(prefs.auto_refresh_interval))document.documentElement.dataset.autoRefresh=prefs.auto_refresh_interval;if(['15s','30s','1m','5m','15m'].includes(prefs.refresh_frequency))document.documentElement.dataset.refreshFrequency=prefs.refresh_frequency;};document.addEventListener('algobot:preferences-loaded',event=>applyPreferences(event.detail||{}));let stored=null,storedPreference=null;try{stored=localStorage.getItem(storageKey);storedPreference=localStorage.getItem('algobot-theme-preference');}catch(_){}if(storedPreference==='system'){document.documentElement.dataset.themePreference='system';apply(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');}else if(storedPreference==='light'||storedPreference==='dark'){document.documentElement.dataset.themePreference=storedPreference;apply(storedPreference);}else if(stored==='light'||stored==='dark'){document.documentElement.dataset.themePreference=stored;apply(stored);}button.addEventListener('click',()=>{const html=document.documentElement;const previous=html.dataset.themePreference||html.dataset.theme||'dark';const next=html.dataset.theme==='dark'?'light':'dark';html.dataset.themePreference=next;try{localStorage.setItem(storageKey,next);localStorage.setItem('algobot-theme-preference',next);}catch(_){}apply(next);if(document.body.dataset.authenticated!=='true')return;const token=(()=>{const input=$('input[name="csrfmiddlewaretoken"]');if(input?.value)return input.value;const match=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);return match?decodeURIComponent(match[1]):'';})();fetch('/api/settings/',{method:'PATCH',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/json',...(token?{'X-CSRFToken':token}:{})},body:JSON.stringify({preferences:{theme:next}})}).then(response=>{if(!response.ok)throw new Error('Could not save theme preference');return response.json();}).then(()=>{html.dataset.themePreference=next;}).catch(()=>{html.dataset.themePreference=previous;try{localStorage.setItem('algobot-theme-preference',previous);if(previous==='system')localStorage.removeItem(storageKey);else localStorage.setItem(storageKey,previous);}catch(_){}apply(previous==='system'?(window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark'):previous);window.AlgoBotBaseShell?.showDjangoMessage?.('Theme changed for this page, but the account preference could not be saved.','warning');});});if(document.body.dataset.authenticated==='true'&&!document.documentElement.dataset.accountPreferencesLoaded){document.documentElement.dataset.accountPreferencesLoaded='pending';fetch('/api/settings/',{method:'GET',credentials:'same-origin',headers:{Accept:'application/json'}}).then(response=>{if(!response.ok)throw new Error('Account preferences unavailable');return response.json();}).then(data=>{const prefs=data?.profile?.account_preferences||{};applyPreferences(prefs);document.documentElement.dataset.accountPreferencesLoaded='true';const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};if(window.location.pathname==='/dashboard/'&&targets[prefs.default_page]&&targets[prefs.default_page]!=='/dashboard/'){window.location.replace(targets[prefs.default_page]);return;}document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:prefs}));}).catch(()=>{delete document.documentElement.dataset.accountPreferencesLoaded;});}if(window.matchMedia){const colorScheme=window.matchMedia('(prefers-color-scheme: light)');const syncSystemTheme=()=>{if(document.documentElement.dataset.themePreference==='system')apply(colorScheme.matches?'light':'dark');};if(colorScheme.addEventListener)colorScheme.addEventListener('change',syncSystemTheme);else if(colorScheme.addListener)colorScheme.addListener(syncSystemTheme);}window.addEventListener('storage',event=>{if(event.key==='algobot-theme-preference'&&['light','dark','system'].includes(event.newValue)){document.documentElement.dataset.themePreference=event.newValue;apply(event.newValue==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):event.newValue);}else if(event.key===storageKey&&(event.newValue==='light'||event.newValue==='dark'))apply(event.newValue);});const systemQuery=window.matchMedia?.('(prefers-color-scheme: light)');systemQuery?.addEventListener?.('change',()=>{if(document.documentElement.dataset.themePreference==='system')apply(systemQuery.matches?'light':'dark');});}
+  function bindTheme(){
+    const button=$('[data-theme-toggle]');
+    if(!button||button.dataset.themeBound==='true')return;
+    button.dataset.themeBound='true';
+    const storageKey='algobot-theme';
+    const preferenceKey='algobot-theme-preference';
+    const validThemes=new Set(['light','dark','system']);
+    const resolvedTheme=preference=>preference==='system'
+      ? (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark')
+      : preference;
+    const persistLocal=preference=>{
+      try{
+        localStorage.setItem(preferenceKey,preference);
+        if(preference==='system')localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey,preference);
+      }catch(_){}
+    };
+    const apply=preference=>{
+      if(!validThemes.has(preference))return;
+      const html=document.documentElement;
+      html.dataset.themePreference=preference;
+      const theme=resolvedTheme(preference);
+      html.dataset.theme=theme;
+      button.setAttribute('aria-pressed',String(theme==='light'));
+      const meta=$('meta[name="theme-color"]');
+      if(meta)meta.content=theme==='light'?'#f3f7fc':'#07111f';
+      const selected=document.querySelector('input[name="theme"][value="'+preference+'"]');
+      if(selected)selected.checked=true;
+    };
+    const applyPreferences=prefs=>{
+      if(!prefs||typeof prefs!=='object')return;
+      let stored='';
+      try{stored=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||'';}catch(_){}
+      const current=document.documentElement.dataset.themePreference;
+      const preference=validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:(validThemes.has(stored)?stored:'dark'));
+      persistLocal(preference);
+      apply(preference);
+      if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;
+      if(['cyan','blue','teal','violet','amber'].includes(prefs.accent))document.documentElement.dataset.accent=prefs.accent;
+      if(['classic','wide','focus'].includes(prefs.layout))document.documentElement.dataset.layout=prefs.layout;
+      if(['left','right','bottom'].includes(prefs.chart_position))document.documentElement.dataset.chartPosition=prefs.chart_position;
+      if(['realtime','15s','30s','60s','5m','manual'].includes(prefs.auto_refresh_interval))document.documentElement.dataset.autoRefresh=prefs.auto_refresh_interval;
+      if(['15s','30s','1m','5m','15m'].includes(prefs.refresh_frequency))document.documentElement.dataset.refreshFrequency=prefs.refresh_frequency;
+    };
+    document.addEventListener('algobot:preferences-loaded',event=>applyPreferences(event.detail||{}));
+    let stored='',storedPreference='';
+    try{stored=localStorage.getItem(storageKey)||'';storedPreference=localStorage.getItem(preferenceKey)||'';}catch(_){}
+    const initial=validThemes.has(storedPreference)?storedPreference:(validThemes.has(stored)?stored:'dark');
+    apply(initial);
+    button.addEventListener('click',async()=>{
+      const html=document.documentElement;
+      const previous=validThemes.has(html.dataset.themePreference)?html.dataset.themePreference:(html.dataset.theme||'dark');
+      const next=html.dataset.theme==='dark'?'light':'dark';
+      persistLocal(next);apply(next);
+      if(document.body.dataset.authenticated!=='true')return;
+      button.disabled=true;
+      try{
+        const client=window.AlgoBotFrontendData;
+        if(typeof client?.request!=='function')throw new Error('Shared authenticated API transport is unavailable.');
+        await client.request('/api/settings/',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({preferences:{theme:next}})},10000);
+        document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:{theme:next}}));
+      }catch(error){
+        persistLocal(previous);apply(previous);
+        showDjangoMessage('Theme could not be saved to your account. The previous theme has been restored. '+String(error?.message||''),'warning');
+      }finally{button.disabled=false;}
+    });
+    if(document.body.dataset.authenticated==='true'&&!document.documentElement.dataset.accountPreferencesLoaded){
+      document.documentElement.dataset.accountPreferencesLoaded='pending';
+      const client=window.AlgoBotFrontendData;
+      if(typeof client?.request==='function'){
+        client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
+          const prefs=data?.profile?.account_preferences||{};
+          applyPreferences(prefs);
+          document.documentElement.dataset.accountPreferencesLoaded='true';
+          const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};
+          if(window.location.pathname==='/dashboard/'&&targets[prefs.default_page]&&targets[prefs.default_page]!=='/dashboard/'){window.location.replace(targets[prefs.default_page]);return;}
+          document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:prefs}));
+        }).catch(error=>{
+          delete document.documentElement.dataset.accountPreferencesLoaded;
+          window.dispatchEvent(new CustomEvent('algobot:preferences-load-failed',{detail:{message:String(error?.message||'Preferences could not be loaded.')}}));
+        });
+      }else{
+        delete document.documentElement.dataset.accountPreferencesLoaded;
+      }
+    }
+    if(window.matchMedia){
+      const colorScheme=window.matchMedia('(prefers-color-scheme: light)');
+      const syncSystemTheme=()=>{if(document.documentElement.dataset.themePreference==='system')apply('system');};
+      if(colorScheme.addEventListener)colorScheme.addEventListener('change',syncSystemTheme);
+      else if(colorScheme.addListener)colorScheme.addListener(syncSystemTheme);
+    }
+    window.addEventListener('storage',event=>{
+      if(event.key===preferenceKey&&validThemes.has(event.newValue))apply(event.newValue);
+      else if(event.key===storageKey&&(event.newValue==='light'||event.newValue==='dark')&&!localStorage.getItem(preferenceKey))apply(event.newValue);
+    });
+  }
   function boot(){bindNavigation();bindTheme();bindApiMessages();if(window.AlgoBotBrokerState)window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);const target=stack();target?.querySelectorAll('.toast').forEach(node=>wireToast(node,MESSAGE_TTL));if(target)trimToastStack(target);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   window.AlgoBotBaseShell=Object.freeze({syncActiveNavigation,showDjangoMessage});

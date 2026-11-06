@@ -212,13 +212,146 @@ class AnomalyDetectionService:
     def scan(self,symbol,features):
         score=max(_num(features.get('volatility')),abs(_num(features.get('price_acceleration')))); return AnomalyEvent.objects.create(symbol=symbol,anomaly_type='volatility_spike' if score>3 else 'none',score=score,details=features) if score>3 else None
 class HyperparameterOptimizationService:
-    def optimize(self,algorithm,search='random_search'):return {'algorithm':algorithm,'search':search,'best_params':{'n_estimators':100,'max_depth':5},'score':0.0}
+    """Run a real time-series search against a model's persisted data context."""
+
+    def optimize(self, algorithm, search="random_search"):
+        import numpy as np
+        from django.db import transaction
+        from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
+        from .training import normalize_timeframe
+        from .training_dataset import build_direction_dataset
+
+        aliases = {
+            "random_forest": "rf", "rf": "rf",
+            "xgboost": "xgb", "xgb": "xgb",
+            "lightgbm": "lgb", "lgb": "lgb",
+        }
+        key = str(algorithm or "").strip().lower()
+        candidate = aliases.get(key)
+        if candidate is None:
+            return {"status": "skipped", "algorithm": key, "reason": "unsupported_algorithm"}
+        model = AIModel.objects.filter(algorithm__in=(key, candidate)).order_by("-created_at").first()
+        if model is None:
+            return {"status": "skipped", "algorithm": key, "reason": "no_registered_model_context"}
+        dataset_context = (model.metadata or {}).get("dataset") or {}
+        symbol = dataset_context.get("symbol")
+        timeframe_value = dataset_context.get("timeframe")
+        if not symbol or not timeframe_value:
+            return {"status": "skipped", "algorithm": key, "model_id": model.pk, "reason": "model_dataset_context_missing"}
+        timeframe = normalize_timeframe(timeframe_value)
+        dataset = build_direction_dataset(symbol, timeframe)
+        if len(dataset.X) < 200 or len(np.unique(dataset.y)) < 2:
+            return {"status": "skipped", "algorithm": key, "symbol": symbol, "timeframe": timeframe, "samples": len(dataset.X), "reason": "insufficient_labeled_market_data"}
+
+        if candidate == "rf":
+            from sklearn.ensemble import RandomForestClassifier
+            estimator = RandomForestClassifier(random_state=42, n_jobs=1, class_weight="balanced")
+            parameter_grid = {
+                "n_estimators": [50, 100, 200],
+                "max_depth": [5, 8, 12, None],
+                "min_samples_leaf": [1, 2, 3],
+                "max_features": ["sqrt", 0.5],
+            }
+        elif candidate == "xgb":
+            try:
+                from xgboost import XGBClassifier
+            except ImportError:
+                return {"status": "skipped", "algorithm": key, "reason": "xgboost_not_installed"}
+            estimator = XGBClassifier(eval_metric="logloss", random_state=42, n_jobs=1)
+            parameter_grid = {
+                "n_estimators": [50, 100, 200], "max_depth": [3, 5, 7],
+                "learning_rate": [0.03, 0.05, 0.1], "subsample": [0.8, 1.0],
+            }
+        else:
+            try:
+                from lightgbm import LGBMClassifier
+            except ImportError:
+                return {"status": "skipped", "algorithm": key, "reason": "lightgbm_not_installed"}
+            estimator = LGBMClassifier(random_state=42, n_jobs=1, verbosity=-1)
+            parameter_grid = {
+                "n_estimators": [50, 100, 200], "max_depth": [3, 5, 7],
+                "learning_rate": [0.03, 0.05, 0.1], "num_leaves": [15, 31, 63],
+            }
+
+        if search not in {"random_search", "grid_search"}:
+            raise ValueError("search must be random_search or grid_search")
+        cv = TimeSeriesSplit(n_splits=5)
+        if search == "grid_search":
+            # Bound the exhaustive grid to avoid unbounded worker runtimes.
+            bounded_grid = {name: values[:2] for name, values in parameter_grid.items()}
+            optimizer = GridSearchCV(estimator, bounded_grid, scoring="f1", cv=cv, n_jobs=1, refit=True, error_score="raise")
+        else:
+            optimizer = RandomizedSearchCV(
+                estimator, parameter_grid, n_iter=8, scoring="f1", cv=cv,
+                n_jobs=1, random_state=42, refit=True, error_score="raise",
+            )
+        optimizer.fit(dataset.X, dataset.y)
+        score = float(optimizer.best_score_)
+        if not np.isfinite(score):
+            raise ValueError("Hyperparameter search returned a non-finite validation score")
+        report = {
+            "status": "completed", "algorithm": candidate, "search": search,
+            "symbol": symbol, "timeframe": timeframe,
+            "best_params": optimizer.best_params_, "best_score": round(score, 6),
+            "scoring": "f1", "validation": "time_series_split_5", "samples": int(len(dataset.X)),
+            "completed_at": timezone.now().isoformat(),
+            "model_updated": False,
+        }
+        with transaction.atomic():
+            model.metadata = {**(model.metadata or {}), "hyperparameter_optimization": report}
+            model.save(update_fields=["metadata"])
+            version = model.versions.order_by("-created_at").first()
+            if version:
+                version.hyperparameters = {
+                    **(version.hyperparameters or {}),
+                    "optimization_report": report,
+                }
+                version.save(update_fields=["hyperparameters"])
+        return {**report, "model_id": model.pk}
+
+
 class TrainingService:
-    def train(self,model=None,mode='manual',symbol=None,timeframe='M1',min_accuracy=.52):
-        from .training import MarketModelTrainer
+    def train(self, model=None, mode="manual", symbol=None, timeframe="M1", min_accuracy=.52):
+        from .training import MarketModelTrainer, normalize_timeframe
+
+        trainer = MarketModelTrainer()
+        started = timezone.now()
         if symbol:
-            MarketModelTrainer().train_symbol(symbol,timeframe,min_accuracy); return TrainingJob.objects.filter(metrics__symbol=symbol).order_by('-started_at').first()
-        results=MarketModelTrainer().train_active_symbols(timeframe,min_accuracy); return TrainingJob.objects.create(status='completed',started_at=timezone.now(),completed_at=timezone.now(),metrics={'mode':mode,'results':results,'feature_set':list(FEATURE_NAMES)})
+            try:
+                trainer.train_symbol(symbol, timeframe, min_accuracy)
+                job = TrainingJob.objects.filter(
+                    metrics__symbol=symbol, started_at__gte=started,
+                ).order_by("-started_at").first()
+                if job is not None and job.status == "completed":
+                    return job
+                raise RuntimeError("Training finished without a persisted completed job")
+            except Exception as exc:
+                finished = timezone.now()
+                return TrainingJob.objects.create(
+                    status="failed", started_at=started, completed_at=finished,
+                    duration=(finished - started).total_seconds(),
+                    metrics={"mode": mode, "symbol": symbol, "timeframe": str(timeframe),
+                             "status": "failed", "error": str(exc)},
+                )
+
+        results = trainer.train_active_symbols(timeframe, min_accuracy)
+        succeeded = {
+            name: result for name, result in results.items()
+            if isinstance(result, dict) and result.get("status") != "skipped" and "accuracy" in result
+        }
+        finished = timezone.now()
+        batch_status = "completed" if succeeded else "failed"
+        return TrainingJob.objects.create(
+            status=batch_status, started_at=started, completed_at=finished,
+            duration=(finished - started).total_seconds(),
+            metrics={
+                "mode": mode, "status": batch_status, "timeframe": normalize_timeframe(timeframe),
+                "symbols_total": len(results), "trained": len(succeeded),
+                "skipped": len(results) - len(succeeded), "results": results,
+                "feature_set": list(FEATURE_NAMES),
+                "message": "Validated models were trained." if succeeded else "No symbol produced a model that passed the training and validation gates.",
+            },
+        )
 class AIRiskAdvisor:
     def advise(self,prediction):return {'risk_score':prediction.risk_score,'action':'REDUCE RISK' if prediction.risk_score>.6 else 'MAINTAIN'}
 class AIStrategyAdvisor:

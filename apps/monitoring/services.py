@@ -27,15 +27,192 @@ class BrokerMonitoringService:
     def record(self,broker,**kwargs): return BrokerHealth.objects.create(broker=broker,**kwargs)
     def disconnected(self,broker): self.record(broker,connection_status="down",websocket_status="down",api_status="down",last_ping=timezone.now()); return AlertEngine().create_alert("Broker disconnected","Broker","CRITICAL",f"{broker} connection is down",broker)
 class TradingMonitoringService:
-    def snapshot(self): return {"trades_per_minute":None,"open_positions":None,"closed_positions":None,"pending_orders":None,"execution_latency":None,"rejected_orders":None,"success_rate":None,"average_profit":None,"average_loss":None}
+    """Account-scoped trading telemetry derived from broker-authoritative records."""
+
+    def snapshot(self, user=None):
+        from datetime import timedelta
+        from django.db.models import Avg, Count, Q
+        from django.utils import timezone
+        from apps.brokers.models import BrokerAccount, ExecutionReport, Order, Position
+
+        accounts = BrokerAccount.objects.filter(status="active")
+        if user is not None:
+            accounts = accounts.filter(user=user)
+        account_ids = accounts.values_list("id", flat=True)
+        positions = Position.objects.filter(account_id__in=account_ids)
+        orders = Order.objects.filter(account_id__in=account_ids)
+        closed = positions.filter(status__iexact="closed")
+        terminal_orders = orders.filter(status__in=(
+            "executed", "filled", "closed", "reconciled", "rejected", "expired", "cancelled", "failed",
+        ))
+        terminal_counts = terminal_orders.aggregate(
+            successful=Count("id", filter=Q(status__in=("executed", "filled", "closed", "reconciled"))),
+            total=Count("id"),
+        )
+        latency = ExecutionReport.objects.filter(order__account_id__in=account_ids).aggregate(
+            value=Avg("latency")
+        )["value"]
+        profit = {
+            "wins": closed.filter(profit__gt=0).count(),
+            "losses": closed.filter(profit__lt=0).count(),
+            "average_win": closed.filter(profit__gt=0).aggregate(value=Avg("profit"))["value"],
+            "average_loss": closed.filter(profit__lt=0).aggregate(value=Avg("profit"))["value"],
+        }
+        now = timezone.now()
+        return {
+            "trades_per_minute": positions.filter(opened_at__gte=now - timedelta(minutes=1)).count(),
+            "open_positions": positions.filter(status__iexact="open").count(),
+            "closed_positions": closed.count(),
+            "pending_orders": orders.filter(status__in=(
+                "created", "validated", "approved", "queued", "submitted", "pending", "partially_filled",
+            )).count(),
+            "execution_latency": round(float(latency), 2) if latency is not None else None,
+            "rejected_orders": orders.filter(status="rejected").count(),
+            "success_rate": (
+                round(100 * terminal_counts["successful"] / terminal_counts["total"], 2)
+                if terminal_counts["total"] else None
+            ),
+            "average_profit": profit["average_win"],
+            "average_loss": profit["average_loss"],
+        }
+
+
 class StrategyMonitoringService:
-    def snapshot(self): return {"running_strategies":None,"paused_strategies":None,"stopped_strategies":None,"signals_generated":None,"win_rate":None,"loss_rate":None,"profit_factor":None,"performance_drift":None,"strategy_errors":None}
+    """Strategy activity counts are scoped through each user's configuration."""
+
+    def snapshot(self, user=None):
+        from apps.strategies.models import StrategyConfiguration, StrategyExecution, StrategySignal
+
+        configurations = StrategyConfiguration.objects.all()
+        executions = StrategyExecution.objects.filter(configuration__isnull=False)
+        signals = StrategySignal.objects.filter(configuration__isnull=False)
+        if user is not None:
+            configurations = configurations.filter(user=user)
+            executions = executions.filter(configuration__user=user)
+            signals = signals.filter(configuration__user=user)
+        return {
+            "running_strategies": configurations.filter(enabled=True, is_active=True).count(),
+            "paused_strategies": configurations.filter(enabled=True, is_active=False).count(),
+            "stopped_strategies": configurations.filter(enabled=False).count(),
+            "signals_generated": signals.count(),
+            # StrategyExecution records are not settled trades; win/loss and
+            # profit metrics must come from a reconciled performance ledger.
+            "win_rate": None,
+            "loss_rate": None,
+            "profit_factor": None,
+            "performance_drift": None,
+            "strategy_errors": executions.filter(status="failed").count(),
+        }
+
+
 class RiskMonitoringService:
-    def snapshot(self): return {"current_drawdown":None,"portfolio_risk":None,"exposure":None,"margin":None,"daily_loss":None,"daily_profit":None,"risk_score":None,"circuit_breakers":None}
+    """Reuse the risk domain's account-aware calculations; do not invent P&L."""
+
+    def snapshot(self, user=None):
+        if user is None:
+            return {
+                "current_drawdown": None, "portfolio_risk": None, "exposure": None,
+                "margin": None, "daily_loss": None, "daily_profit": None,
+                "risk_score": None, "circuit_breakers": None,
+            }
+        from apps.risk.services import RiskMonitoringService as RiskDomainService
+
+        data = RiskDomainService().dashboard(user)
+        return {
+            "current_drawdown": data.get("current_drawdown"),
+            "portfolio_risk": data.get("risk_score"),
+            "exposure": data.get("portfolio_exposure"),
+            "margin": data.get("margin_level"),
+            "daily_loss": None,
+            "daily_profit": data.get("today_profit_loss"),
+            "risk_score": data.get("risk_score"),
+            "circuit_breakers": data.get("circuit_breaker_status"),
+        }
+
+
 class AIMonitoringService:
-    def snapshot(self): return {"prediction_latency":None,"prediction_accuracy":None,"model_drift":None,"feature_drift":None,"training_status":"unknown","inference_errors":None,"champion_model":None,"memory_usage":None,"gpu_usage":None}
+    """Model and prediction quality from persisted, resolved prediction outcomes."""
+
+    def snapshot(self, user=None):
+        from django.db.models import Count, Q
+        from apps.ai_engine.models import AIModel, Prediction, PredictionOutcome, TrainingJob
+
+        predictions = Prediction.objects.all()
+        training = TrainingJob.objects.all()
+        if user is not None:
+            predictions = predictions.filter(user=user)
+            training = training.filter(Q(user=user) | Q(user__isnull=True))
+        outcomes = PredictionOutcome.objects.filter(
+            prediction__in=predictions, correct__isnull=False,
+        )
+        outcome_counts = outcomes.aggregate(
+            correct=Count("id", filter=Q(correct=True)),
+            total=Count("id"),
+        )
+        model = AIModel.objects.filter(status="champion").order_by("-created_at").first()
+        latest_training = training.order_by("-started_at", "-id").first()
+        total = outcome_counts["total"]
+        return {
+            "predictions_generated": predictions.count(),
+            "prediction_latency": None,
+            "prediction_accuracy": round(100 * outcome_counts["correct"] / total, 2) if total else None,
+            "model_drift": None,
+            "feature_drift": None,
+            "training_status": latest_training.status if latest_training else None,
+            "inference_errors": None,
+            "champion_model": str(model) if model else None,
+            "memory_usage": None,
+            "gpu_usage": None,
+        }
+
+
 class InfrastructureMonitoringService:
-    def snapshot(self): return {"cpu":os.getloadavg()[0] if hasattr(os,"getloadavg") else None,"memory":None,"disk":None,"database":"unknown","redis":"unknown","network":None,"bandwidth":None,"threads":None,"processes":None,"docker":"unknown","workers":None,"celery":"unknown","gpu":None,"temperature":None}
+    """Expose only host metrics that this process can actually measure."""
+
+    def snapshot(self):
+        import shutil
+        from django.conf import settings
+        from django.db import connection
+        from django.core.cache import cache
+
+        cpu = os.getloadavg()[0] if hasattr(os, "getloadavg") else None
+        memory = None
+        try:
+            pages = os.sysconf("SC_PHYS_PAGES")
+            available = os.sysconf("SC_AVPHYS_PAGES")
+            memory = round(100 * (1 - available / pages), 2) if pages else None
+        except (AttributeError, OSError, ValueError):
+            pass
+        try:
+            disk = shutil.disk_usage(os.getcwd())
+            disk_percent = round(100 * disk.used / disk.total, 2) if disk.total else None
+        except OSError:
+            disk_percent = None
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            database = "healthy"
+        except Exception:
+            database = "down"
+        cache_backend = str(
+            settings.CACHES.get("default", {}).get("BACKEND", "")
+        ).lower()
+        if "redis" not in cache_backend:
+            redis_status = "not_configured"
+        else:
+            try:
+                key = "monitoring:infrastructure-probe"
+                cache.set(key, "ok", timeout=5)
+                redis_status = "healthy" if cache.get(key) == "ok" else "degraded"
+            except Exception:
+                redis_status = "down"
+        return {
+            "cpu": cpu, "memory": memory, "disk": disk_percent,
+            "database": database, "redis": redis_status,
+            "network": None, "bandwidth": None, "threads": None,
+            "processes": None, "docker": None, "workers": None,
+            "celery": None, "gpu": None, "temperature": None,
+        }
 class MetricsService:
     def record(self,metric_name,value,unit="",module="application",tags=None): return Metric.objects.create(metric_name=metric_name,value=value,unit=unit,module=module,tags=tags or {})
     def collect_application_metrics(self):
@@ -78,8 +255,66 @@ class SelfHealingService:
         if action=="flush_cache": cache.clear()
         LogAggregationService().ingest("infrastructure","INFO",f"self-healing request {action} for {target}","self-healing",payload or {}); return {"action":action,"target":target,"status":"requested","timestamp":timezone.now().isoformat()}
 class MonitoringEngine:
-    def __init__(self): self.health=HealthMonitoringService(); self.broker=BrokerMonitoringService(); self.trading=TradingMonitoringService(); self.strategy=StrategyMonitoringService(); self.risk=RiskMonitoringService(); self.ai=AIMonitoringService(); self.infrastructure=InfrastructureMonitoringService(); self.metrics=MetricsService(); self.alerts=AlertEngine()
-    def dashboard(self):
-        health=SystemHealth.objects.order_by("-timestamp").first(); broker=BrokerHealth.objects.order_by("-last_ping").first()
-        return {"overall_system_health":health.status if health else "unknown","broker_status":broker.connection_status if broker else "unknown","trading_engine_status":"unknown","strategy_engine_status":"unknown","ai_engine_status":"unknown","risk_engine_status":"unknown","current_cpu_usage":None,"current_memory_usage":None,"current_network_usage":None,"current_drawdown":None,"active_alerts":Alert.objects.exclude(status="resolved").count(),"open_incidents":Incident.objects.exclude(status="resolved").count(),"active_users":None,"current_trades":None,"current_predictions":None,"queue_health":"unknown"}
-    def collect(self): health=self.health.run_checks(); metrics=self.metrics.collect_application_metrics(); alerts=self.alerts.evaluate({}); return {"health_checks":len(health),"metrics":metrics,"alerts":len(alerts)}
+    def __init__(self):
+        self.health = HealthMonitoringService()
+        self.broker = BrokerMonitoringService()
+        self.trading = TradingMonitoringService()
+        self.strategy = StrategyMonitoringService()
+        self.risk = RiskMonitoringService()
+        self.ai = AIMonitoringService()
+        self.infrastructure = InfrastructureMonitoringService()
+        self.metrics = MetricsService()
+        self.alerts = AlertEngine()
+
+    def dashboard(self, user=None):
+        from django.db.models import Q
+        from apps.brokers.models import BrokerAccount, BrokerConnection
+
+        health = SystemHealth.objects.order_by("-timestamp").first()
+        accounts = BrokerAccount.objects.filter(status="active")
+        if user is not None:
+            accounts = accounts.filter(user=user)
+        account_ids = accounts.values_list("id", flat=True)
+        latest_connection = BrokerConnection.objects.filter(
+            broker_account_id__in=account_ids
+        ).order_by("-updated_at").first()
+        broker_status = (
+            "connected" if BrokerConnection.objects.filter(
+                broker_account_id__in=account_ids, status="connected"
+            ).exists() else latest_connection.status if latest_connection else "not_connected"
+        )
+        trading = self.trading.snapshot(user=user)
+        strategy = self.strategy.snapshot(user=user)
+        risk = self.risk.snapshot(user=user)
+        ai = self.ai.snapshot(user=user)
+        alerts = Alert.objects.exclude(status="resolved")
+        incidents = Incident.objects.exclude(status="resolved")
+        if user is not None:
+            alerts = alerts.filter(user=user)
+            incidents = incidents.filter(Q(assigned_to=user) | Q(alert__user=user)).distinct()
+
+        system_health = health.status if health else None
+        if user is not None and not getattr(user, "is_staff", False):
+            # Trader accounts receive their own account state, not global
+            # infrastructure or internal engine diagnostics.
+            system_health = "available"
+
+        return {
+            "overall_system_health": system_health,
+            "broker_status": broker_status,
+            "current_drawdown": risk.get("current_drawdown"),
+            "active_alerts": alerts.count(),
+            "open_incidents": incidents.count(),
+            "current_trades": trading["open_positions"],
+            "current_predictions": ai["predictions_generated"],
+            "trading": trading,
+            "strategy": strategy,
+            "ai": ai,
+            "risk": risk,
+        }
+
+    def collect(self):
+        health = self.health.run_checks()
+        metrics = self.metrics.collect_application_metrics()
+        alerts = self.alerts.evaluate({})
+        return {"health_checks": len(health), "metrics": metrics, "alerts": len(alerts)}
