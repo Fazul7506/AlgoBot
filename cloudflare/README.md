@@ -80,7 +80,7 @@ The preflight is intentionally a source/configuration check, not proof of live a
 
 ## Automated production deployment and activation
 
-The GitHub Actions workflow `.github/workflows/deploy-cloudflare-workers.yml` deploys the three versioned Worker scripts, provisions missing queues, installs Worker secrets, validates the authenticated Django endpoints, then activates the unified scheduler and Deriv market stream. It runs on a push to `main` that changes Cloudflare infrastructure and can also be started with `workflow_dispatch`.
+The GitHub Actions workflow `.github/workflows/deploy-cloudflare-workers.yml` deploys the three versioned Worker scripts, provisions missing queues, installs Worker secrets, validates the authenticated Django endpoints and confirms a live Celery execution worker is responding, then activates the unified scheduler and Deriv market stream. It runs on a push to `main` that changes Cloudflare infrastructure and can also be started with `workflow_dispatch`.
 
 Configure these **GitHub Actions repository secrets** before merging/enabling the workflow:
 
@@ -101,3 +101,10 @@ Activation policy:
 - `ALLOW_LIVE_TRADING` is not changed by this workflow.
 
 The workflow's post-deployment API checks verify all three Worker scripts and all six Queue/DLQ resources. They do not claim that Celery Python execution has moved into Cloudflare: the existing Celery worker must remain available to execute Django task dispatches. Monitor Cloudflare Worker logs, Queue backlog/DLQs, Deriv tick freshness, and Django ingestion/fan-out after activation.
+
+
+### Required Python execution service
+
+The Cloudflare scheduler is a clock, queue producer, and authenticated dispatcher—not a Python task runtime. A separate Celery worker must be running against the same production Redis broker as Django before scheduled tasks can execute. The deployment workflow checks this using the authenticated `/api/internal/cloudflare/task-dispatch/health/` endpoint and refuses scheduler activation if Celery remote-control ping receives no worker response.
+
+The currently connected Render workspace has only the Daphne web service; it does not currently expose a dedicated Celery background-worker service. Consequently, Cloudflare Worker deployment can be prepared and validated in CI, but the production activation job will stop at the Celery readiness gate until a Python Celery worker is provisioned and confirmed online. Do not work around this gate by removing it or enabling schedules without an execution consumer.
