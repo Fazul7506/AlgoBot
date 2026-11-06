@@ -166,7 +166,7 @@ jobs:
           # Keep the legacy dispatcher's cron gate off to prevent duplicate AI schedules.
           npx --yes wrangler deploy --config cloudflare/ai-training-dispatcher/wrangler.jsonc --var AI_TRAINING_DISPATCH_ACTIVE:false
 
-      - name: Verify deployed Worker scripts and Queue resources
+      - name: Verify deployed Worker settings, bindings, and Queue consumers
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
@@ -174,16 +174,36 @@ jobs:
           api="https://api.cloudflare.com/client/v4"
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
           for worker in algobot-ai-training-dispatcher algobot-background-scheduler algobot-market-stream; do
-            response="$(curl --fail --silent --show-error "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker")"
-            printf '%s' "$response" | node -e '
-              let raw = "";
-              process.stdin.on("data", chunk => raw += chunk);
-              process.stdin.on("end", () => {
-                const payload = JSON.parse(raw);
-                if (payload.success !== true) process.exit(1);
-              });
-            '
-            echo "Verified deployed Worker script: $worker"
+            response="$(curl --fail --silent --show-error "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/settings")"
+            WORKER_RESPONSE="$response" WORKER_NAME="$worker" node - <<'NODE'
+            const payload = JSON.parse(process.env.WORKER_RESPONSE || "{}");
+            if (payload.success !== true || !Array.isArray(payload.result?.bindings)) {
+              throw new Error(`Could not inspect deployed Worker settings for ${process.env.WORKER_NAME}`);
+            }
+            const bindings = payload.result.bindings;
+            const names = new Set(bindings.map(binding => binding.name));
+            if (process.env.WORKER_NAME === "algobot-background-scheduler") {
+              for (const name of ["ALGOBOT_TASK_QUEUE", "ALGOBOT_TASK_DLQ_QUEUE", "SCHEDULER_COORDINATOR", "ALGOBOT_TASK_DISPATCH_TOKEN"]) {
+                if (!names.has(name)) throw new Error(`Scheduler binding/secret missing: ${name}`);
+              }
+              for (const [name, expected] of [["CLOUDFLARE_SCHEDULER_ACTIVE", "true"], ["ENABLE_EXECUTION_QUEUE_RECOVERY", "false"]]) {
+                const binding = bindings.find(item => item.name === name && item.type === "plain_text");
+                if (!binding || binding.text !== expected) throw new Error(`Scheduler activation value incorrect: ${name}`);
+              }
+            }
+            if (process.env.WORKER_NAME === "algobot-market-stream") {
+              for (const name of ["MARKET_TICK_QUEUE", "MARKET_TICK_DLQ_QUEUE", "MARKET_STREAM_COORDINATOR", "CLOUDFLARE_MARKET_STREAM_TOKEN", "MARKET_STREAM_CONTROL_TOKEN"]) {
+                if (!names.has(name)) throw new Error(`Market-stream binding/secret missing: ${name}`);
+              }
+              const active = bindings.find(item => item.name === "CLOUDFLARE_MARKET_STREAM_ACTIVE" && item.type === "plain_text");
+              if (!active || active.text !== "true") throw new Error("Market stream activation flag is not true");
+            }
+            if (process.env.WORKER_NAME === "algobot-ai-training-dispatcher") {
+              const active = bindings.find(item => item.name === "AI_TRAINING_DISPATCH_ACTIVE" && item.type === "plain_text");
+              if (!active || active.text !== "false") throw new Error("Legacy AI dispatcher schedule must remain disabled");
+            }
+            console.log(`Verified deployed Worker configuration: ${process.env.WORKER_NAME}`);
+            NODE
           done
           queues="$(curl --fail --silent --show-error "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/queues?per_page=1000")"
           QUEUE_RESPONSE="$queues" node - <<'NODE'
@@ -191,13 +211,21 @@ jobs:
           if (payload.success !== true || !Array.isArray(payload.result)) {
             throw new Error("Cloudflare Queue listing failed");
           }
-          const actual = new Set(payload.result.map(queue => queue.queue_name));
           const required = [
-            "algobot-ai-training", "algobot-ai-training-dlq",
-            "algobot-background-tasks", "algobot-background-tasks-dlq",
-            "algobot-market-ticks", "algobot-market-ticks-dlq",
+            ["algobot-ai-training", "algobot-ai-training-dispatcher", "algobot-ai-training-dlq"],
+            ["algobot-background-tasks", "algobot-background-scheduler", "algobot-background-tasks-dlq"],
+            ["algobot-market-ticks", "algobot-market-stream", "algobot-market-ticks-dlq"],
           ];
-          const missing = required.filter(name => !actual.has(name));
-          if (missing.length) throw new Error("Missing Cloudflare Queues: " + missing.join(", "));
-          console.log("Verified all six production Queue and DLQ resources.");
+          for (const [queueName, workerName, dlqName] of required) {
+            const queue = payload.result.find(item => item.queue_name === queueName);
+            if (!queue) throw new Error(`Missing Cloudflare Queue: ${queueName}`);
+            const consumer = (queue.consumers || []).find(item => item.type === "worker" && item.script_name === workerName);
+            if (!consumer) throw new Error(`Queue consumer not attached: ${queueName} -> ${workerName}`);
+            if (consumer.dead_letter_queue !== dlqName) throw new Error(`Wrong DLQ for ${queueName}: expected ${dlqName}`);
+          }
+          const allNames = new Set(payload.result.map(queue => queue.queue_name));
+          for (const name of ["algobot-ai-training-dlq", "algobot-background-tasks-dlq", "algobot-market-ticks-dlq"]) {
+            if (!allNames.has(name)) throw new Error(`Missing dead-letter Queue: ${name}`);
+          }
+          console.log("Verified all six Queue/DLQ resources and all three active Worker consumers.");
           NODE
