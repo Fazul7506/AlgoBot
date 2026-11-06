@@ -9,6 +9,7 @@ import email.utils
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -76,7 +77,7 @@ def _catalogue_sentiment_keywords() -> dict[str, list[str]]:
     ).values("symbol", "display_name", "market", "sub_market")
     result: dict[str, list[str]] = {}
     for row in rows.iterator():
-        symbol = str(row["symbol"] or "").strip().upper()
+        symbol = str(row["symbol"] or "").strip()
         if not symbol:
             continue
         name = str(row["display_name"] or "").strip()
@@ -102,10 +103,11 @@ def sentiment_symbol_keywords() -> dict[str, list[str]]:
     if not isinstance(overrides, dict):
         raise RuntimeError("AI_SENTIMENT_SYMBOL_KEYWORDS_JSON must be a JSON object")
     for symbol, values in overrides.items():
-        key = str(symbol).strip().upper()
+        key = str(symbol).strip()
         if not key or not isinstance(values, list):
             continue
-        keywords[key] = sorted(set(keywords.get(key, [])).union(
+        canonical = next((existing for existing in keywords if existing.upper() == key.upper()), key)
+        keywords[canonical] = sorted(set(keywords.get(canonical, [])).union(
             str(value).strip() for value in values if str(value).strip()
         ))
     return keywords
@@ -184,7 +186,7 @@ def normalize_orderbook(payload: dict[str, Any]) -> dict[str, float]:
             if not isinstance(level, (list, tuple)) or len(level) < 2:
                 raise ValueError("Invalid order-book level")
             price, quantity = float(level[0]), float(level[1])
-            if price <= 0 or quantity < 0:
+            if not math.isfinite(price) or not math.isfinite(quantity) or price <= 0 or quantity < 0:
                 raise ValueError("Order-book prices must be positive and quantities non-negative")
             total += quantity
         return total
@@ -248,7 +250,7 @@ def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
         raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must be valid JSON") from exc
     if not isinstance(mapping, dict) or any(not isinstance(v, str) or not v.strip() for v in mapping.values()):
         raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must map internal symbols to provider symbol strings")
-    return provider, symbols, {str(k).strip().upper(): v.strip().upper() for k, v in mapping.items()}
+    return provider, symbols, {str(k).strip(): v.strip().upper() for k, v in mapping.items()}
 
 
 def ingest_orderbook_snapshots() -> dict[str, int]:
