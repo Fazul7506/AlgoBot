@@ -69,7 +69,7 @@ class ExternalMarketSignalTests(SimpleTestCase):
             keywords = _catalogue_sentiment_keywords()
         self.assertIn("R_100", keywords)
         self.assertIn("frxEURUSD", keywords)
-        self.assertIn("EUR/USD", keywords["FRXEURUSD"])
+        self.assertIn("EUR/USD", keywords["frxEURUSD"])
 
     def test_sentiment_overrides_are_additive_to_catalogue(self):
         from apps.ai_engine.external_signals import sentiment_symbol_keywords
