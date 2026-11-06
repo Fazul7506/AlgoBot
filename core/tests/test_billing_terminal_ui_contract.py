@@ -156,6 +156,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("browserApiTokenUrl", client)
+        self.assertIn("window.location.origin+'/api/auth/browser-token/'", client)
+        self.assertNotIn("browserApiTokenUrl=()=>apiBase", client)
         self.assertIn("/api/auth/browser-token/", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
