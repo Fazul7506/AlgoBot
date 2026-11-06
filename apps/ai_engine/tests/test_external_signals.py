@@ -56,3 +56,41 @@ class ExternalMarketSignalTests(SimpleTestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["title"], "EUR/USD outlook")
         self.assertEqual(rows[0]["link"], "https://example.com/story")
+
+
+    def test_sentiment_keyword_catalogue_includes_inactive_and_untradable_symbols(self):
+        from apps.ai_engine.external_signals import _catalogue_sentiment_keywords
+        with patch("apps.market_data.services.MarketDataService.symbols.catalogue") as catalogue:
+            catalogue.return_value.values.return_value.iterator.return_value = iter([
+                {"symbol": "R_100", "display_name": "Volatility 100 Index", "market": "synthetic", "sub_market": ""},
+                {"symbol": "frxEURUSD", "display_name": "EUR/USD", "market": "forex", "sub_market": ""},
+            ])
+            keywords = _catalogue_sentiment_keywords()
+        self.assertIn("R_100", keywords)
+        self.assertIn("frxEURUSD", keywords)
+        self.assertIn("EUR/USD", keywords["FRXEURUSD"])
+
+    def test_sentiment_overrides_are_additive_to_catalogue(self):
+        from apps.ai_engine.external_signals import sentiment_symbol_keywords
+        with patch("apps.ai_engine.external_signals._catalogue_sentiment_keywords", return_value={"R_100": ["R_100"]}), patch.dict(
+            "os.environ", {"AI_SENTIMENT_SYMBOL_KEYWORDS_JSON": '{"R_100":["Volatility 100"]}'}
+        ):
+            keywords = sentiment_symbol_keywords()
+        self.assertEqual(set(keywords["R_100"]), {"R_100", "Volatility 100"})
+
+    def test_sentiment_ticker_matching_uses_token_boundaries(self):
+        from apps.ai_engine.external_signals import _matches_keyword
+        self.assertTrue(_matches_keyword("Bitcoin BTC/USD rises", "BTC"))
+        self.assertFalse(_matches_keyword("whether markets rise", "ETH"))
+
+    def test_binance_orderbook_adapter_requires_explicit_symbol_mapping(self):
+        from apps.ai_engine.external_signals import BinanceSpotOrderBookAdapter, OrderBookProviderError
+        adapter = BinanceSpotOrderBookAdapter({})
+        with self.assertRaises(OrderBookProviderError):
+            adapter.fetch("CRYBTCUSD")
+
+    def test_orderbook_configuration_rejects_malformed_symbol_map(self):
+        from apps.ai_engine.external_signals import _orderbook_symbol_configuration
+        with patch.dict("os.environ", {"ORDER_BOOK_PROVIDER": "binance_spot", "ORDER_BOOK_SYMBOLS": "CRYBTCUSD", "ORDER_BOOK_SYMBOL_MAP_JSON": "[]"}):
+            with self.assertRaises(RuntimeError):
+                _orderbook_symbol_configuration()
