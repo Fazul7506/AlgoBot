@@ -33,7 +33,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
-  const money = (value, currency = 'USD') => { if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = 'USD') => { if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
   const pct = value => value === null || value === undefined || value === '' ? '—' : `${Number(value).toFixed(1)}%`;
   const normalise = value => Array.isArray(value) ? value : (
     Array.isArray(value?.results) ? value.results : (
@@ -100,10 +100,10 @@
       const positions = $('[data-kpi="positions"]');
       const winrate = $('[data-kpi="winrate"]');
       const pnl = $('[data-kpi="pnl"]');
-      if (balance) balance.textContent = account ? `${account.currency || ''} ${money(account.balance)}`.trim() : '—';
+      if (balance) balance.textContent = account ? money(account.balance, account.currency || 'USD') : money(0, 'USD');
       if (positions) positions.textContent = stats.open_trades ?? '0';
       if (winrate) winrate.textContent = pct(stats.win_rate);
-      if (pnl) pnl.textContent = money(stats.total_pnl);
+      if (pnl) pnl.textContent = money(stats.total_pnl, account?.currency || 'USD');
       const terminalAccount = $('[data-terminal-account]');
       if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || data.account?.account_id || 'Not connected'}`;
       return { ...data, selectedAccount: account };

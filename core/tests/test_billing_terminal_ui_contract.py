@@ -33,7 +33,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertIn("ENTERPRISE", template)
-        self.assertIn("Custom pricing", template)
+        self.assertIn("currency='USD'", template)
+        self.assertIn("!Number.isFinite(raw)?0:raw", template)
         self.assertIn("Usage is measured from persisted platform audit/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
         self.assertNotIn("Contact sales", template)

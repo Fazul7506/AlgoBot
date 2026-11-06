@@ -7,6 +7,7 @@
   const state = {category:'all', market:'', asset:'', search:'', page:1, pageSize:10, loading:false, lastData:null};
   const fmt = (v, digits=5) => v == null || v === '' || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString(undefined,{maximumFractionDigits:digits});
   const pct = v => v == null || !Number.isFinite(Number(v)) ? 'Unavailable' : Number(v).toFixed(1)+'%';
+  const money = (v,c='USD') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v,c) : '$'+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   const title = v => String(v || 'unknown').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
   // Preserve lifecycle semantics and strategy classification from the reference implementation.
   const lifecycleStatus = row => String(row.lifecycle || row.execution_state || row.settlement_state || row.status || 'unavailable').toLowerCase();
@@ -64,9 +65,9 @@
     ring.setAttribute('aria-label',winRate==null?'Win rate unavailable':('Win rate '+pct(winRate)));
     $('performance-winrate').textContent=winRate==null?'—':pct(winRate);
     $('performance-wins').textContent=fmt(performance.wins,0);$('performance-losses').textContent=fmt(performance.losses,0);$('performance-flat').textContent=fmt(performance.breakeven,0);
-    $('performance-pnl').textContent=performance.realized_pnl==null?'Unavailable':fmt(performance.realized_pnl,2)+(data.account?.currency?' '+esc(data.account.currency):'');
-    $('performance-average-profit').textContent=performance.average_profit==null?'Unavailable':fmt(performance.average_profit,2);
-    $('performance-average-loss').textContent=performance.average_loss==null?'Unavailable':fmt(performance.average_loss,2);
+    $('performance-pnl').textContent=money(performance.realized_pnl,data.account?.currency||'USD');
+    $('performance-average-profit').textContent=money(performance.average_profit,data.account?.currency||'USD');
+    $('performance-average-loss').textContent=money(performance.average_loss,data.account?.currency||'USD');
     $('performance-note').textContent=performance.performance_available?'Calculated from persisted outcome/P&L metadata; open signals are not included.':'No persisted completed outcomes or realized P&L are available for this account.';
     fillSelect($('signals-market'),data.markets||[],'All Markets',state.market);
     fillSelect($('signals-asset'),data.assets||[],'All Assets',state.asset);

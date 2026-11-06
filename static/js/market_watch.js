@@ -139,7 +139,7 @@
       const state = quote?.state || 'unavailable';
       const favourite = favourites.has(row.symbol);
       const href = '/trading/?symbol=' + encodeURIComponent(row.symbol);
-      const quoteText = quote && state !== 'unavailable' ? money(quote.price) : 'Unavailable';
+      const quoteText = quote && state !== 'unavailable' ? money(quote.price) : money(0, quote?.currency || 'USD');
       const bidAsk = quote && state !== 'unavailable'
         ? 'Bid ' + money(quote.bid) + ' · Ask ' + money(quote.ask) + ' · ' + statusText(state)
         : 'Waiting for broker market feed';

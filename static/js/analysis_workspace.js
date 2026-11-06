@@ -45,7 +45,7 @@
       aiState:"UNAVAILABLE",aiDecision:"UNAVAILABLE",aiConfidence:"—",aiModels:"0",aiAgreement:"—",confluenceState:"UNAVAILABLE",confluenceDirection:"WAIT",confluenceScore:"—",
       validationState:"UNAVAILABLE",validationDirection:"WAIT",validationExpiry:"—",noLookAhead:"UNCONFIRMED",marketState:"UNAVAILABLE",marketSource:"—",marketAge:"—",candleCount:"—",
       keyCurrentPrice:"—",resistance1:"—",resistance2:"—",support1:"—",support2:"—",sma20:"—",sma50:"—",sma200:"—",ema:"— / —",rsi:"—",atr:"—",macd:"—",bb:"—",
-      account:"NO VERIFIED ACCOUNT CONTEXT",accountType:"—",currency:"—",balance:"—",riskBudget:"—",stake:"—",provenanceMarket:"—",provenanceCandles:"—",provenanceAnalysis:"—",provenanceExecution:"—",
+      account:"NO VERIFIED ACCOUNT CONTEXT",accountType:"—",currency:"USD",balance:"$0.00",riskBudget:"$0.00",stake:"$0.00",provenanceMarket:"—",provenanceCandles:"—",provenanceAnalysis:"—",provenanceExecution:"—",
       gateState:"BLOCKED",gateReason:"Fresh analysis evidence could not be confirmed.",heroFeedState:"Market feed unavailable",referenceUpdatedAt:"Last update unavailable",aiReason:"No verified AI analysis available"
     };
     Object.entries(values).forEach(([id,value])=>set(id,value));
@@ -181,7 +181,7 @@
     list("fvgs",d.fair_value_gaps,x=>'<div class="evidence-row"><span>'+esc(x.type)+" FVG</span><strong>"+num(x.low)+"–"+num(x.high)+"</strong></div>");
     list("zones",d.supply_demand,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+num(x.low)+"–"+num(x.high)+"</strong></div>");
     list("patterns",d.candlestick_patterns,x=>'<div class="evidence-row"><span>'+esc(x.type)+"</span><strong>"+esc(x.bias)+"</strong></div>");
-    set("account",acct.account_id||"NO ACTIVE ACCOUNT");set("accountType",acct.account_type||"—");set("currency",acct.currency||"—");set("balance",money(acct.balance,acct.currency));set("riskBudget",money(acct.risk_budget,acct.currency));set("stake",money(acct.recommended_stake,acct.currency));
+    set("account",acct.account_id||"NO ACTIVE ACCOUNT");set("accountType",acct.account_type||"—");set("currency",acct.currency||"USD");set("balance",money(acct.balance,acct.currency));set("riskBudget",money(acct.risk_budget,acct.currency));set("stake",money(acct.recommended_stake,acct.currency));
     set("provenanceMarket",d.data_provenance?.broker||"—");set("provenanceCandles",d.data_provenance?.candle_source||"—");set("provenanceAnalysis","AlgoBot technical + AI pipeline");set("provenanceExecution","Broker only");
     drawChart(d.last_candles||[]); drawIndicators(d.last_candles||[]);
   }
@@ -231,7 +231,7 @@
       list("predictionRows",[],()=>"", "No verified AI prediction is available.");
       list("sentimentNewsRows",[],()=>"", "No verified sentiment or news feed is available.");
       set("keyCurrentPrice","—");set("resistance1","—");set("resistance2","—");set("support1","—");set("support2","—");
-      set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","—");set("balance","—");set("riskBudget","—");set("stake","—");
+      set("account","NO VERIFIED ACCOUNT CONTEXT");set("accountType","—");set("currency","USD");set("balance","$0.00");set("riskBudget","$0.00");set("stake","$0.00");
       drawChart([]); drawIndicators([]);
     } finally {
       if(A.requestController===controller)A.requestController=null;

@@ -26,12 +26,9 @@
   const esc = value => String(value ?? '—').replace(/[&<>'"]/g, ch => ({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
   }[ch]));
-  const money = (value, code) => {
-    if (value == null || value === '') return '—';
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '—';
-    return `${n.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 8})} ${esc(code || '')}`.trim();
-  };
+  const money = (value, code='USD') => window.AlgoBotMoney?.format
+    ? window.AlgoBotMoney.format(value, code || 'USD')
+    : `$${(Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2)}`;
   const time = value => {
     if (!value) return '—';
     const d = new Date(value);

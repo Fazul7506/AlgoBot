@@ -1,0 +1,22 @@
+/* Monetary values use one consistent positive green treatment across AlgoBot. */
+.algobot-money-value,
+.money-value,
+[data-money-value],
+[data-kpi="balance"],
+[data-kpi="equity"],
+[data-kpi="available"],
+[data-kpi="pnl"],
+[data-page-pnl],
+[data-pf-total],
+[data-pf-pnl],
+[data-pf-balance],
+[data-pf-invested] {
+  color: var(--algobot-money-green, #20c997) !important;
+}
+input[data-money-input],
+input[name*="amount" i],
+input[name*="stake" i],
+input[name*="price" i],
+input[name*="balance" i] {
+  color: var(--algobot-money-green, #20c997) !important;
+}

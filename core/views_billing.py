@@ -26,8 +26,8 @@ from core.services.payment_service import PaymentService
 class CheckoutPlan:
     plan: str
     price_cents: int
-    currency: str = "KES"
-    recurring: bool = True
+    currency: str = "USD"
+    recurring: bool = False
     reference: str = ""
     provider_request_id: str = ""
 
@@ -56,11 +56,11 @@ def _safe_price(value):
 
 
 def _plans():
-    currency = str(getattr(settings, "ALGOBOT_BILLING_CURRENCY", "KES")).upper()
+    currency = "USD"
     configured = {"BASIC": _safe_price(getattr(settings, "ALGOBOT_BASIC_PRICE_CENTS", None)), "PRO": _safe_price(getattr(settings, "ALGOBOT_PRO_PRICE_CENTS", None)), "ENTERPRISE": _safe_price(getattr(settings, "ALGOBOT_ENTERPRISE_PRICE_CENTS", None))}
     plans = [{"plan": "FREE", "price_cents": 0, "currency": currency, "recurring": False, "configured": True}]
     for name, price in configured.items():
-        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": True, "configured": price is not None and price > 0})
+        plans.append({"plan": name, "price_cents": price, "currency": currency, "recurring": False, "configured": price is not None and price > 0})
     return plans
 
 
@@ -212,10 +212,19 @@ def _checkout(request, plan_name, provider=None):
     if selected == PaymentService.PAYPAL:
         paypal_price = PaymentService().paypal_price_for_plan(plan["plan"])
         if not paypal_price:
-            return None, "PayPal is not ready for this plan. Configure PayPal credentials, webhook ID, supported currency and an explicit price for this plan."
+            return None, "PayPal is not ready for this plan. Configure PayPal credentials and webhook ID."
         checkout_price_cents = paypal_price["price_cents"]
-        checkout_currency = paypal_price["currency"]
+        checkout_currency = "USD"
         checkout_recurring = False  # Orders v2 capture is a one-time charge, not automatic renewal.
+    elif selected == PaymentService.INTASEND:
+        # IntaSend's recurring subscription-plan endpoint does not accept USD.
+        # Its hosted collections checkout supports USD, so use a verified
+        # one-time collection and let AlgoBot's subscription expiry govern access.
+        checkout_currency = "USD"
+        checkout_recurring = False
+    else:
+        checkout_currency = "USD"
+        checkout_recurring = False
 
     active_subscription = Subscription.objects.filter(user=request.user).first()
     if active_subscription and active_subscription.plan != "FREE" and active_subscription.is_active and (
@@ -223,7 +232,9 @@ def _checkout(request, plan_name, provider=None):
     ):
         if active_subscription.plan == plan["plan"]:
             return None, "This plan is already active."
-        return None, "Your current paid access is still active. Cancel its renewal first, then start the new plan."
+        if active_subscription.recurring:
+            return None, "Your current recurring subscription is still active. Cancel its renewal first, then start the new plan."
+        return None, "Your current paid access is still active. Wait for it to expire before starting a different plan."
 
     # Serialize checkout initiation per user, but never hold a DB lock across the provider HTTP call.
     # A short-lived lease prevents concurrent browser retries from opening two provider checkouts.
@@ -233,16 +244,20 @@ def _checkout(request, plan_name, provider=None):
         request_user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
         existing = (
             Invoice.objects.filter(
-                user=request_user,
-                paid=False,
-                amount_cents=checkout_price_cents,
-                currency=checkout_currency,
-                metadata__plan=plan["plan"],
-                metadata__provider=selected,
-            )
-            .order_by("-created_at")
-            .first()
+                user=request_user, paid=False, amount_cents=checkout_price_cents,
+                currency=checkout_currency, metadata__plan=plan["plan"], metadata__provider=selected,
+            ).order_by("-created_at").first()
         )
+        # A KES checkout may still be in flight from before the USD migration.
+        # Reconcile/resume that exact provider invoice before creating a new USD
+        # checkout; never reinterpret the historical KES amount as dollars.
+        if not existing:
+            existing = (
+                Invoice.objects.filter(
+                    user=request_user, paid=False, metadata__plan=plan["plan"],
+                    metadata__provider=selected, metadata__state="checkout_open",
+                ).order_by("-created_at").first()
+            )
         metadata = dict(existing.metadata or {}) if existing else {}
         # Hosted checkout URLs can contain bearer-like provider tokens. Never persist
         # or reuse them; a fresh provider response is required for each new checkout.
@@ -317,6 +332,11 @@ def _checkout(request, plan_name, provider=None):
             if not invoice:
                 return None, "The existing checkout changed while it was being checked. Refresh billing and try again."
             metadata = dict(invoice.metadata or {})
+            # Once a legacy non-USD checkout is terminal, reuse its invoice row
+            # for the new attempt only after switching it to the current USD
+            # catalogue price. Its prior provider payment remains auditable.
+            invoice.amount_cents = checkout_price_cents
+            invoice.currency = checkout_currency
             if metadata.get("state") == "checkout_open":
                 now = timezone.now()
                 metadata.update({
@@ -326,7 +346,7 @@ def _checkout(request, plan_name, provider=None):
                     "error_classification": "",
                 })
                 invoice.metadata = metadata
-                invoice.save(update_fields=["metadata"])
+                invoice.save(update_fields=["amount_cents", "currency", "metadata"])
             elif metadata.get("state") == "checkout_attempting":
                 lock_until = metadata.get("checkout_lock_until")
                 try:
@@ -345,7 +365,7 @@ def _checkout(request, plan_name, provider=None):
                 "attempt_count": int(metadata.get("attempt_count") or 0) + 1,
                 "checkout_lock_until": (timezone.now() + timedelta(seconds=lease_seconds)).isoformat(),
             }
-            invoice.save(update_fields=["metadata"])
+            invoice.save(update_fields=["amount_cents", "currency", "metadata"])
 
     else:
         invoice = locals().get("invoice")

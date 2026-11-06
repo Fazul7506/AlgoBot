@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
@@ -9,6 +12,7 @@ from core.services.payment_service import PaymentService
 from core.views_billing import CheckoutPlan, _checkout
 
 
+@override_settings(ALGOBOT_BASIC_PRICE_CENTS=99900, ALGOBOT_PRO_PRICE_CENTS=499900, ALGOBOT_ENTERPRISE_PRICE_CENTS=2499900)
 class BillingPaymentFlowTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -54,7 +58,7 @@ class BillingPaymentFlowTests(TestCase):
         invoice = Invoice.objects.create(
             user=self.user,
             amount_cents=99900,
-            currency="KES",
+            currency="USD",
             metadata={"plan": "BASIC", "provider": "intasend", "reference": reference},
         )
 
@@ -106,6 +110,67 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(payload["purchase_units"][0]["amount"], {"currency_code": "USD", "value": "999.00"})
         self.assertEqual(payload["purchase_units"][0]["custom_id"], reference)
         self.assertEqual(post.call_args.kwargs["headers"]["PayPal-Request-Id"], "checkout-ref-1")
+
+    def test_legacy_kes_price_environment_values_are_not_used_as_usd(self):
+        env = os.environ.copy()
+        for plan in ("BASIC", "PRO", "ENTERPRISE"):
+            env.pop(f"ALGOBOT_{plan}_PRICE_CENTS_USD", None)
+        env["ALGOBOT_BASIC_PRICE_CENTS"] = "99900"
+        legacy = subprocess.run(
+            [sys.executable, "-c", "from config.settings.payment import ALGOBOT_BASIC_PRICE_CENTS; print(ALGOBOT_BASIC_PRICE_CENTS or 'NONE')"],
+            env=env, capture_output=True, text=True, check=True,
+        )
+        self.assertEqual(legacy.stdout.strip(), "NONE")
+        env["ALGOBOT_BASIC_PRICE_CENTS_USD"] = "12345"
+        configured = subprocess.run(
+            [sys.executable, "-c", "from config.settings.payment import ALGOBOT_BASIC_PRICE_CENTS; print(ALGOBOT_BASIC_PRICE_CENTS)"],
+            env=env, capture_output=True, text=True, check=True,
+        )
+        self.assertEqual(configured.stdout.strip(), "12345")
+
+    @override_settings(ALGOBOT_BILLING_CURRENCY="KES", ALGOBOT_BASIC_PRICE_CENTS=12345)
+    def test_all_provider_catalogue_prices_are_shared_usd_amounts(self):
+        from core.views_billing import _plans
+        plans = {item["plan"]: item for item in _plans()}
+        self.assertEqual(plans["BASIC"]["currency"], "USD")
+        self.assertEqual(plans["BASIC"]["price_cents"], 12345)
+        self.assertFalse(plans["BASIC"]["recurring"])
+        self.assertFalse(CheckoutPlan(plan="BASIC", price_cents=12345).recurring)
+        self.assertEqual(Invoice._meta.get_field("currency").default, "USD")
+        self.assertEqual(Payment._meta.get_field("currency").default, "USD")
+        self.assertEqual(Subscription._meta.get_field("currency").default, "USD")
+        self.assertFalse(Subscription._meta.get_field("recurring").default)
+        with override_settings(PAYPAL_BILLING_CURRENCY="USD", ALGOBOT_BASIC_PRICE_CENTS=12345):
+            self.assertEqual(PaymentService().paypal_price_for_plan("BASIC"), {"price_cents": 12345, "currency": "USD"})
+
+    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_live_example", INTASEND_API_BASE_URL="https://api.intasend.com")
+    @patch("core.services.payment_service.requests.post")
+    def test_intasend_recurring_plan_is_routed_to_usd_collection_checkout(self, post):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {"id": "INVOICE-USD", "url": "https://payment.intasend.com/checkout/INVOICE-USD", "currency": "USD"}
+        post.return_value = response
+        result = PaymentService().create_intasend_checkout(
+            self.user, CheckoutPlan(plan="BASIC", price_cents=12345, currency="USD", recurring=True, reference="IS-USD-REF"),
+        )
+        self.assertEqual(result["url"], "https://payment.intasend.com/checkout/INVOICE-USD")
+        self.assertTrue(post.call_args.args[0].endswith("/api/v1/checkout/"))
+        self.assertEqual(post.call_args.kwargs["json"]["currency"], "USD")
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], "123.45")
+
+    @override_settings(PESAPAL_CONSUMER_KEY="consumer", PESAPAL_CONSUMER_SECRET="secret", PESAPAL_NOTIFICATION_ID="notification", PESAPAL_API_BASE_URL="https://pay.pesapal.com/v3")
+    @patch("core.services.payment_service.PaymentService._pesapal_access_token", return_value="token")
+    @patch("core.services.payment_service.requests.post")
+    def test_pesapal_checkout_uses_usd_and_shared_amount(self, post, token):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {"redirect_url": "https://pay.pesapal.com/checkout/123", "order_tracking_id": "TRACK-USD"}
+        post.return_value = response
+        result = PaymentService().create_pesapal_checkout(
+            self.user, CheckoutPlan(plan="BASIC", price_cents=12345, currency="USD", recurring=False, reference="PP-USD-REF"),
+        )
+        self.assertEqual(result["order_tracking_id"], "TRACK-USD")
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["currency"], "USD")
+        self.assertEqual(payload["amount"], "123.45")
 
     @override_settings(
         PAYPAL_CLIENT_ID="sandbox-client", PAYPAL_CLIENT_SECRET="sandbox-secret",
@@ -208,9 +273,8 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(result["reconciled"]["rejected"], "amount_mismatch")
 
     @override_settings(
-        ALGOBOT_BILLING_CURRENCY="KES", ALGOBOT_BASIC_PRICE_CENTS=250000,
         PAYPAL_CLIENT_ID="client", PAYPAL_CLIENT_SECRET="secret", PAYPAL_WEBHOOK_ID="WH-TEST",
-        PAYPAL_MODE="sandbox", PAYPAL_BILLING_CURRENCY="USD", PAYPAL_BASIC_PRICE_CENTS=1999,
+        PAYPAL_MODE="sandbox", PAYPAL_BILLING_CURRENCY="USD", ALGOBOT_BASIC_PRICE_CENTS=1999,
     )
     @patch("core.views_billing.RequestBoundPaymentService.create_checkout_session", return_value={"url": "https://www.sandbox.paypal.com/checkoutnow?token=ORDER123", "session_id": "ORDER123", "reference": "PY-1-BASIC-ref"})
     def test_paypal_checkout_uses_explicit_usd_price_without_converting_kes_catalogue(self, create_checkout):
@@ -368,12 +432,6 @@ class BillingPaymentFlowTests(TestCase):
         self.assertEqual(payload["mobile_tarrif"], "MOBILE-PAYS")
         self.assertEqual(payload["card_tarrif"], "CARD-PAYS")
 
-    @override_settings(INTASEND_PUBLIC_KEY="ISPubKey_test_example", INTASEND_API_BASE_URL="https://api.intasend.com")
-    def test_intasend_rejects_test_key_on_live_api_endpoint(self):
-        result = PaymentService().create_intasend_checkout(self.user, CheckoutPlan(plan="BASIC", price_cents=99900, recurring=False))
-        self.assertEqual(result["url"], "")
-        self.assertIn("sandbox API URL", result["error"])
-
     @override_settings(
         INTASEND_PUBLIC_KEY="ISPubKey_live_example",
         INTASEND_API_BASE_URL="https://api.intasend.com",
@@ -500,10 +558,8 @@ class BillingPaymentFlowTests(TestCase):
         INTASEND_PUBLIC_KEY="ISPubKey_test_example",
         INTASEND_API_BASE_URL="https://api.intasend.com",
     )
-    def test_intasend_test_key_live_endpoint_is_configuration_failure(self):
-        result = PaymentService().create_intasend_checkout(
-            self.user,
-            CheckoutPlan(plan="BASIC", price_cents=50000, currency="KES", recurring=False),
-        )
-        self.assertEqual(result["url"], "")
-        self.assertIn("sandbox API URL", result["error"])
+    def test_intasend_test_key_uses_official_shared_api_endpoint(self):
+        service = PaymentService()
+        self.assertEqual(service._intasend_environment_error(), "")
+        self.assertTrue(service._is_checkout_url("https://sandbox.intasend.com/checkout/test-session", service.INTASEND))
+        self.assertFalse(service._is_checkout_url("https://payment.intasend.com/checkout/live-session", service.INTASEND))

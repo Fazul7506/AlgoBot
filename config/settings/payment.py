@@ -8,11 +8,16 @@ import os
 
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "intasend").strip().lower()
 PAYMENT_HTTP_TIMEOUT = int(os.getenv("PAYMENT_HTTP_TIMEOUT", "").strip() or "20")
-ALGOBOT_BILLING_CURRENCY = os.getenv("ALGOBOT_BILLING_CURRENCY", "KES").strip().upper()
-# KES cents. Deployment values override these defaults without a code change.
-ALGOBOT_BASIC_PRICE_CENTS = os.getenv("ALGOBOT_BASIC_PRICE_CENTS", "99900").strip() or None
-ALGOBOT_PRO_PRICE_CENTS = os.getenv("ALGOBOT_PRO_PRICE_CENTS", "499900").strip() or None
-ALGOBOT_ENTERPRISE_PRICE_CENTS = os.getenv("ALGOBOT_ENTERPRISE_PRICE_CENTS", "2499900").strip() or None
+ALGOBOT_BILLING_CURRENCY = "USD"  # Platform billing currency is fixed; broker-native amounts remain source-currency aware.
+# All providers share these explicit USD-cent values. The old unsuffixed
+# ALGOBOT_*_PRICE_CENTS variables represented KES cents and are deliberately
+# ignored so they can never be charged as dollars after the currency switch.
+def _usd_price_cents(plan_name):
+    return os.getenv(f"ALGOBOT_{plan_name}_PRICE_CENTS_USD", "").strip() or None
+
+ALGOBOT_BASIC_PRICE_CENTS = _usd_price_cents("BASIC")
+ALGOBOT_PRO_PRICE_CENTS = _usd_price_cents("PRO")
+ALGOBOT_ENTERPRISE_PRICE_CENTS = _usd_price_cents("ENTERPRISE")
 ALGOBOT_SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("ALGOBOT_SUBSCRIPTION_PERIOD_DAYS", "").strip() or "30")
 
 # Explicit application return URLs. Provider checkout URLs are dynamic and
@@ -50,13 +55,4 @@ PAYPAL_API_BASE_URL = os.getenv("PAYPAL_API_BASE_URL", "").strip().rstrip("/") o
 )
 PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "").strip()
 PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "").strip()
-PAYPAL_BILLING_CURRENCY = os.getenv("PAYPAL_BILLING_CURRENCY", "USD").strip().upper()
-def _paypal_price_cents(plan_name):
-    try:
-        value = int(os.getenv(f"PAYPAL_{plan_name}_PRICE_CENTS", ""))
-        return value if value > 0 else None
-    except (TypeError, ValueError):
-        return None
-PAYPAL_BASIC_PRICE_CENTS = _paypal_price_cents("BASIC")
-PAYPAL_PRO_PRICE_CENTS = _paypal_price_cents("PRO")
-PAYPAL_ENTERPRISE_PRICE_CENTS = _paypal_price_cents("ENTERPRISE")
+PAYPAL_BILLING_CURRENCY = "USD"

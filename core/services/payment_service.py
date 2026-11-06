@@ -62,7 +62,11 @@ class PaymentService:
         return {"url": "", "provider": selected, "error": "Unsupported payment provider"}
 
     def create_intasend_checkout(self, user, subscription_plan):
-        if bool(getattr(subscription_plan, "recurring", False)):
+        amount, currency = self._amount_and_currency(subscription_plan)
+        # IntaSend subscription plans support only selected African local
+        # currencies; USD is supported by its hosted collections checkout.
+        # Do not send USD to the recurring-plan endpoint (it rejects it).
+        if bool(getattr(subscription_plan, "recurring", False)) and currency.upper() != "USD":
             return self.create_intasend_subscription(user, subscription_plan)
 
         if not self.intasend_public_key:
@@ -71,7 +75,6 @@ class PaymentService:
         if environment_error:
             logger.error("IntaSend environment configuration mismatch: %s", environment_error)
             return {"url": "", "provider": self.INTASEND, "error": environment_error}
-        amount, currency = self._amount_and_currency(subscription_plan)
         # The billing view creates an internal reference before it persists the
         # invoice.  Reusing it here is essential: IntaSend returns this value
         # in its webhook/redirect payload, and generating another value would
@@ -341,14 +344,10 @@ class PaymentService:
             return {"url": "", "provider": self.INTASEND, "error": "Payment provider is temporarily unavailable. Please try again.", "error_classification": "timeout/network failure"}
 
     def _intasend_subscription_api_base_url(self):
-        """Return the configured IntaSend API base for recurring subscriptions.
+        """Return the configured IntaSend API base for legacy subscriptions.
 
-        Do not silently rewrite the deployment's API host. IntaSend's current
-        documentation is inconsistent: the generic authentication page uses
-        ``payment.intasend.com`` while the subscription API reference publishes
-        ``api.intasend.com``. The application must honor the explicitly
-        configured endpoint so a provider-side host mismatch is observable
-        instead of becoming an opaque timeout.
+        New collection checkout uses the documented api.intasend.com host for
+        both test/live keys; the key determines the environment.
         """
         return self.intasend_base_url
 
@@ -425,9 +424,10 @@ class PaymentService:
 
     def paypal_price_for_plan(self, plan_name):
         name = str(plan_name or "").upper().strip()
-        if name not in {"BASIC", "PRO", "ENTERPRISE"} or self.paypal_billing_currency not in self.PAYPAL_SUPPORTED_CURRENCIES:
+        if name not in {"BASIC", "PRO", "ENTERPRISE"} or self.paypal_billing_currency != "USD":
             return None
-        value = getattr(settings, f"PAYPAL_{name}_PRICE_CENTS", None)
+        # All providers share one authoritative USD price catalogue.
+        value = getattr(settings, f"ALGOBOT_{name}_PRICE_CENTS", None)
         try:
             cents = int(value)
         except (TypeError, ValueError):
@@ -750,7 +750,7 @@ class PaymentService:
             logger.error("IntaSend subscription cancellation failed: %s", exc)
             return {"ok": False, "status": "network_error"}
 
-    def create_invoice_record(self, user, amount_cents: int, currency: str = "KES"):
+    def create_invoice_record(self, user, amount_cents: int, currency: str = "USD"):
         from core.models import Invoice
         return Invoice.objects.create(user=user, amount_cents=amount_cents, currency=currency)
 
@@ -786,12 +786,12 @@ class PaymentService:
 
     def _amount_and_currency(self, subscription_plan):
         raw_amount = getattr(subscription_plan, "price_cents", 0) if not isinstance(subscription_plan, str) else 0
-        currency = getattr(subscription_plan, "currency", "KES") if not isinstance(subscription_plan, str) else "KES"
+        currency = getattr(subscription_plan, "currency", "USD") if not isinstance(subscription_plan, str) else "USD"
         try:
             amount = Decimal(str(raw_amount or 0)) / Decimal("100")
         except (InvalidOperation, ValueError):
             amount = Decimal("0")
-        return amount, str(currency or "KES")
+        return amount, str(currency or "USD")
 
     def _base_url(self):
         raw = str(getattr(settings, "BASE_URL", "") or "").strip().strip('"').strip("'")
@@ -859,16 +859,19 @@ class PaymentService:
 
     def _intasend_environment_error(self):
         key = str(self.intasend_public_key or "").strip().lower()
-        base_host = (urlsplit(str(self.intasend_base_url or "")).hostname or "").lower()
-        is_sandbox = base_host == "sandbox.intasend.com" or base_host.endswith(".sandbox.intasend.com")
-        is_live = base_host in {"api.intasend.com", "payment.intasend.com"} or (base_host.endswith(".intasend.com") and not is_sandbox)
+        base_host = (urlsplit(str(self.intasend_base_url or "")).hostname or "").lower().rstrip(".")
         key_environment = "sandbox" if "test" in key else "live" if "live" in key else "unknown"
-        if key_environment == "sandbox" and not is_sandbox:
-            return "IntaSend test credentials require the IntaSend sandbox API URL."
-        if key_environment == "live" and not is_live:
-            return "IntaSend live credentials require the IntaSend live API URL."
-        if base_host and not (is_sandbox or is_live):
-            return "IntaSend API URL is not a recognized live or sandbox endpoint."
+        # Current IntaSend docs use api.intasend.com for both environments;
+        # the publishable key selects sandbox vs live. Legacy environment hosts
+        # remain accepted only when their key environment matches.
+        if key_environment == "unknown":
+            return "IntaSend public key must be an explicit test or live key."
+        if base_host == "sandbox.intasend.com" and key_environment != "sandbox":
+            return "IntaSend live credentials require the live API URL."
+        if base_host == "payment.intasend.com" and key_environment != "live":
+            return "IntaSend test credentials require the sandbox API URL."
+        if base_host not in {"api.intasend.com", "sandbox.intasend.com", "payment.intasend.com"}:
+            return "IntaSend API URL is not a recognized official endpoint."
         return ""
 
     @staticmethod
@@ -951,13 +954,13 @@ class PaymentService:
 
     def _is_checkout_url(self, value, provider=PESAPAL):
         parsed = urlsplit(str(value or "").strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             return False
         host = parsed.hostname.lower().rstrip(".")
         if provider == self.INTASEND:
-            base_host = (urlsplit(self._intasend_subscription_api_base_url()).hostname or "").lower().rstrip(".")
-            allowed = {"payment.intasend.com", "sandbox.intasend.com"}
-            return host in allowed and ((base_host == "sandbox.intasend.com" and host == "sandbox.intasend.com") or (base_host != "sandbox.intasend.com" and host == "payment.intasend.com"))
+            key = str(self.intasend_public_key or "").strip().lower()
+            expected_host = "sandbox.intasend.com" if "test" in key else "payment.intasend.com" if "live" in key else ""
+            return bool(expected_host and host == expected_host)
         if provider == self.PESAPAL:
             base_host = (urlsplit(self.pesapal_base_url).hostname or "").lower().rstrip(".")
             return host == base_host

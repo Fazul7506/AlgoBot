@@ -11,7 +11,7 @@
     <div class="callback-grid">
       <div><span>Provider</span><strong>{{ provider|title }}</strong></div>
       <div><span>Status</span><strong class="money-value">{{ payment_state|default:"PENDING" }}</strong></div>
-      {% if invoice %}<div><span>Amount</span><strong class="money-value">{{ invoice.currency|upper }} {{ invoice_amount|floatformat:2 }}</strong></div>{% endif %}
+      {% if invoice %}<div><span>Amount</span><strong class="money-value">{% if invoice.currency|upper == "USD" or not invoice.currency %}${{ invoice_amount|floatformat:2 }}{% else %}{{ invoice.currency|upper }} {{ invoice_amount|floatformat:2 }}{% endif %}</strong></div>{% endif %}
       {% if subscription %}<div><span>Plan</span><strong>{{ subscription.plan }}</strong></div>{% endif %}
     </div>
     <div class="callback-actions"><a class="btn primary" href="/billing/">Open billing</a><a class="btn ghost" href="/dashboard/">Return to dashboard</a></div>
