@@ -102,7 +102,9 @@ def sentiment_symbol_keywords() -> dict[str, list[str]]:
         key = str(symbol).strip()
         if not key or not isinstance(values, list):
             continue
-        canonical = next((existing for existing in keywords if existing.upper() == key.upper()), key)
+        canonical = next((existing for existing in keywords if existing.upper() == key.upper()), None)
+        if canonical is None:
+            continue
         keywords[canonical] = sorted(set(keywords.get(canonical, [])).union(
             str(value).strip() for value in values if str(value).strip()
         ))
