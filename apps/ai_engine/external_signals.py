@@ -235,8 +235,54 @@ class BinanceSpotOrderBookAdapter:
         return payload
 
 
+def _discover_binance_spot_symbols() -> dict[str, str]:
+    """Discover exact Binance Spot pairs that also exist in AlgoBot's active crypto catalogue.
+
+    This deliberately performs no ticker conversion or broker-symbol inference:
+    BTCUSD is not treated as BTCUSDT, and synthetic/forex instruments are excluded.
+    The persisted active/tradable catalogue is the allowlist; Binance exchangeInfo
+    is the independent provider-side availability check.
+    """
+    from django.core.cache import cache
+    from apps.market_data.services import MarketDataService
+
+    cache_key = "ai:binance-spot:verified-catalogue-symbols:v1"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cached
+
+    response = requests.get(
+        "https://data-api.binance.vision/api/v3/exchangeInfo",
+        timeout=(4, 12),
+        headers={"User-Agent": "AlgoBotMarketResearch/1.0"},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or not isinstance(payload.get("symbols"), list):
+        raise ValueError("Binance exchangeInfo returned an invalid symbols catalogue")
+
+    available = {
+        str(item.get("symbol", "")).upper()
+        for item in payload["symbols"]
+        if isinstance(item, dict)
+        and item.get("status") == "TRADING"
+        and item.get("isSpotTradingAllowed") is True
+        and item.get("symbol")
+    }
+    catalogue_symbols = MarketDataService.symbols.catalogue(
+        active=True, tradable=True, market="Crypto"
+    ).values_list("symbol", flat=True)
+    verified = {
+        str(symbol): str(symbol).upper()
+        for symbol in catalogue_symbols
+        if str(symbol).upper() in available
+    }
+    cache.set(cache_key, verified, timeout=60 * 60)
+    return verified
+
+
 def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
-    provider = os.environ.get("ORDER_BOOK_PROVIDER", "custom").strip().lower()
+    provider = os.environ.get("ORDER_BOOK_PROVIDER", "binance_spot").strip().lower()
     symbols = list(dict.fromkeys(
         item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
         if item.strip()
@@ -256,6 +302,18 @@ def ingest_orderbook_snapshots() -> dict[str, int]:
     provider, configured_symbols, symbol_map = _orderbook_symbol_configuration()
     token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
     endpoint = os.environ.get("ORDER_BOOK_API_URL", "").strip()
+
+    # Binance can be enabled without hand-maintained environment mappings.
+    # Discover only exact active/tradable Crypto catalogue symbols that Binance
+    # independently reports as live Spot pairs. This is a strict intersection,
+    # not a guessed alias map; unsupported instruments remain unavailable.
+    if provider == "binance_spot" and not configured_symbols:
+        try:
+            symbol_map = _discover_binance_spot_symbols()
+            configured_symbols = list(symbol_map)
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            logger.warning("Binance Spot instrument discovery unavailable: %s", str(exc)[:200])
+            return {"symbols": 0, "snapshots": 0, "configured": 0}
 
     if not configured_symbols:
         return {"symbols": 0, "snapshots": 0, "configured": 0}
