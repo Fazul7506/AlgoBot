@@ -63,17 +63,70 @@ def _feed_items(payload: bytes) -> list[dict[str, str]]:
     return items
 
 
-def ingest_rss_sentiment() -> dict[str, int]:
-    """Fetch configured public RSS feeds and persist only explicitly mapped assets."""
-    feed_urls = [item.strip() for item in os.environ.get("AI_SENTIMENT_RSS_URLS", "").split(",") if item.strip()]
+def _catalogue_sentiment_keywords() -> dict[str, list[str]]:
+    """Build keyword coverage for every persisted instrument, active or not.
+
+    The catalogue is the source of coverage. Environment JSON is an additive
+    operator override, never a prerequisite for discovering instruments.
+    """
+    from apps.market_data.services import MarketDataService
+
+    rows = MarketDataService.symbols.catalogue(
+        active=None, tradable=None
+    ).values("symbol", "display_name", "market", "sub_market")
+    result: dict[str, list[str]] = {}
+    for row in rows.iterator():
+        symbol = str(row["symbol"] or "").strip().upper()
+        if not symbol:
+            continue
+        name = str(row["display_name"] or "").strip()
+        terms = {symbol, symbol.replace("_", " "), name}
+        # Add useful display-name phrases and non-trivial words. Avoid generic
+        # market labels (e.g. "index", "synthetic") that match unrelated news.
+        terms.update(
+            token for token in re.findall(r"[A-Za-z][A-Za-z0-9.-]{2,}", name)
+            if token.lower() not in {"index", "indices", "market", "synthetic", "derived"}
+        )
+        result[symbol] = sorted(term for term in terms if term)
+    return result
+
+
+def sentiment_symbol_keywords() -> dict[str, list[str]]:
+    """Return full catalogue coverage merged with explicit operator aliases."""
+    keywords = _catalogue_sentiment_keywords()
+    raw = os.environ.get("AI_SENTIMENT_SYMBOL_KEYWORDS_JSON", "{}").strip() or "{}"
     try:
-        symbol_keywords = json.loads(os.environ.get("AI_SENTIMENT_SYMBOL_KEYWORDS_JSON", "{}"))
+        overrides = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise RuntimeError("AI_SENTIMENT_SYMBOL_KEYWORDS_JSON must be valid JSON") from exc
-    if not isinstance(symbol_keywords, dict):
+    if not isinstance(overrides, dict):
         raise RuntimeError("AI_SENTIMENT_SYMBOL_KEYWORDS_JSON must be a JSON object")
+    for symbol, values in overrides.items():
+        key = str(symbol).strip().upper()
+        if not key or not isinstance(values, list):
+            continue
+        keywords[key] = sorted(set(keywords.get(key, [])).union(
+            str(value).strip() for value in values if str(value).strip()
+        ))
+    return keywords
+
+
+def _matches_keyword(text: str, keyword: str) -> bool:
+    term = str(keyword or "").strip()
+    if not term:
+        return False
+    # Tickers and short codes must match as whole tokens; longer phrases use
+    # the same boundary rule to avoid matching e.g. "ETH" inside "whether".
+    escaped = re.escape(term)
+    return re.search(r"(?<![A-Z0-9])" + escaped + r"(?![A-Z0-9])", text, re.IGNORECASE) is not None
+
+
+def ingest_rss_sentiment() -> dict[str, int]:
+    """Persist timestamped sentiment against every instrument in the catalogue."""
+    feed_urls = [item.strip() for item in os.environ.get("AI_SENTIMENT_RSS_URLS", "").split(",") if item.strip()]
+    symbol_keywords = sentiment_symbol_keywords()
     if not feed_urls or not symbol_keywords:
-        return {"feeds": 0, "items": 0, "observations": 0, "configured": 0}
+        return {"feeds": 0, "items": 0, "observations": 0, "configured": len(symbol_keywords)}
 
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
     analyzer = SentimentIntensityAnalyzer()
@@ -98,17 +151,14 @@ def ingest_rss_sentiment() -> dict[str, int]:
             if len(text) < 20:
                 continue
             item_count += 1
-            normalized = text.upper()
             score = analyzer.polarity_scores(text)
             digest = hashlib.sha256((feed_url + "|" + item["link"] + "|" + text).encode()).hexdigest()
             for symbol, keywords in symbol_keywords.items():
-                if not isinstance(keywords, list) or not keywords:
-                    continue
-                if not any(str(word).strip() and str(word).upper() in normalized for word in keywords):
+                if not any(_matches_keyword(text, word) for word in keywords):
                     continue
                 _, created = SentimentObservation.objects.get_or_create(
                     content_hash=digest,
-                    symbol=str(symbol).upper(),
+                    symbol=symbol,
                     defaults={
                         "source": feed_url,
                         "source_url": item["link"][:1000],
@@ -155,47 +205,91 @@ def normalize_orderbook(payload: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def ingest_orderbook_snapshots() -> dict[str, int]:
-    """Poll a configured Level-2 provider; no candle-volume fallback is allowed."""
-    endpoint = os.environ.get("ORDER_BOOK_API_URL", "").strip()
-    if not endpoint:
-        return {"symbols": 0, "snapshots": 0, "configured": 0}
-    parsed = urlparse(endpoint)
-    if parsed.scheme != "https" or not parsed.netloc or "{symbol}" not in endpoint:
-        raise RuntimeError("ORDER_BOOK_API_URL must be HTTPS and contain a {symbol} placeholder")
-    token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
-    # Never infer provider coverage from AlgoBot's broker catalogue. In
-    # particular, Deriv Synthetic Indices must not be polled unless the
-    # configured Level-2 provider explicitly supports those exact symbols.
-    # This allowlist is therefore mandatory and is the operator's assertion
-    # that each listed instrument is supported by the configured provider.
-    configured_symbols = list(dict.fromkeys(
-        item.strip() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
+class OrderBookProviderError(RuntimeError):
+    """A configured provider cannot supply verified depth for an instrument."""
+
+
+class BinanceSpotOrderBookAdapter:
+    """Binance Spot public Level-2 adapter; requires explicit internal-symbol mapping."""
+
+    endpoint = "https://data-api.binance.vision/api/v3/depth"
+
+    def __init__(self, symbol_map: dict[str, str], token: str = ""):
+        self.symbol_map = symbol_map
+        self.token = token
+
+    def fetch(self, internal_symbol: str) -> dict[str, Any]:
+        provider_symbol = self.symbol_map.get(internal_symbol)
+        if not provider_symbol:
+            raise OrderBookProviderError("No verified Binance Spot symbol mapping exists")
+        response = requests.get(
+            self.endpoint,
+            params={"symbol": provider_symbol, "limit": 100},
+            headers={"X-MBX-APIKEY": self.token} if self.token else {},
+            timeout=(4, 10),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("lastUpdateId") or not isinstance(payload.get("bids"), list) or not isinstance(payload.get("asks"), list):
+            raise ValueError("Binance returned an invalid depth response")
+        return payload
+
+
+def _orderbook_symbol_configuration() -> tuple[str, list[str], dict[str, str]]:
+    provider = os.environ.get("ORDER_BOOK_PROVIDER", "custom").strip().lower()
+    symbols = list(dict.fromkeys(
+        item.strip().upper() for item in os.environ.get("ORDER_BOOK_SYMBOLS", "").split(",")
         if item.strip()
     ))
+    raw_map = os.environ.get("ORDER_BOOK_SYMBOL_MAP_JSON", "{}").strip() or "{}"
+    try:
+        mapping = json.loads(raw_map)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must be valid JSON") from exc
+    if not isinstance(mapping, dict) or any(not isinstance(v, str) or not v.strip() for v in mapping.values()):
+        raise RuntimeError("ORDER_BOOK_SYMBOL_MAP_JSON must map internal symbols to provider symbol strings")
+    return provider, symbols, {str(k).strip().upper(): v.strip().upper() for k, v in mapping.items()}
+
+
+def ingest_orderbook_snapshots() -> dict[str, int]:
+    """Poll genuine provider Level-2 depth for explicitly mapped instruments only."""
+    provider, configured_symbols, symbol_map = _orderbook_symbol_configuration()
+    token = os.environ.get("ORDER_BOOK_API_TOKEN", "").strip()
+    endpoint = os.environ.get("ORDER_BOOK_API_URL", "").strip()
+
     if not configured_symbols:
-        logger.warning(
-            "Order-book ingestion is disabled: ORDER_BOOK_SYMBOLS must explicitly "
-            "list instruments supported by the configured Level-2 provider"
-        )
         return {"symbols": 0, "snapshots": 0, "configured": 0}
+    if provider == "binance_spot":
+        adapter = BinanceSpotOrderBookAdapter(symbol_map, token=token)
+    elif provider == "custom":
+        parsed = urlparse(endpoint)
+        if parsed.scheme != "https" or not parsed.netloc or "{symbol}" not in endpoint:
+            raise RuntimeError("Custom ORDER_BOOK_API_URL must be HTTPS and contain a {symbol} placeholder")
+        adapter = None
+    else:
+        raise RuntimeError("Unsupported ORDER_BOOK_PROVIDER; choose binance_spot or custom")
+
     count = symbols = 0
-    symbols_to_poll = configured_symbols
-    for symbol in symbols_to_poll:
+    for symbol in configured_symbols:
         symbols += 1
         try:
-            response = requests.get(
-                endpoint.replace("{symbol}", requests.utils.quote(str(symbol), safe="")),
-                headers={"Authorization": f"Bearer {token}"} if token else {},
-                timeout=(4, 10),
-            )
-            response.raise_for_status()
-            book = normalize_orderbook(response.json())
-            OrderBookSnapshot.objects.create(symbol=str(symbol), observed_at=django_timezone.now(), **book)
+            if provider == "binance_spot":
+                payload = adapter.fetch(symbol)
+            else:
+                provider_symbol = symbol_map.get(symbol, symbol)
+                response = requests.get(
+                    endpoint.replace("{symbol}", requests.utils.quote(provider_symbol, safe="")),
+                    headers={"Authorization": f"Bearer {token}"} if token else {},
+                    timeout=(4, 10),
+                )
+                response.raise_for_status()
+                payload = response.json()
+            book = normalize_orderbook(payload)
+            OrderBookSnapshot.objects.create(symbol=symbol, observed_at=django_timezone.now(), **book)
             count += 1
-        except (requests.RequestException, ValueError, TypeError) as exc:
-            logger.warning("Order-book snapshot unavailable symbol=%s reason=%s", symbol, str(exc)[:200])
-    return {"symbols": symbols, "snapshots": count, "configured": 1}
+        except (requests.RequestException, ValueError, TypeError, OrderBookProviderError) as exc:
+            logger.warning("Order-book snapshot unavailable symbol=%s provider=%s reason=%s", symbol, provider, str(exc)[:200])
+    return {"symbols": symbols, "snapshots": count, "configured": len(configured_symbols)}
 
 
 def _sentiment_asof(symbol: str, epoch: int) -> tuple[float, float, float, float, float]:
