@@ -36,6 +36,13 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertIn("mt4", template)
         self.assertNotIn("Generic broker symbol", template)
 
+    def test_deriv_country_identity_is_normalized_for_svg_flags(self):
+        root = Path(__file__).resolve().parents[2]
+        serializer = (root / "apps" / "brokers" / "serializers.py").read_text(encoding="utf-8")
+        self.assertIn("identity.get('country')", serializer)
+        self.assertIn("'UNITED STATES':'US'", serializer)
+        self.assertIn("https://flagcdn.com/'+country.lower()+'.svg", serializer)
+
     def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
         root = Path(__file__).resolve().parents[2]
         topbar = (root / "static" / "js" / "topbar_security_controls.js").read_text(encoding="utf-8")
