@@ -14,6 +14,8 @@
   const accountContext = () => window.AlgoBotAccountContext;
   const selectedAccount = () => accountContext()?.getSelected?.() || window.AlgoBotBrokerState?.get?.()?.account || null;
   const accountType = a => String(a?.account_type || a?.credentials?.account_type || 'unknown').toUpperCase();
+  const accountIdentity = a => window.AlgoBotBrokerBranding?.identityMarkup?.(a,'topbar') || '';
+  const accountCountry = a => String(a?.branding?.country_code || a?.deriv_identity?.country_code || '').toUpperCase();
   const BROKER_SVG={deriv:'/static/icons/brokers/deriv.svg',binance:'/static/icons/brokers/binance.svg',coinbase:'/static/icons/brokers/coinbase.svg',alpaca:'https://cdn.simpleicons.org/alpaca',bybit:'https://cdn.simpleicons.org/bybit',ctrader:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt3a4db3259d633e7d/6aa8abe5ca2a94302fe1269b/ctrader_logo.svg?branch=main',dxtrade:'https://cdn.simpleicons.org/dxtrade',exness:'https://d33vw3iu5hs0zi.cloudfront.net/media/exness_logo_76096879aa.svg',forex_com:'https://cdn.simpleicons.org/forexcom',forexcom:'https://cdn.simpleicons.org/forexcom',ic_markets:'https://cdn.simpleicons.org/icmarkets',icmarkets:'https://cdn.simpleicons.org/icmarkets',interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',kraken:'https://cdn.simpleicons.org/kraken',oanda:'https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg',pepperstone:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt170ddde20eb927c5/6aa8ac0963177a84cc7771bb/Pepperstone_logo.svg?branch=main',mt4:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt147ccf6e97a62074/6aa8abfb22a09568933cb3c1/MT4_logo.svg?branch=main',mt5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',metatrader_gateway:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',metaquotes:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',metatrader5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',xtb:'https://cdn.simpleicons.org/xtb'};
   const svgSource = value => {const s=String(value||'').trim();return /^(https:\/\/|\/static\/)/i.test(s)&&(/\.svg(?:[?#]|$)/i.test(s)||s.startsWith('/static/icons/brokers/'))?s:'';};
   const accountVisual = a => {const b=a?.branding||{},type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(),logo=svgSource(b.logo_svg_url)||svgSource(a?.broker?.logo_svg_url)||svgSource(a?.broker?.avatar_url)||svgSource(a?.logo_svg_url)||BROKER_SVG[type]||'',rawCode=String(b.country_code||a?.deriv_identity?.country_code||a?.deriv_identity?.country||'').trim().toLowerCase(),flag=/^[a-z]{2}$/.test(rawCode)?`https://flagcdn.com/${rawCode}.svg`:'';const fallback='<svg class="topbar-broker-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker mark unavailable"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';return `<span class="topbar-account-visual${logo?'':' is-fallback'}">${logo?`<img class="topbar-broker-mark" src="${safe(logo)}" alt="" decoding="async" onerror="this.remove();this.parentElement.classList.add('is-fallback')">`:''}${fallback}${flag?`<img class="topbar-country-flag" src="${safe(flag)}" alt="${safe(b.country_name||'Account country')}" decoding="async">`:''}</span>`;};
@@ -179,7 +181,350 @@
       const eligible = accounts.filter(a => a?.id);
       options.innerHTML = eligible.length ? eligible.map(a => {
         const label = accountLabel(a), active = String(a.id) === String(current.id);
+        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '>' + accountIdentity(a) + '<span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe([label.type,accountCountry(a),label.currency,(window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(label.balance,label.currency||'USD') : ' + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+      }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
+    }
+  }
+  async function switchAccount(id, button) {
+    if (!id || button?.disabled) return;
+    const context = accountContext();
+    if (!context?.selectAccount) {
+      window.AlgoBotMessage?.('Broker account selector is not ready. Refresh and try again.', 'error');
+      return;
+    }
+    const old = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="topbar-account-option-copy"><strong>Switching account…</strong></span>';
+    try {
+      await context.selectAccount(id);
+      renderAccount();
+      const menu = $('[data-topbar-account-menu]');
+      const trigger = $('[data-topbar-account-trigger]');
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+    } catch (error) {
+      button.innerHTML = old;
+      window.AlgoBotMessage?.(error?.message || 'Account switch failed.', 'error');
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+  let notifications = [];
+  let unreadCount = null;
+  function notificationUnread(item) { return !item?.read_at; }
+  function renderNotifications(payload) {
+    notifications = list(payload);
+    const count = unreadCount == null ? notifications.filter(notificationUnread).length : unreadCount;
+    const badge = $('[data-notification-count]');
+    const trigger = $('[data-notification-trigger]');
+    if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.hidden = count < 1; }
+    if (trigger) trigger.setAttribute('aria-label', count ? 'Notifications, ' + count + ' unread' : 'Notifications, no unread items');
+    const target = $('[data-notification-list]');
+    if (!target) return;
+    if (!notifications.length) {
+      target.innerHTML = '<p class="topbar-menu-empty">You are all caught up. New account and trading notifications will appear here.</p>';
+      return;
+    }
+    target.innerHTML = notifications.slice(0,8).map(n => {
+      const unread = notificationUnread(n);
+      const date = n.created_at ? new Date(n.created_at) : null;
+      const when = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
+      return '<article class="topbar-notification-item' + (unread ? ' is-unread' : '') + '"><span class="topbar-notification-dot" aria-hidden="true"></span><div class="topbar-notification-copy"><strong>' + safe(n.title || 'Notification') + '</strong><p>' + safe(n.message || '') + '</p><small>' + safe(when) + (n.category ? ' · ' + safe(n.category) : '') + '</small></div>' + (unread ? '<button type="button" class="topbar-mark-read" data-notification-read="' + safe(n.id) + '" aria-label="Mark ' + safe(n.title || 'notification') + ' as read">Mark read</button>' : '<span class="topbar-read-label">Read</span>') + '</article>';
+    }).join('');
+  }
+  async function loadNotifications() {
+    try {
+      const results = await Promise.all([
+        request('/api/notifications/?page_size=8', {notifyOnError:false}, 6500),
+        request('/api/notifications/unread-count/', {notifyOnError:false}, 6500)
+      ]);
+      unreadCount = Math.max(0, Number(results[1]?.unread_count) || 0);
+      renderNotifications(results[0]);
+    }
+    catch (_) {
+      const target = $('[data-notification-list]');
+      if (target) target.innerHTML = '<p class="topbar-menu-empty">Notifications could not be loaded right now. Open the notification center to retry.</p><a class="topbar-menu-retry" href="/notifications/">Retry in notification center</a>';
+    }
+  }
+  async function markRead(id, all = false) {
+    const url = all ? '/api/notifications/mark-all-read/' : '/api/notifications/' + encodeURIComponent(id) + '/read/';
+    try {
+      const payload = await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
+      if (all) {
+        notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
+        unreadCount = 0;
+        renderNotifications(notifications);
+      } else {
+        await loadNotifications();
+      }
+    } catch (error) {
+      window.AlgoBotMessage?.(error?.message || 'Could not update notification status.', 'error');
+    }
+  }
+  function bind() {
+    const accountTrigger = $('[data-topbar-account-trigger]');
+    const accountMenu = $('[data-topbar-account-menu]');
+    accountTrigger?.addEventListener('click', () => toggleMenu(accountTrigger, accountMenu));
+    const notificationTrigger = $('[data-notification-trigger]');
+    const notificationMenu = $('[data-notification-menu]');
+    notificationTrigger?.addEventListener('click', () => {
+      toggleMenu(notificationTrigger, notificationMenu);
+      if (!notificationMenu.hidden) loadNotifications();
+    });
+    const profileTrigger = $('[data-profile-trigger]');
+    const profileMenu = $('[data-profile-menu]');
+    profileTrigger?.addEventListener('click', () => toggleMenu(profileTrigger, profileMenu));
+    document.addEventListener('click', event => {
+      const select = event.target.closest('[data-topbar-select-account]');
+      if (select) { event.preventDefault(); switchAccount(select.dataset.topbarSelectAccount, select); return; }
+      const read = event.target.closest('[data-notification-read]');
+      if (read) { event.preventDefault(); markRead(read.dataset.notificationRead); return; }
+      if (event.target.closest('[data-notification-read-all]')) { event.preventDefault(); markRead(null, true); return; }
+      if (!event.target.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]')) closeMenus(null);
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeMenus(null); document.querySelector('[data-topbar-account-trigger]')?.focus({preventScroll:true}); } });
+    window.addEventListener('algobot:account-context-changed', renderAccount);
+    window.addEventListener('algobot:backend-accounts-loaded', renderAccount);
+    window.addEventListener('algobot:account-changed', renderAccount);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications(); });
+    renderAccount();
+    loadNotifications(); // Populate the unread badge on first render, not only after opening the menu.
+    if (accountContext()?.load) accountContext().load().then(renderAccount).catch(renderAccount);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true}); else bind();
+})();
++(Number(label.balance)||0).toFixed(2))) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+      }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
+    }
+  }
+  async function switchAccount(id, button) {
+    if (!id || button?.disabled) return;
+    const context = accountContext();
+    if (!context?.selectAccount) {
+      window.AlgoBotMessage?.('Broker account selector is not ready. Refresh and try again.', 'error');
+      return;
+    }
+    const old = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="topbar-account-option-copy"><strong>Switching account…</strong></span>';
+    try {
+      await context.selectAccount(id);
+      renderAccount();
+      const menu = $('[data-topbar-account-menu]');
+      const trigger = $('[data-topbar-account-trigger]');
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+    } catch (error) {
+      button.innerHTML = old;
+      window.AlgoBotMessage?.(error?.message || 'Account switch failed.', 'error');
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+  let notifications = [];
+  let unreadCount = null;
+  function notificationUnread(item) { return !item?.read_at; }
+  function renderNotifications(payload) {
+    notifications = list(payload);
+    const count = unreadCount == null ? notifications.filter(notificationUnread).length : unreadCount;
+    const badge = $('[data-notification-count]');
+    const trigger = $('[data-notification-trigger]');
+    if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.hidden = count < 1; }
+    if (trigger) trigger.setAttribute('aria-label', count ? 'Notifications, ' + count + ' unread' : 'Notifications, no unread items');
+    const target = $('[data-notification-list]');
+    if (!target) return;
+    if (!notifications.length) {
+      target.innerHTML = '<p class="topbar-menu-empty">You are all caught up. New account and trading notifications will appear here.</p>';
+      return;
+    }
+    target.innerHTML = notifications.slice(0,8).map(n => {
+      const unread = notificationUnread(n);
+      const date = n.created_at ? new Date(n.created_at) : null;
+      const when = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
+      return '<article class="topbar-notification-item' + (unread ? ' is-unread' : '') + '"><span class="topbar-notification-dot" aria-hidden="true"></span><div class="topbar-notification-copy"><strong>' + safe(n.title || 'Notification') + '</strong><p>' + safe(n.message || '') + '</p><small>' + safe(when) + (n.category ? ' · ' + safe(n.category) : '') + '</small></div>' + (unread ? '<button type="button" class="topbar-mark-read" data-notification-read="' + safe(n.id) + '" aria-label="Mark ' + safe(n.title || 'notification') + ' as read">Mark read</button>' : '<span class="topbar-read-label">Read</span>') + '</article>';
+    }).join('');
+  }
+  async function loadNotifications() {
+    try {
+      const results = await Promise.all([
+        request('/api/notifications/?page_size=8', {notifyOnError:false}, 6500),
+        request('/api/notifications/unread-count/', {notifyOnError:false}, 6500)
+      ]);
+      unreadCount = Math.max(0, Number(results[1]?.unread_count) || 0);
+      renderNotifications(results[0]);
+    }
+    catch (_) {
+      const target = $('[data-notification-list]');
+      if (target) target.innerHTML = '<p class="topbar-menu-empty">Notifications could not be loaded right now. Open the notification center to retry.</p><a class="topbar-menu-retry" href="/notifications/">Retry in notification center</a>';
+    }
+  }
+  async function markRead(id, all = false) {
+    const url = all ? '/api/notifications/mark-all-read/' : '/api/notifications/' + encodeURIComponent(id) + '/read/';
+    try {
+      const payload = await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
+      if (all) {
+        notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
+        unreadCount = 0;
+        renderNotifications(notifications);
+      } else {
+        await loadNotifications();
+      }
+    } catch (error) {
+      window.AlgoBotMessage?.(error?.message || 'Could not update notification status.', 'error');
+    }
+  }
+  function bind() {
+    const accountTrigger = $('[data-topbar-account-trigger]');
+    const accountMenu = $('[data-topbar-account-menu]');
+    accountTrigger?.addEventListener('click', () => toggleMenu(accountTrigger, accountMenu));
+    const notificationTrigger = $('[data-notification-trigger]');
+    const notificationMenu = $('[data-notification-menu]');
+    notificationTrigger?.addEventListener('click', () => {
+      toggleMenu(notificationTrigger, notificationMenu);
+      if (!notificationMenu.hidden) loadNotifications();
+    });
+    const profileTrigger = $('[data-profile-trigger]');
+    const profileMenu = $('[data-profile-menu]');
+    profileTrigger?.addEventListener('click', () => toggleMenu(profileTrigger, profileMenu));
+    document.addEventListener('click', event => {
+      const select = event.target.closest('[data-topbar-select-account]');
+      if (select) { event.preventDefault(); switchAccount(select.dataset.topbarSelectAccount, select); return; }
+      const read = event.target.closest('[data-notification-read]');
+      if (read) { event.preventDefault(); markRead(read.dataset.notificationRead); return; }
+      if (event.target.closest('[data-notification-read-all]')) { event.preventDefault(); markRead(null, true); return; }
+      if (!event.target.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]')) closeMenus(null);
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeMenus(null); document.querySelector('[data-topbar-account-trigger]')?.focus({preventScroll:true}); } });
+    window.addEventListener('algobot:account-context-changed', renderAccount);
+    window.addEventListener('algobot:backend-accounts-loaded', renderAccount);
+    window.addEventListener('algobot:account-changed', renderAccount);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications(); });
+    renderAccount();
+    loadNotifications(); // Populate the unread badge on first render, not only after opening the menu.
+    if (accountContext()?.load) accountContext().load().then(renderAccount).catch(renderAccount);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true}); else bind();
+})();
++(Number(currentLabel.balance)||0).toFixed(2));
+    const triggerVisual=$('[data-topbar-account-trigger] .topbar-account-shield',control); if(triggerVisual){triggerVisual.className='topbar-account-shield';triggerVisual.innerHTML=accountVisual(current);}
+    const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];
+    if (options) {
+      const eligible = accounts.filter(a => a?.id);
+      options.innerHTML = eligible.length ? eligible.map(a => {
+        const label = accountLabel(a), active = String(a.id) === String(current.id);
         return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '><span class="topbar-account-option-icon material-symbols-rounded" aria-hidden="true">' + (active ? 'check_circle' : 'account_balance_wallet') + '</span><span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe(label.type + ' · ' + (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(label.balance,label.currency||'USD') : '$'+(Number(label.balance)||0).toFixed(2))) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+      }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
+    }
+  }
+  async function switchAccount(id, button) {
+    if (!id || button?.disabled) return;
+    const context = accountContext();
+    if (!context?.selectAccount) {
+      window.AlgoBotMessage?.('Broker account selector is not ready. Refresh and try again.', 'error');
+      return;
+    }
+    const old = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="topbar-account-option-copy"><strong>Switching account…</strong></span>';
+    try {
+      await context.selectAccount(id);
+      renderAccount();
+      const menu = $('[data-topbar-account-menu]');
+      const trigger = $('[data-topbar-account-trigger]');
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+    } catch (error) {
+      button.innerHTML = old;
+      window.AlgoBotMessage?.(error?.message || 'Account switch failed.', 'error');
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+  let notifications = [];
+  let unreadCount = null;
+  function notificationUnread(item) { return !item?.read_at; }
+  function renderNotifications(payload) {
+    notifications = list(payload);
+    const count = unreadCount == null ? notifications.filter(notificationUnread).length : unreadCount;
+    const badge = $('[data-notification-count]');
+    const trigger = $('[data-notification-trigger]');
+    if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.hidden = count < 1; }
+    if (trigger) trigger.setAttribute('aria-label', count ? 'Notifications, ' + count + ' unread' : 'Notifications, no unread items');
+    const target = $('[data-notification-list]');
+    if (!target) return;
+    if (!notifications.length) {
+      target.innerHTML = '<p class="topbar-menu-empty">You are all caught up. New account and trading notifications will appear here.</p>';
+      return;
+    }
+    target.innerHTML = notifications.slice(0,8).map(n => {
+      const unread = notificationUnread(n);
+      const date = n.created_at ? new Date(n.created_at) : null;
+      const when = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
+      return '<article class="topbar-notification-item' + (unread ? ' is-unread' : '') + '"><span class="topbar-notification-dot" aria-hidden="true"></span><div class="topbar-notification-copy"><strong>' + safe(n.title || 'Notification') + '</strong><p>' + safe(n.message || '') + '</p><small>' + safe(when) + (n.category ? ' · ' + safe(n.category) : '') + '</small></div>' + (unread ? '<button type="button" class="topbar-mark-read" data-notification-read="' + safe(n.id) + '" aria-label="Mark ' + safe(n.title || 'notification') + ' as read">Mark read</button>' : '<span class="topbar-read-label">Read</span>') + '</article>';
+    }).join('');
+  }
+  async function loadNotifications() {
+    try {
+      const results = await Promise.all([
+        request('/api/notifications/?page_size=8', {notifyOnError:false}, 6500),
+        request('/api/notifications/unread-count/', {notifyOnError:false}, 6500)
+      ]);
+      unreadCount = Math.max(0, Number(results[1]?.unread_count) || 0);
+      renderNotifications(results[0]);
+    }
+    catch (_) {
+      const target = $('[data-notification-list]');
+      if (target) target.innerHTML = '<p class="topbar-menu-empty">Notifications could not be loaded right now. Open the notification center to retry.</p><a class="topbar-menu-retry" href="/notifications/">Retry in notification center</a>';
+    }
+  }
+  async function markRead(id, all = false) {
+    const url = all ? '/api/notifications/mark-all-read/' : '/api/notifications/' + encodeURIComponent(id) + '/read/';
+    try {
+      const payload = await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
+      if (all) {
+        notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
+        unreadCount = 0;
+        renderNotifications(notifications);
+      } else {
+        await loadNotifications();
+      }
+    } catch (error) {
+      window.AlgoBotMessage?.(error?.message || 'Could not update notification status.', 'error');
+    }
+  }
+  function bind() {
+    const accountTrigger = $('[data-topbar-account-trigger]');
+    const accountMenu = $('[data-topbar-account-menu]');
+    accountTrigger?.addEventListener('click', () => toggleMenu(accountTrigger, accountMenu));
+    const notificationTrigger = $('[data-notification-trigger]');
+    const notificationMenu = $('[data-notification-menu]');
+    notificationTrigger?.addEventListener('click', () => {
+      toggleMenu(notificationTrigger, notificationMenu);
+      if (!notificationMenu.hidden) loadNotifications();
+    });
+    const profileTrigger = $('[data-profile-trigger]');
+    const profileMenu = $('[data-profile-menu]');
+    profileTrigger?.addEventListener('click', () => toggleMenu(profileTrigger, profileMenu));
+    document.addEventListener('click', event => {
+      const select = event.target.closest('[data-topbar-select-account]');
+      if (select) { event.preventDefault(); switchAccount(select.dataset.topbarSelectAccount, select); return; }
+      const read = event.target.closest('[data-notification-read]');
+      if (read) { event.preventDefault(); markRead(read.dataset.notificationRead); return; }
+      if (event.target.closest('[data-notification-read-all]')) { event.preventDefault(); markRead(null, true); return; }
+      if (!event.target.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]')) closeMenus(null);
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeMenus(null); document.querySelector('[data-topbar-account-trigger]')?.focus({preventScroll:true}); } });
+    window.addEventListener('algobot:account-context-changed', renderAccount);
+    window.addEventListener('algobot:backend-accounts-loaded', renderAccount);
+    window.addEventListener('algobot:account-changed', renderAccount);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications(); });
+    renderAccount();
+    loadNotifications(); // Populate the unread badge on first render, not only after opening the menu.
+    if (accountContext()?.load) accountContext().load().then(renderAccount).catch(renderAccount);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true}); else bind();
+})();
++(Number(label.balance)||0).toFixed(2))].filter(Boolean).join(' · ')) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
       }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
     }
   }
