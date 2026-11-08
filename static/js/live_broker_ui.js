@@ -49,7 +49,7 @@
     dxtrade:'https://cdn.simpleicons.org/dxtrade',bybit:'https://cdn.simpleicons.org/bybit',
     forex_com:'https://cdn.simpleicons.org/forexcom',ic_markets:'https://cdn.simpleicons.org/icmarkets',
     interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',
-    alpaca:'https://alpaca.markets/favicon.ico'
+    alpaca:'https://cdn.simpleicons.org/alpaca'
   };
   const avatar = (a, small = false) => {
     const name=a?.broker?.name||a?.broker_name||'Broker';
