@@ -368,14 +368,45 @@ class ProfileCompletionTests(TestCase):
         from pathlib import Path
         template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
         base = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("Profile Details", template)
-        self.assertIn("Additional Info", template)
-        self.assertIn("Preferences", template)
+        self.assertNotIn('class="profile-onboarding__steps"', template)
+        self.assertNotIn("Profile Details", template)
+        self.assertNotIn("Additional Info", template)
+        self.assertNotIn("Preferences", template)
+        self.assertIn('id="timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', template)
         self.assertIn('id="phone_country_code"', template)
         self.assertIn('id="country" name="country"', template)
         self.assertIn("anchored_selects.js", base)
         self.assertIn("anchored_selects.css", base)
 
+
+
+    def test_profile_completion_uses_searchable_iana_timezone_dropdown_and_no_progress_tabs(self):
+        from pathlib import Path
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile_completion_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Africa/Nairobi", response.context["timezone_choices"])
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('id="timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', template)
+        self.assertNotIn('class="profile-onboarding__steps"', template)
+        self.assertNotIn("Additional Info", template)
+        self.assertNotIn("Preferences", template)
+
+    def test_invalid_timezone_is_rejected_server_side(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "terms_accepted": "on",
+                "timezone": "Not/A_Real_Timezone",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a valid IANA time zone")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.timezone, "UTC")
 
     def test_invalid_international_phone_is_rejected_server_side(self):
         self.client.force_login(self.user)
