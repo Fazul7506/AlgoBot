@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" role="img" aria-labelledby="title desc">
+<title id="title">Pesapal</title><desc id="desc">Pesapal payment brand mark</desc>
+<rect width="220" height="64" rx="10" fill="#fff"/>
+<path d="M23 14h19c13 0 21 7 21 18S55 50 42 50H34v-9h8c7 0 11-3 11-9s-4-9-11-9H34v27h-11z" fill="#115f9d"/>
+<text x="72" y="43" font-family="Arial,Helvetica,sans-serif" font-size="31" font-weight="700" letter-spacing="-1.4" fill="#0b2f57">pesapal</text>
+</svg>

@@ -380,7 +380,7 @@ def reset_password_page(request, token=None):
 def account_identity_page(request):
     user = request.user
     profile, _ = UserProfile.objects.get_or_create(user=user)
-    # Show real, account-scoped authentication audit records only. Device and
+    # Show real, account-scoped authentication activity events only. Device and
     # location data are omitted because the current audit contract does not
     # provide trustworthy device/location fields.
     from apps.observability.models import AuditEvent

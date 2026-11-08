@@ -48,7 +48,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         routes = (
             "/analysis/",
             "/notifications/",
-            "/operations/audit/",
             "/operations/security/",
             "/developer/",
         )
@@ -70,14 +69,15 @@ class UniversalWorkspaceAccessTests(TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
-        self.assertIn("developer_api_hardening.css?v=20261020-devapi3", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-design-tokens1", html)
         css = (Path(settings.BASE_DIR) / "static" / "css" / "developer_api_hardening.css").read_text(encoding="utf-8")
         self.assertIn(".dev-dashboard .dev-dashboard-layout", css)
         self.assertIn("@media(max-width:900px)", css)
         self.assertIn("@media(max-width:620px)", css)
         self.assertIn("@media(max-width:360px)", css)
         portal = (Path(settings.BASE_DIR) / "static" / "js" / "developer_portal.js").read_text(encoding="utf-8")
-        self.assertIn("function bindSectionNavigation()", portal)
+        self.assertNotIn("bindSectionNavigation", portal)
+        self.assertIn("function bindCopyButtons()", portal)
         self.assertIn("function bindCopyButtons()", portal)
 
     def test_removed_bot_runtime_page_has_no_route_or_sidebar_entry(self):
@@ -100,7 +100,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
             "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
             "/predictions/", "/analysis/", "/risk/", "/monitoring/", "/notifications/",
-            "/automation/", "/operations/audit/",
+            "/automation/",
             "/operations/security/", "/portfolio/", "/operations/brokers/", "/billing/",
             "/developer/",
         ):
@@ -113,7 +113,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         for label, href in (
             ("Analysis", "/analysis/"),
             ("Notifications", "/notifications/"),
-            ("Audit Log", "/operations/audit/"),
             ("Account Settings", "/settings/"),
             ("Developer & API", "/developer/"),
         ):
@@ -198,7 +197,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("&&a.is_connected===true&&a.switch_enabled", switcher)
         # Keep the sidebar click separate from the shared generic switch listener;
         # verify the rendered target is still eligible before starting a switch.
-        self.assertIn("data-account-id=\"${safe(target?.id||'')}\"", switcher)
+        self.assertIn("data-account-id=", switcher)
+        self.assertIn("safe(target?.id", switcher)
         self.assertIn("data-sidebar-account-switch", switcher)
         self.assertIn("closest?.('[data-sidebar-account-switch]')", switcher)
         self.assertIn("if(!target||String(target.id)!==String(b.dataset.accountId||''))return", switcher)
@@ -268,7 +268,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         from pathlib import Path
         for relative in (
             "templates/components/enterprise_page.html",
-            "templates/core/audit_log.html",
         ):
             content = (Path(settings.BASE_DIR) / relative).read_text(encoding="utf-8")
             self.assertNotIn("<style", content.lower(), relative)
@@ -279,10 +278,26 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "css/runtime_recovery.css?v=20261026-toast-severity1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
-        self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
+        self.assertContains(response, "js/sidebar_account_switch.js?v=20261108-connected-account-branding4")
         self.assertRegex(response.content.decode("utf-8"), r"js/base_shell\.js(?:\?v=[^\"\s]+)?")
         shell = (Path("static/js/base_shell.js")).read_text(encoding="utf-8")
         self.assertIn("function bindNavigationPrefetch(links)", shell)
         self.assertIn("prefetchedNavigation.size >= 5", shell)
         self.assertIn("connection?.saveData", shell)
         self.assertContains(response, 'href="/static/icons/favicon.ico')
+
+
+    def test_developer_workspace_tabs_promote_nested_panels_and_use_one_controller(self):
+        from pathlib import Path
+        root = Path(settings.BASE_DIR)
+        template = (root / "templates/developer/dashboard.html").read_text()
+        tabs = (root / "static/js/workspace_tabs.js").read_text()
+        portal = (root / "static/js/developer_portal.js").read_text()
+        css = (root / "static/css/developer_api_hardening.css").read_text()
+        for panel in ("dev-overview", "dev-api-keys", "dev-documentation", "dev-webhooks", "dev-code-examples", "dev-sandbox"):
+            self.assertIn(f'href="#{panel}"', template)
+            self.assertIn(f'id="{panel}"', template)
+        self.assertIn("targetPanels.forEach", tabs)
+        self.assertIn("content.appendChild(panel)", tabs)
+        self.assertNotIn("bindSectionNavigation", portal)
+        self.assertIn("[data-workspace-tab-content] > [hidden]", css)

@@ -5,7 +5,7 @@ This migration uses standard Cloudflare Workers, Queues, and Durable Objects. It
 ## Components
 
 - `background-scheduler/`: unified Cron Triggers, a Durable Object alarm for the 30-second schedules, and Queue dispatch for scheduled Django/Celery jobs, including AI training, sentiment, and order-book ingestion.
-- `ai-training-dispatcher/`: legacy queue consumer retained only to drain/retire its existing queue safely; its schedule defaults off in source. Do not run both schedulers at once.
+- `ai-training-dispatcher/`: deployed Worker with its Queue consumer active so existing `algobot-ai-training` messages continue to reach Django. Its legacy Cron producer stays off because the unified scheduler owns AI schedules; this is not a disabled Worker.
 - `market-stream/`: Durable Object for Deriv WebSocket connectivity and a Queue for tick ingestion.
 
 ## Important execution boundary
@@ -76,3 +76,35 @@ The scheduler URL and market endpoint URLs are non-secret config values in their
 
 The preflight is intentionally a source/configuration check, not proof of live account state. After a disabled deployment, independently inspect the Cloudflare dashboard/API for Worker scripts, Queue consumers and DLQs, secret names (never values), cron triggers, Durable Object migrations, and R2 access. Do not retire the legacy dispatcher, Celery, or Render market stream until end-to-end parity and recovery checks pass.
 
+
+
+## Automated production deployment and activation
+
+The GitHub Actions workflow `.github/workflows/deploy-cloudflare-workers.yml` deploys the three versioned Worker scripts, provisions missing queues, installs Worker secrets, validates the authenticated Django endpoints and confirms a live Celery execution worker is responding, then activates the unified scheduler and Deriv market stream. It runs on a push to `main` that changes Cloudflare infrastructure and can also be started with `workflow_dispatch`.
+
+Configure these **GitHub Actions repository secrets** before merging/enabling the workflow:
+
+- `CLOUDFLARE_ACCOUNT_ID`: the 32-character account ID for the connected production account.
+- `CLOUDFLARE_API_TOKEN`: least-privilege token with Workers Scripts read/write and Queues read/write permissions.
+- `CLOUDFLARE_TASK_DISPATCH_TOKEN`: must exactly match Render's `CLOUDFLARE_TASK_DISPATCH_TOKEN`.
+- `CLOUDFLARE_MARKET_STREAM_TOKEN`: must exactly match Render's `CLOUDFLARE_MARKET_STREAM_TOKEN`.
+- `MARKET_STREAM_CONTROL_TOKEN`: independent high-entropy Worker-only secret.
+- `CLOUDFLARE_TRAINING_WEBHOOK_TOKEN`: must exactly match Render's `CLOUDFLARE_TRAINING_WEBHOOK_TOKEN`.
+
+The workflow provisions and deploys all three Worker scripts, then configures secrets and verifies the authenticated Django endpoints. Once the Celery worker readiness check also passes, it activates the unified scheduler and Deriv market stream. The AI training dispatcher remains deployed with its Queue consumer active; only its legacy Cron producer is off to prevent duplicate scheduled AI jobs. The task-dispatch and legacy-training probes deliberately submit invalid schedule/kind values; they verify authentication and routing without enqueueing work. Secret values are piped to Wrangler and are never printed. If a prerequisite fails, the workflow stops before enabling schedule/stream producers rather than leaving a backlog of unconsumed Python tasks.
+
+Activation policy:
+- `algobot-background-scheduler`: activated after authenticated task-dispatch validation.
+- `algobot-market-stream`: activated after authenticated symbol-catalogue validation. It uses the existing idempotent Django ingestion path; keep the old market-data producer until live parity and duplicate-ingestion checks pass.
+- `algobot-ai-training-dispatcher`: deployed with its legacy schedule gate **off** so its existing queue consumer can drain messages without running a second copy of the AI schedule.
+- `ENABLE_EXECUTION_QUEUE_RECOVERY`: remains **false**. This schedule can enqueue work on the trade-execution path and is not required to activate the scheduler or market-data stream. Do not turn it on as part of a generic Worker deployment.
+- `ALLOW_LIVE_TRADING` is not changed by this workflow.
+
+The workflow's post-deployment API checks verify all three Worker scripts and all six Queue/DLQ resources. They do not claim that Celery Python execution has moved into Cloudflare: the existing Celery worker must remain available to execute Django task dispatches. Monitor Cloudflare Worker logs, Queue backlog/DLQs, Deriv tick freshness, and Django ingestion/fan-out after activation.
+
+
+### Required Python execution service
+
+The Cloudflare scheduler is a clock, queue producer, and authenticated dispatcher—not a Python task runtime. A separate Celery worker must be running against the same production Redis broker as Django before scheduled tasks can execute. The deployment workflow checks this using the authenticated `/api/internal/cloudflare/task-dispatch/health/` endpoint and refuses scheduler activation if Celery remote-control ping receives no worker response.
+
+The currently connected Render workspace has only the Daphne web service; it does not currently expose a dedicated Celery background-worker service. Consequently, the current production release cannot complete scheduler activation until a Python Celery worker is provisioned and confirmed online. The deployment workflow intentionally does not bypass this dependency: doing so would make Cloudflare report successful Queue dispatch while Python tasks remain unexecuted. Provision the worker against the same production Redis broker and verify its authenticated readiness response before releasing the scheduler.

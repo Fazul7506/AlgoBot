@@ -18,7 +18,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
-            "Usage is measured from persisted platform audit/database records",
+            "Usage is measured from persisted platform activity/database records",
             "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
             with self.subTest(marker=marker):
@@ -35,21 +35,50 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("ENTERPRISE", template)
         self.assertIn("currency='USD'", template)
         self.assertIn("!Number.isFinite(raw)?0:raw", template)
-        self.assertIn("Usage is measured from persisted platform audit/database records", template)
+        self.assertIn("Usage is measured from persisted platform activity/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
         self.assertNotIn("Contact sales", template)
+        self.assertIn("support@algobot.dpdns.org", template)
+        self.assertNotIn("support@algobot.com", template)
+        self.assertIn("PLAN_FEATURES", template)
+        self.assertIn("Not included", template)
+        self.assertIn("billing-plan-features", template)
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
         self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
-        self.assertIn("Continue with Pesapal", template)
-        self.assertIn("Continue with IntaSend", template)
-        self.assertIn("Continue with PayPal", template)
-        self.assertIn("PayPal setup pending", template)
+        self.assertIn('data-provider=\"pesapal\"', template)
+        self.assertIn("billing-provider-logo pesapal-logo", template)
+        self.assertIn('data-provider=\"intasend\"', template)
+        self.assertIn("billing-provider-logo intasend-logo", template)
+        self.assertIn('data-provider=\"paypal\"', template)
+        self.assertIn("paypal-mark-color.svg", template)
+        self.assertIn("PayPal unavailable", template)
         self.assertNotIn("Pay with IntaSend", template)
         self.assertNotIn("Pay with Pesapal", template)
         self.assertIn('Included with every account', template)
         self.assertIn('Checkout unavailable', template)
         self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
+
+    def test_payment_provider_controls_are_svg_only_with_accessible_names(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn("icons/payments/pesapal.svg", template)
+        self.assertIn("EW5SO1YUyLv7luuQQdXwh1wLKa4.svg", template)
+        self.assertIn("paypal-mark-color.svg", template)
+        self.assertIn('aria-label="Continue with Pesapal', template)
+        self.assertIn('aria-label="Continue with IntaSend', template)
+        self.assertNotIn("<span>Continue with Pesapal</span>", template)
+        self.assertNotIn("<span>Continue with IntaSend</span>", template)
+        self.assertNotIn("<span>Continue with PayPal", template)
+
+    def test_global_error_bus_does_not_toast_background_read_failures(self):
+        from pathlib import Path
+        client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("Background/polling GET failures are rendered by their owning page state", client)
+        self.assertIn("error?.code === 'API_TIMEOUT'", client)
+        self.assertIn("error?.code === 'NETWORK_ERROR'", client)
+        self.assertIn("API_ERROR_DEDUPE_MS = 30000", shell)
 
     def test_intasend_badge_is_limited_to_intasend_billing_surfaces(self):
         from pathlib import Path
@@ -179,7 +208,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         template = Path("templates/base.html").read_text(encoding="utf-8")
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("ensureApiAccessToken", client)
-        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261030-canonical-catalogue-cache2", template)
+        self.assertIn("{% static 'js/core/frontend_data_contract.js' %}?v=20261106-session-origin-bootstrap1", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260929-bearerauth2", template)
         self.assertNotIn("{% static 'js/core/frontend_data_contract.js' %}?v=20260913-sameorigin1", template)
 
@@ -390,7 +419,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261030-shared-catalogue2", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-connected-account-branding6", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
@@ -566,7 +595,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
     def test_payment_provider_buttons_use_image_logos_not_letter_placeholders(self):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
-        self.assertIn('src="https://shop.jbs.co.ke/assets/img/pesapal.jpg"', template)
+        self.assertIn("icons/payments/pesapal.svg", template)
         self.assertIn('src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg', template)
         self.assertNotIn('aria-hidden="true">P</span>', template)
         self.assertNotIn('aria-hidden="true">S</span>', template)

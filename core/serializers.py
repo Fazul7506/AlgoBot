@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from core.models import (
-    UserProfile, Subscription, BotSettings, AuditLog,
+    UserProfile, Subscription, BotSettings,
     Invoice, Payment, ReferralReward, EncryptedCredential
 )
 
@@ -79,18 +79,6 @@ class BotSettingsSerializer(serializers.ModelSerializer):
             'id', 'status', 'created_at', 'updated_at'
         ]
 
-
-class AuditLogSerializer(serializers.ModelSerializer):
-    """Audit log entry"""
-    username = serializers.CharField(source='user.username', read_only=True)
-
-    class Meta:
-        model = AuditLog
-        fields = [
-            'id', 'user', 'username', 'path', 'method', 'status_code',
-            'ip_address', 'user_agent', 'error', 'created_at'
-        ]
-        read_only_fields = ['id', 'user', 'created_at']
 
 
 class InvoiceSerializer(serializers.ModelSerializer):

@@ -212,3 +212,43 @@ class CloudflareTaskDispatchTests(SimpleTestCase):
         )
         response = cloudflare_task_dispatch(request)
         self.assertEqual(response.status_code, 400)
+
+
+
+class CloudflareTaskDispatchHealthTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    @patch("apps.automation.cloudflare_hooks.current_app")
+    def test_health_reports_ready_when_a_celery_worker_responds(self, celery):
+        celery.control.inspect.return_value.ping.return_value = {"celery@worker-1": {"ok": "pong"}}
+        request = self.factory.get(
+            "/api/internal/cloudflare/task-dispatch/health/",
+            HTTP_AUTHORIZATION="Bearer test-secret",
+        )
+        from apps.automation.cloudflare_hooks import cloudflare_task_dispatch_health
+        response = cloudflare_task_dispatch_health(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content), {"status": "ready", "worker_count": 1})
+        celery.control.inspect.assert_called_once_with(timeout=2.0)
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    @patch("apps.automation.cloudflare_hooks.current_app")
+    def test_health_fails_closed_when_no_celery_worker_responds(self, celery):
+        celery.control.inspect.return_value.ping.return_value = {}
+        request = self.factory.get(
+            "/api/internal/cloudflare/task-dispatch/health/",
+            HTTP_AUTHORIZATION="Bearer test-secret",
+        )
+        from apps.automation.cloudflare_hooks import cloudflare_task_dispatch_health
+        response = cloudflare_task_dispatch_health(request)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(json.loads(response.content)["status"], "celery_worker_unavailable")
+
+    @patch.dict("os.environ", {"CLOUDFLARE_TASK_DISPATCH_TOKEN": "test-secret"})
+    def test_health_requires_dispatch_token(self):
+        request = self.factory.get("/api/internal/cloudflare/task-dispatch/health/")
+        from apps.automation.cloudflare_hooks import cloudflare_task_dispatch_health
+        response = cloudflare_task_dispatch_health(request)
+        self.assertEqual(response.status_code, 401)

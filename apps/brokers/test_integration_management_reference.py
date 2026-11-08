@@ -32,14 +32,14 @@ class BrokerIntegrationManagementReferenceLayoutTests(SimpleTestCase):
         self.assertIn("<svg", template)
         shared_logo = Path("templates/components/broker_logo.html").read_text(encoding="utf-8")
         for official_asset in (
-            "https://deriv.com/favicon.ico",
-            "https://www.oanda.com/favicon.ico",
-            "https://www.interactivebrokers.com/favicon.ico",
-            "https://www.metatrader5.com/favicon.ico",
-            "https://www.binance.com/favicon.ico",
-            "https://www.kraken.com/favicon.ico",
-            "https://www.coinbase.com/favicon.ico",
-            "https://www.xtb.com/favicon.ico",
+            "icons/brokers/deriv.svg",
+            "https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg",
+            "https://cdn.simpleicons.org/interactivebrokers",
+            "https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main",
+            "icons/brokers/binance.svg",
+            "https://cdn.simpleicons.org/kraken",
+            "icons/brokers/coinbase.svg",
+            "https://cdn.simpleicons.org/xtb",
         ):
             with self.subTest(official_asset=official_asset):
                 self.assertIn(official_asset, shared_logo)

@@ -2,9 +2,8 @@ from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
-from apps.monitoring.models import AuditLog as StructuredAuditLog
 from apps.observability.models import AuditEvent
-from core.middleware.audit_middleware import AuditMiddleware
+from core.middleware.activity_middleware import ActivityMiddleware
 
 
 class AuditApiIsolationTests(TestCase):
@@ -45,10 +44,12 @@ class AuditApiIsolationTests(TestCase):
         self.assertEqual(payload["pagination"]["page_size"], 1)
         self.assertEqual(len(payload["events"]), 1)
 
-    def test_dashboard_merges_user_request_and_application_audit_streams(self):
-        StructuredAuditLog.objects.create(
-            user=self.user, action="post_completed", module="execution",
-            resource="/api/orders/submit/ | status=201 | request_id=abc123",
+    def test_dashboard_reads_request_and_application_activity_from_one_stream(self):
+        AuditEvent.objects.create(
+            actor_id=self.user.pk, action="post_completed", resource_type="execution",
+            resource_id="/api/orders/submit/ | status=201 | request_id=abc123",
+            request_path="/api/orders/submit/", http_method="POST", http_status=201,
+            module="execution", resource="/api/orders/submit/",
         )
         self.client.force_login(self.user)
         response = self.client.get("/api/observability/dashboard/")
@@ -58,6 +59,7 @@ class AuditApiIsolationTests(TestCase):
         self.assertIn("post_completed", actions)
         self.assertIn("order_submitted", actions)
         self.assertNotIn("credential_rotated", actions)
+        self.assertEqual(len([item for item in payload["audit"] if item["action"] == "post_completed"]), 1)
 
     def test_browser_token_unauthenticated_response_is_not_bridged_as_a_flash_message(self):
         from unittest.mock import patch
@@ -68,24 +70,23 @@ class AuditApiIsolationTests(TestCase):
             {"detail": "Authentication credentials were not provided.", "code": "not_authenticated"},
             status=401,
         )
-        with patch("core.middleware.audit_middleware.messages.add_message") as add_message:
-            AuditMiddleware._bridge_message(request, response)
+        with patch("core.middleware.activity_middleware.messages.add_message") as add_message:
+            ActivityMiddleware._bridge_message(request, response)
         add_message.assert_not_called()
 
     def test_mutating_request_is_recorded_without_storing_request_body(self):
         factory = RequestFactory()
         request = factory.post("/api/orders/submit/", data='{"token":"do-not-store"}', content_type="application/json")
         request.user = self.user
-        middleware = AuditMiddleware(lambda req: HttpResponse("ok", status=201))
+        middleware = ActivityMiddleware(lambda req: HttpResponse("ok", status=201))
         middleware.process_request(request)
         response = middleware.process_response(request, HttpResponse("ok", status=201))
-        record = StructuredAuditLog.objects.get(user=self.user, action="post_completed")
+        record = AuditEvent.objects.get(actor_id=self.user.pk, action="post_completed", request_path="/api/orders/submit/")
         self.assertEqual(record.module, "execution")
         self.assertIn("/api/orders/submit/", record.resource)
-        self.assertIn("request_id=", record.resource)
+        self.assertIn("request_id=", record.resource_id)
+        self.assertEqual(record.http_method, "POST")
+        self.assertEqual(record.http_status, 201)
         self.assertEqual(response["X-Request-ID"], request.algobot_request_id)
         self.assertFalse(record.new_value)
-        from core.models import AuditLog as RequestAuditLog
-        request_record = RequestAuditLog.objects.filter(user=self.user, path="/api/orders/submit/").latest("created_at")
-        self.assertEqual(request_record.request_body, "")
-        self.assertEqual(request_record.response_body, "")
+        self.assertNotIn("do-not-store", str(record.metadata))

@@ -85,7 +85,9 @@ def _operation(pattern: URLPattern):
     authenticated = any("IsAuthenticated" in getattr(p, "__name__", str(p)) for p in permission_classes)
     callback_name = getattr(callback, "__name__", cls.__name__ if cls else "endpoint")
     operation_id = getattr(pattern, "name", None) or callback_name
-    doc = getattr(callback, "__doc__", None) or getattr(cls, "__doc__", "") or ""
+    callback_doc = getattr(callback, "__doc__", None)
+    class_doc = getattr(cls, "__doc__", None) if cls is not None else None
+    doc = callback_doc or class_doc or ""
     summary = doc.strip().split("\n")[0] or operation_id.replace("_", " ").title()
     schema = _serializer_schema(serializer_class)
     operation = {

@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from apps.monitoring.models import Alert, AuditLog, Incident, LogEntry, Metric, SystemHealth, TraceSpan
+from apps.monitoring.models import Alert, Incident, LogEntry, Metric, SystemHealth, TraceSpan
 
 
 class MonitoringApiIsolationTests(TestCase):
@@ -17,7 +17,6 @@ class MonitoringApiIsolationTests(TestCase):
             user=self.other, title="Foreign alert", category="Security", severity="CRITICAL",
             message="Foreign account data", source="test",
         )
-        AuditLog.objects.create(user=self.other, action="secret_action", module="security", resource="sensitive-resource")
         LogEntry.objects.create(stream="application", level="ERROR", message="private token diagnostic", context={"token": "do-not-expose"})
         Metric.objects.create(metric_name="private_metric", value=1, module="test", tags={"user": self.other.pk})
         TraceSpan.objects.create(trace_id="private-trace", span_id="private-span", operation="private-operation", module="security", attributes={"secret": "private"})
@@ -25,12 +24,12 @@ class MonitoringApiIsolationTests(TestCase):
 
     def test_global_operational_telemetry_requires_staff(self):
         self.client.force_login(self.user)
+        self.assertEqual(self.client.get("/api/monitoring/audit/").status_code, 404)
         for path in (
             "/api/monitoring/health/",
             "/api/monitoring/broker/",
             "/api/monitoring/infrastructure/",
             "/api/monitoring/metrics/",
-            "/api/monitoring/audit/",
             "/api/monitoring/logs/",
             "/api/monitoring/traces/",
         ):

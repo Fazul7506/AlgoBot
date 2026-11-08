@@ -80,12 +80,13 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 
 from apps.ai_engine.cloudflare_hooks import cloudflare_training_dispatch
-from apps.automation.cloudflare_hooks import cloudflare_task_dispatch
+from apps.automation.cloudflare_hooks import cloudflare_task_dispatch, cloudflare_task_dispatch_health
 from apps.market_data.cloudflare_hooks import cloudflare_market_symbols, cloudflare_market_tick
 
 urlpatterns = [
     path("api/internal/cloudflare/ai-training/", cloudflare_training_dispatch, name="cloudflare-ai-training-dispatch"),
     path("api/internal/cloudflare/task-dispatch/", cloudflare_task_dispatch, name="cloudflare-task-dispatch"),
+    path("api/internal/cloudflare/task-dispatch/health/", cloudflare_task_dispatch_health, name="cloudflare-task-dispatch-health"),
     path("api/internal/cloudflare/market-symbols/", cloudflare_market_symbols, name="cloudflare-market-symbols"),
     path("api/internal/cloudflare/market-tick/", cloudflare_market_tick, name="cloudflare-market-tick"),
     path("health/", include("apps.health.urls")),
@@ -132,7 +133,6 @@ urlpatterns = [
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
-    path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
     path("operations/broker-integrations/", broker_integration_management_page, name="broker_integration_management"),
     path("operations/broker-integrations/assistant/", broker_integration_assistant_chat, name="broker_integration_assistant_chat"),

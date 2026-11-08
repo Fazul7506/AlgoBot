@@ -9,8 +9,8 @@ from django.utils.dateparse import parse_datetime
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 
-from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
-from .serializers import AlertSerializer, AuditLogSerializer, BrokerHealthSerializer, IncidentSerializer, LogEntrySerializer, MetricSerializer, SystemHealthSerializer, TraceSpanSerializer
+from .models import Alert, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
+from .serializers import AlertSerializer, BrokerHealthSerializer, IncidentSerializer, LogEntrySerializer, MetricSerializer, SystemHealthSerializer, TraceSpanSerializer
 from .services import MonitoringEngine
 
 logger = logging.getLogger(__name__)
@@ -98,10 +98,6 @@ def metrics(request):
     return Response(MetricSerializer(Metric.objects.all()[:500], many=True).data)
 
 
-@api_view(["GET"])
-@permission_classes([IsAdminUser])
-def audit(request):
-    return Response(AuditLogSerializer(AuditLog.objects.all()[:500], many=True).data)
 
 
 @api_view(["GET"])

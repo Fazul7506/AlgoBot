@@ -1,11 +1,11 @@
-/* Responsive top-right workspace controls backed by canonical account and notification APIs. */
+/* Responsive topbar controls backed by canonical account and notification APIs. */
 (() => {
   'use strict';
   if (window.__algoBotTopbarSecurityControls) return;
   window.__algoBotTopbarSecurityControls = true;
-  const $ = (s, r = document) => r.querySelector(s);
-  const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const list = v => Array.isArray(v) ? v : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : []));
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const safe = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+  const list = value => Array.isArray(value) ? value : (Array.isArray(value?.results) ? value.results : (Array.isArray(value?.data) ? value.data : []));
   const request = (url, options = {}, timeout = 7000) => {
     const fn = window.AlgoBotFrontendData?.request;
     if (typeof fn !== 'function') return Promise.reject(new Error('AlgoBot secure transport is not ready.'));
@@ -13,54 +13,74 @@
   };
   const accountContext = () => window.AlgoBotAccountContext;
   const selectedAccount = () => accountContext()?.getSelected?.() || window.AlgoBotBrokerState?.get?.()?.account || null;
-  const accountType = a => String(a?.account_type || a?.credentials?.account_type || 'unknown').toUpperCase();
-  const accountLabel = a => {
-    const broker = a?.broker?.name || a?.broker_name || 'Broker';
-    const id = a?.broker_account_id || a?.account_id || a?.id || '';
-    return {broker, id, type: accountType(a), currency: a?.currency || 'USD', balance: a?.balance};
-  };
+  const accountType = account => String(account?.account_type || account?.credentials?.account_type || 'unknown').toUpperCase();
+  const accountIdentity = account => window.AlgoBotBrokerBranding?.identityMarkup?.(account, 'topbar') || '';
+  const accountLabel = account => ({
+    broker: account?.broker?.name || account?.broker_name || 'Broker',
+    id: account?.broker_account_id || account?.account_id || account?.id || '',
+    type: accountType(account),
+    currency: account?.currency || 'USD',
+    balance: account?.balance
+  });
+  const formatBalance = label => window.AlgoBotMoney?.format
+    ? window.AlgoBotMoney.format(label.balance, label.currency || 'USD')
+    : '$' + (Number(label.balance) || 0).toFixed(2);
+
   function closeMenus(except) {
     document.querySelectorAll('[data-topbar-account-menu],[data-notification-menu],[data-profile-menu]').forEach(menu => {
       if (menu !== except) menu.hidden = true;
     });
-    document.querySelectorAll('[data-topbar-account-trigger],[data-notification-trigger],[data-profile-trigger]').forEach(btn => {
-      const owner = btn.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]');
+    document.querySelectorAll('[data-topbar-account-trigger],[data-notification-trigger],[data-profile-trigger]').forEach(button => {
+      const owner = button.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]');
       const menu = owner?.querySelector('[data-topbar-account-menu],[data-notification-menu],[data-profile-menu]');
-      if (menu && menu !== except) btn.setAttribute('aria-expanded', 'false');
+      if (menu && menu !== except) button.setAttribute('aria-expanded', 'false');
     });
   }
+
   function toggleMenu(button, menu) {
+    if (!button || !menu) return;
     const opening = menu.hidden;
     closeMenus(opening ? menu : null);
     menu.hidden = !opening;
     button.setAttribute('aria-expanded', String(opening));
     if (opening) menu.querySelector('button,a,[role="option"]')?.focus({preventScroll:true});
   }
+
   function renderAccount() {
     const control = $('[data-topbar-account-control]');
     if (!control) return;
     const current = selectedAccount();
     const name = $('[data-topbar-account-name]', control);
     const meta = $('[data-topbar-account-meta]', control);
+    const identity = $('[data-topbar-account-brand]', control);
     const options = $('[data-topbar-account-options]', control);
     if (!current) {
       if (name) name.textContent = 'No active account';
       if (meta) meta.textContent = 'Connect a broker to continue';
+      if (identity) identity.innerHTML = '';
       if (options) options.innerHTML = '<span class="topbar-menu-empty">No active broker account is selected.</span>';
       return;
     }
     const currentLabel = accountLabel(current);
     if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
-    if (meta) meta.textContent = currentLabel.type + ' · ' + (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(currentLabel.balance,currentLabel.currency||'USD') : '$'+(Number(currentLabel.balance)||0).toFixed(2));
+    if (meta) meta.textContent = [currentLabel.type, current?.branding?.country_code || current?.deriv_identity?.country_code || '', currentLabel.currency, formatBalance(currentLabel)].filter(Boolean).join(' · ');
+    if (identity) identity.innerHTML = accountIdentity(current);
+
     const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];
     if (options) {
-      const eligible = accounts.filter(a => a?.id);
-      options.innerHTML = eligible.length ? eligible.map(a => {
-        const label = accountLabel(a), active = String(a.id) === String(current.id);
-        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '><span class="topbar-account-option-icon material-symbols-rounded" aria-hidden="true">' + (active ? 'check_circle' : 'account_balance_wallet') + '</span><span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe(label.type + ' · ' + (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(label.balance,label.currency||'USD') : '$'+(Number(label.balance)||0).toFixed(2))) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+      const eligible = accounts.filter(account => account?.id);
+      options.innerHTML = eligible.length ? eligible.map(account => {
+        const label = accountLabel(account);
+        const active = String(account.id) === String(current.id);
+        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(account.id) + '"' + (active ? ' disabled' : '') + '>' +
+          accountIdentity(account) +
+          '<span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) +
+          '</strong><small>' + safe([label.type, account?.branding?.country_code || account?.deriv_identity?.country_code || '', label.currency, formatBalance(label)].filter(Boolean).join(' · ')) +
+          '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
       }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
     }
   }
+
   async function switchAccount(id, button) {
     if (!id || button?.disabled) return;
     const context = accountContext();
@@ -68,7 +88,7 @@
       window.AlgoBotMessage?.('Broker account selector is not ready. Refresh and try again.', 'error');
       return;
     }
-    const old = button.innerHTML;
+    const previousMarkup = button.innerHTML;
     button.disabled = true;
     button.innerHTML = '<span class="topbar-account-option-copy"><strong>Switching account…</strong></span>';
     try {
@@ -79,21 +99,26 @@
       if (menu) menu.hidden = true;
       trigger?.setAttribute('aria-expanded', 'false');
     } catch (error) {
-      button.innerHTML = old;
+      button.innerHTML = previousMarkup;
       window.AlgoBotMessage?.(error?.message || 'Account switch failed.', 'error');
     } finally {
       if (button.isConnected) button.disabled = false;
     }
   }
+
   let notifications = [];
   let unreadCount = null;
-  function notificationUnread(item) { return !item?.read_at; }
+  const notificationUnread = item => !item?.read_at;
+
   function renderNotifications(payload) {
     notifications = list(payload);
     const count = unreadCount == null ? notifications.filter(notificationUnread).length : unreadCount;
     const badge = $('[data-notification-count]');
     const trigger = $('[data-notification-trigger]');
-    if (badge) { badge.textContent = count > 99 ? '99+' : String(count); badge.hidden = count < 1; }
+    if (badge) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = count < 1;
+    }
     if (trigger) trigger.setAttribute('aria-label', count ? 'Notifications, ' + count + ' unread' : 'Notifications, no unread items');
     const target = $('[data-notification-list]');
     if (!target) return;
@@ -101,13 +126,20 @@
       target.innerHTML = '<p class="topbar-menu-empty">You are all caught up. New account and trading notifications will appear here.</p>';
       return;
     }
-    target.innerHTML = notifications.slice(0,8).map(n => {
-      const unread = notificationUnread(n);
-      const date = n.created_at ? new Date(n.created_at) : null;
+    target.innerHTML = notifications.slice(0, 8).map(item => {
+      const unread = notificationUnread(item);
+      const date = item.created_at ? new Date(item.created_at) : null;
       const when = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '';
-      return '<article class="topbar-notification-item' + (unread ? ' is-unread' : '') + '"><span class="topbar-notification-dot" aria-hidden="true"></span><div class="topbar-notification-copy"><strong>' + safe(n.title || 'Notification') + '</strong><p>' + safe(n.message || '') + '</p><small>' + safe(when) + (n.category ? ' · ' + safe(n.category) : '') + '</small></div>' + (unread ? '<button type="button" class="topbar-mark-read" data-notification-read="' + safe(n.id) + '" aria-label="Mark ' + safe(n.title || 'notification') + ' as read">Mark read</button>' : '<span class="topbar-read-label">Read</span>') + '</article>';
+      return '<article class="topbar-notification-item' + (unread ? ' is-unread' : '') + '">' +
+        '<span class="topbar-notification-dot" aria-hidden="true"></span><div class="topbar-notification-copy">' +
+        '<strong>' + safe(item.title || 'Notification') + '</strong><p>' + safe(item.message || '') +
+        '</p><small>' + safe(when) + (item.category ? ' · ' + safe(item.category) : '') +
+        '</small></div>' + (unread
+          ? '<button type="button" class="topbar-mark-read" data-notification-read="' + safe(item.id) + '" aria-label="Mark ' + safe(item.title || 'notification') + ' as read">Mark read</button>'
+          : '<span class="topbar-read-label">Read</span>') + '</article>';
     }).join('');
   }
+
   async function loadNotifications() {
     try {
       const results = await Promise.all([
@@ -116,18 +148,18 @@
       ]);
       unreadCount = Math.max(0, Number(results[1]?.unread_count) || 0);
       renderNotifications(results[0]);
-    }
-    catch (_) {
+    } catch (_) {
       const target = $('[data-notification-list]');
       if (target) target.innerHTML = '<p class="topbar-menu-empty">Notifications could not be loaded right now. Open the notification center to retry.</p><a class="topbar-menu-retry" href="/notifications/">Retry in notification center</a>';
     }
   }
+
   async function markRead(id, all = false) {
     const url = all ? '/api/notifications/mark-all-read/' : '/api/notifications/' + encodeURIComponent(id) + '/read/';
     try {
-      const payload = await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
+      await request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}', notifyOnError:false}, 6500);
       if (all) {
-        notifications = notifications.map(n => ({...n, read_at: n.read_at || new Date().toISOString()}));
+        notifications = notifications.map(item => ({...item, read_at: item.read_at || new Date().toISOString()}));
         unreadCount = 0;
         renderNotifications(notifications);
       } else {
@@ -137,6 +169,7 @@
       window.AlgoBotMessage?.(error?.message || 'Could not update notification status.', 'error');
     }
   }
+
   function bind() {
     const accountTrigger = $('[data-topbar-account-trigger]');
     const accountMenu = $('[data-topbar-account-menu]');
@@ -152,20 +185,41 @@
     profileTrigger?.addEventListener('click', () => toggleMenu(profileTrigger, profileMenu));
     document.addEventListener('click', event => {
       const select = event.target.closest('[data-topbar-select-account]');
-      if (select) { event.preventDefault(); switchAccount(select.dataset.topbarSelectAccount, select); return; }
+      if (select) {
+        event.preventDefault();
+        switchAccount(select.dataset.topbarSelectAccount, select);
+        return;
+      }
       const read = event.target.closest('[data-notification-read]');
-      if (read) { event.preventDefault(); markRead(read.dataset.notificationRead); return; }
-      if (event.target.closest('[data-notification-read-all]')) { event.preventDefault(); markRead(null, true); return; }
+      if (read) {
+        event.preventDefault();
+        markRead(read.dataset.notificationRead);
+        return;
+      }
+      if (event.target.closest('[data-notification-read-all]')) {
+        event.preventDefault();
+        markRead(null, true);
+        return;
+      }
       if (!event.target.closest('[data-topbar-account-control],[data-topbar-notifications],[data-topbar-profile]')) closeMenus(null);
     });
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeMenus(null); document.querySelector('[data-topbar-account-trigger]')?.focus({preventScroll:true}); } });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        closeMenus(null);
+        $('[data-topbar-account-trigger]')?.focus({preventScroll:true});
+      }
+    });
     window.addEventListener('algobot:account-context-changed', renderAccount);
     window.addEventListener('algobot:backend-accounts-loaded', renderAccount);
     window.addEventListener('algobot:account-changed', renderAccount);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !($('[data-notification-menu]')?.hidden)) loadNotifications();
+    });
     renderAccount();
-    loadNotifications(); // Populate the unread badge on first render, not only after opening the menu.
+    loadNotifications();
     if (accountContext()?.load) accountContext().load().then(renderAccount).catch(renderAccount);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true}); else bind();
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, {once:true});
+  else bind();
 })();

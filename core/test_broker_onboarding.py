@@ -37,7 +37,7 @@ class BrokerOnboardingGateTests(TestCase):
         self.client.force_login(self.user)
         # Account management and observability must work before a broker is
         # connected; only trading-workspace routes are gated by this middleware.
-        for path in ("/settings/", "/profile/", "/operations/audit/", "/monitoring/"):
+        for path in ("/settings/", "/profile/", "/monitoring/"):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertNotEqual(response.status_code, 302)
@@ -151,7 +151,7 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
         self.assertContains(response, 'data-broker-status-filter="connected"')
         self.assertContains(response, 'data-broker-status-filter="available"')
         self.assertContains(response, 'data-broker-status-filter="unavailable"')
-        self.assertContains(response, "https://deriv.com/favicon.ico")
+        self.assertContains(response, "/static/icons/brokers/deriv.svg")
         self.assertContains(response, 'alt="Deriv brand SVG"')
         self.assertContains(response, "Example Broker")
         self.assertContains(response, "Not supported yet")

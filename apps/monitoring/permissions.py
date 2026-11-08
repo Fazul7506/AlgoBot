@@ -4,5 +4,3 @@ class MonitoringPermission(IsAuthenticated):
     pass
 class AlertPermission(IsAuthenticated):
     pass
-class AuditLogPermission(IsAuthenticated):
-    pass

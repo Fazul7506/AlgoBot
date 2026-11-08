@@ -42,7 +42,7 @@ class BillingEntitlementsContractTests(TestCase):
     def test_usage_payload_declares_measurement_source(self):
         user = get_user_model().objects.create_user(username="billing-user", password="test-password")
         payload = entitlement_payload(user)
-        self.assertEqual(payload["usage"]["orders"]["source"], "audit_log")
+        self.assertEqual(payload["usage"]["orders"]["source"], "activity_events")
         self.assertEqual(payload["usage"]["broker_accounts"]["source"], "database")
         self.assertIn("no synthetic usage is generated", payload["reset_policy"]["measurement"].lower())
 

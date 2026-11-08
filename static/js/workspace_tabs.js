@@ -8,7 +8,17 @@
     const content = nav.parentElement?.querySelector('[data-workspace-tab-content]') ||
       nav.nextElementSibling?.matches('[data-workspace-tab-content]') && nav.nextElementSibling;
     if (!content) return;
-    const tabs = [...nav.querySelectorAll('a[href^="#"]')].map((link) => ({
+    const tabLinks = [...nav.querySelectorAll('a[href^="#"]')];
+    const targetPanels = tabLinks
+      .map((link) => document.getElementById(decodeURIComponent(link.getAttribute('href').slice(1))))
+      .filter(Boolean);
+    // A workspace tab target may be nested inside a layout grid (as on the
+    // Developer page). Move it into the shared panel root so every tab is a
+    // peer panel and selecting it cannot leave unrelated nested content visible.
+    targetPanels.forEach((panel) => {
+      if (!content.contains(panel) || panel.parentElement !== content) content.appendChild(panel);
+    });
+    const tabs = tabLinks.map((link) => ({
       link,
       id: decodeURIComponent(link.getAttribute('href').slice(1)),
       panel: document.getElementById(decodeURIComponent(link.getAttribute('href').slice(1)))

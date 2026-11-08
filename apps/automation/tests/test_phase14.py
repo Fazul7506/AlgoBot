@@ -104,8 +104,8 @@ class AutomationEngineTests(TestCase):
         execution = WorkflowExecutionService().run(workflow, {"risk_ok": False})
         self.assertEqual(execution.status, "completed")
         self.assertEqual(execution.result["status"], "condition_not_met")
-        self.assertEqual(len(execution.audit_log), 1)
-        self.assertEqual(execution.audit_log[0]["status"], "condition_not_met")
+        self.assertEqual(len(execution.execution_trace), 1)
+        self.assertEqual(execution.execution_trace[0]["status"], "condition_not_met")
 
     def test_execute_trade_requires_explicit_account(self):
         user = get_user_model().objects.create_user(username="auto-account", password="x")

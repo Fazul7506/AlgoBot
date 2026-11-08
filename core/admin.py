@@ -2,7 +2,7 @@
 from django.contrib import admin
 from core.models import (
     UserProfile, Subscription, PasswordResetToken, BotSettings,
-    Invoice, Payment, PaymentWebhookEvent, ReferralReward, AuditLog, EncryptedCredential
+    Invoice, Payment, PaymentWebhookEvent, ReferralReward, EncryptedCredential
 )
 
 
@@ -87,21 +87,6 @@ class ReferralRewardAdmin(admin.ModelAdmin):
     search_fields = ["referrer__username", "referee__username"]
     readonly_fields = ["awarded_at"]
 
-
-@admin.register(AuditLog)
-class AuditLogAdmin(admin.ModelAdmin):
-    """Audit records must remain append-only and tamper-resistant."""
-    list_display = ["user", "path", "method", "status_code", "created_at"]
-    list_filter = ["method", "status_code", "created_at"]
-    search_fields = ["user__username", "path"]
-    readonly_fields = [
-        "user", "path", "method", "status_code", "ip_address",
-        "user_agent", "request_body", "response_body", "error", "created_at",
-    ]
-
-    def has_add_permission(self, request): return False
-    def has_change_permission(self, request, obj=None): return False
-    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(EncryptedCredential)

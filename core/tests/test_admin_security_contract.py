@@ -49,10 +49,16 @@ class AdminSecurityContractTests(TestCase):
 
     def test_runtime_records_are_read_only_in_admin(self):
         from apps.execution.models import ExecutionLog, ExecutionQueue, Order, ReconciliationEvent
-        from apps.monitoring.models import AuditLog, LogEntry, SystemHealth
+        from apps.monitoring.models import LogEntry, SystemHealth
+        from apps.observability.models import AuditEvent
 
-        for model in (Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, AuditLog, LogEntry, SystemHealth):
+        for model in (Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, LogEntry, SystemHealth):
             model_admin = admin.site._registry[model]
             self.assertFalse(model_admin.has_add_permission(None), model.__name__)
             self.assertFalse(model_admin.has_change_permission(None), model.__name__)
             self.assertFalse(model_admin.has_delete_permission(None), model.__name__)
+
+        activity_admin = admin.site._registry[AuditEvent]
+        self.assertFalse(activity_admin.has_add_permission(None))
+        self.assertFalse(activity_admin.has_change_permission(None))
+        self.assertFalse(activity_admin.has_delete_permission(None))

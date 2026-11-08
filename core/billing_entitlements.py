@@ -6,7 +6,8 @@ from typing import Dict
 from django.db import DatabaseError
 from django.db.models import Q
 from django.utils import timezone
-from core.models import AuditLog, Subscription
+from apps.observability.models import AuditEvent
+from core.models import Subscription
 
 @dataclass(frozen=True)
 class PlanEntitlement:
@@ -22,7 +23,7 @@ FEATURE_LABELS = {"api_calls":"Execution API calls", "strategies":"active strate
 EXECUTION_PATH_PREFIXES = ("/api/orders/", "/api/trading/execute/", "/api/trades/execute/", "/api/execution/")
 EXECUTION_METHODS = ("POST", "PUT", "PATCH")
 RESETTABLE_METRICS = {"api_calls", "backtests", "predictions", "orders", "automations", "live_orders"}
-AUDIT_METRICS = {"api_calls", "backtests", "predictions", "orders", "automations", "live_orders"}
+METERED_EVENT_METRICS = {"api_calls", "backtests", "predictions", "orders", "automations", "live_orders"}
 
 def subscription_for(user):
     if not getattr(user, "is_authenticated", False): return None
@@ -47,12 +48,12 @@ def reset_at(window="day"):
     start = _start(window); return start + (timedelta(days=1) if window == "day" else timedelta(minutes=1))
 
 def _audit_count(user, start, prefixes=None, methods=None):
-    qs = AuditLog.objects.filter(user=user, created_at__gte=start)
+    qs = AuditEvent.objects.filter(actor_id=user.pk, created_at__gte=start, request_path__gt="")
     if prefixes:
         q = Q()
-        for prefix in prefixes: q |= Q(path__startswith=prefix)
+        for prefix in prefixes: q |= Q(request_path__startswith=prefix)
         qs = qs.filter(q)
-    if methods: qs = qs.filter(method__in=methods)
+    if methods: qs = qs.filter(http_method__in=methods)
     return qs.count()
 
 def usage(user, metric, window="day"):
@@ -107,7 +108,7 @@ def entitlement_payload(user):
     items = {}
     for metric in ("api_calls", "strategies", "backtests", "predictions", "orders", "broker_accounts", "automations", "live_orders"):
         limit = limit_for(plan, metric); current = usage(user, metric)
-        item = {"used":current,"limit":None if limit < 0 else limit,"unlimited":limit < 0,"remaining":None if limit < 0 else max(0, limit-current),"source":"audit_log" if metric in AUDIT_METRICS else "database"}
+        item = {"used":current,"limit":None if limit < 0 else limit,"unlimited":limit < 0,"remaining":None if limit < 0 else max(0, limit-current),"source":"activity_events" if metric in METERED_EVENT_METRICS else "database"}
         if metric in RESETTABLE_METRICS: item.update({"reset_at":None if limit < 0 else reset_at("day").isoformat(),"reset_window":None if limit < 0 else "day"})
         else: item.update({"reset_at":None,"reset_window":None,"limit_type":"capacity"})
         items[metric] = item

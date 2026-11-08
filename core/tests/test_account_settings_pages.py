@@ -10,6 +10,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 from PIL import Image
 
 from apps.observability.models import AuditEvent
@@ -220,6 +222,8 @@ class AccountSettingsPagesTests(TestCase):
         api_contract = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "frontend_data_contract.js").read_text()
         preferences_script = (Path(__file__).resolve().parents[2] / "static" / "js" / "core" / "settings_preferences.js").read_text()
         self.assertIn("settings_preferences.js", settings_template)
+        self.assertIn("{% block extra_js %}", settings_template)
+        self.assertLess(settings_template.index("{% block extra_js %}"), settings_template.index("settings_preferences.js"))
         self.assertIn("window.AlgoBotFrontendData", preferences_script)
         self.assertNotIn("fetch('/api/settings/'", preferences_script)
         self.assertIn("path==='/api/settings/'", api_contract)
@@ -339,6 +343,24 @@ class AccountSettingsPagesTests(TestCase):
                 self.assertIsNotNone(nav_match, "Account Settings navigation must render")
                 active_links = re.findall(r'<a href="([^"]+)" aria-current="page">', nav_match.group(1))
                 self.assertEqual(active_links, [url], "Only the current subpage should be active")
+
+    def test_settings_api_accepts_authenticated_browser_bearer_token(self):
+        api_client = APIClient()
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        response = api_client.get(reverse("account_settings_api"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["username"], self.user.username)
+
+        saved = api_client.patch(
+            reverse("account_settings_api"),
+            {"preferences": {"theme": "system", "density": "comfortable"}},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertTrue(saved.json()["ok"])
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.account_preferences["theme"], "system")
+        self.assertEqual(profile.account_preferences["density"], "comfortable")
 
     def test_settings_api_rejects_non_object_payload(self):
         response = self.client.patch(

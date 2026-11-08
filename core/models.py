@@ -135,26 +135,6 @@ class BotSettings(models.Model):
         return f"{self.user.username} Bot Settings"
 
 
-class AuditLog(models.Model):
-    """Audit trail for API requests"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='audit_logs')
-    path = models.CharField(max_length=500)
-    method = models.CharField(max_length=10)
-    status_code = models.IntegerField()
-    ip_address = models.CharField(max_length=45, blank=True)
-    user_agent = models.TextField(blank=True)
-    request_body = models.TextField(blank=True)
-    response_body = models.TextField(blank=True)
-    error = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [models.Index(fields=['user', '-created_at'])]
-
-    def __str__(self):
-        return f"{self.method} {self.path} - {self.status_code}"
-
 
 class Invoice(models.Model):
     """Invoice records with provider/checkout metadata."""
