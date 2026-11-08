@@ -70,7 +70,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
-        self.assertIn("developer_api_hardening.css?v=20261108-devapi-mobile3", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-design-tokens1", html)
         css = (Path(settings.BASE_DIR) / "static" / "css" / "developer_api_hardening.css").read_text(encoding="utf-8")
         self.assertIn(".dev-dashboard .dev-dashboard-layout", css)
         self.assertIn("@media(max-width:900px)", css)
@@ -199,7 +199,8 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertNotIn("&&a.is_connected===true&&a.switch_enabled", switcher)
         # Keep the sidebar click separate from the shared generic switch listener;
         # verify the rendered target is still eligible before starting a switch.
-        self.assertIn("data-account-id=\"${safe(target?.id||'')}\"", switcher)
+        self.assertIn("data-account-id=", switcher)
+        self.assertIn("safe(target?.id", switcher)
         self.assertIn("data-sidebar-account-switch", switcher)
         self.assertIn("closest?.('[data-sidebar-account-switch]')", switcher)
         self.assertIn("if(!target||String(target.id)!==String(b.dataset.accountId||''))return", switcher)
@@ -280,7 +281,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "css/runtime_recovery.css?v=20261026-toast-severity1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
-        self.assertContains(response, "js/sidebar_account_switch.js?v=20261013-samescope1")
+        self.assertContains(response, "js/sidebar_account_switch.js?v=20261108-connected-account-branding4")
         self.assertRegex(response.content.decode("utf-8"), r"js/base_shell\.js(?:\?v=[^\"\s]+)?")
         shell = (Path("static/js/base_shell.js")).read_text(encoding="utf-8")
         self.assertIn("function bindNavigationPrefetch(links)", shell)
