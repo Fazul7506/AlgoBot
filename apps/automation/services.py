@@ -489,8 +489,8 @@ class WorkflowExecutionService:
             execution.result = {"error": str(exc), "code": getattr(exc, "code", "WORKFLOW_EXECUTION_FAILED")}
         execution.completed_at = timezone.now()
         execution.duration = execution.completed_at - execution.started_at
-        execution.audit_log = audit
-        execution.save(update_fields=["status", "result", "completed_at", "duration", "audit_log"])
+        execution.execution_trace = audit
+        execution.save(update_fields=["status", "result", "completed_at", "duration", "execution_trace"])
         return execution
 
 
