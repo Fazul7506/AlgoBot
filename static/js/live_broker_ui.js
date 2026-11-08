@@ -8,11 +8,6 @@
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
-    if(!document.getElementById('algobot-broker-svg-avatar-style')){
-      const style=document.createElement('style');style.id='algobot-broker-svg-avatar-style';
-      style.textContent='.broker-svg-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:visible}.broker-svg-avatar .account-broker-identity{position:relative;display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%}.broker-svg-avatar img.account-broker-logo{width:100%;height:100%;object-fit:contain}.broker-svg-avatar img.account-country-flag{position:absolute;right:-4px;bottom:-3px;width:13px;height:10px;object-fit:cover;border:1px solid #dce9f8;border-radius:2px}';
-      document.head.appendChild(style);
-    }
     document.documentElement.classList.add('material-symbols-ready');
   }
 
