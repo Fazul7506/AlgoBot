@@ -227,8 +227,8 @@ class DeveloperPlatformTests(TestCase):
         response = session.get("/developer/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("developer_api_hardening.css?v=20261108-devapi-tabs1", html)
-        self.assertIn("developer_portal.js?v=20261108-devapi-tabs1", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-devapi-mobile2", html)
+        self.assertIn("developer_portal.js?v=20261108-devapi-mobile2", html)
 
         explorer = session.get("/developer/api/explorer/")
         self.assertEqual(explorer.status_code, 200)
