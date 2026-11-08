@@ -1,3 +1,4 @@
+from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
@@ -227,13 +228,25 @@ class DeveloperPlatformTests(TestCase):
         response = session.get("/developer/")
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("developer_api_hardening.css?v=20261108-devapi-mobile3", html)
-        self.assertIn("developer_portal.js?v=20261108-devapi-mobile3", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-design-tokens1", html)
+        self.assertIn("workspace_theme_contract.css?v=20261108-theme-contract1", html)
+        self.assertIn("developer_portal.js?v=20261108-design-tokens1", html)
 
         explorer = session.get("/developer/api/explorer/")
         self.assertEqual(explorer.status_code, 200)
         self.assertIn("20261104-accessible-tabs1", explorer.content.decode())
         self.assertRegex(explorer.content.decode(), r"developer_api_hardening\.css\?v=[A-Za-z0-9_-]+")
+
+        status = session.get("/developer/api/status/")
+        self.assertEqual(status.status_code, 200)
+        status_html = status.content.decode()
+        self.assertIn("Execution API", status_html)
+        self.assertIn("20261108-live-health1", status_html)
+        status_js = (Path(__file__).resolve().parents[3] / "static/js/api_status.js").read_text()
+        self.assertIn("/health/", status_js)
+        self.assertIn("/health/ready/", status_js)
+        self.assertIn("/api/developer/docs/", status_js)
+        self.assertIn("no order was submitted", status_js)
     def test_missing_endpoint_docstring_uses_operation_name_not_none_type_doc(self):
         from django.urls.resolvers import RoutePattern, URLPattern
         from apps.developer.contract import _operation
