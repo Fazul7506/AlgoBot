@@ -7,7 +7,7 @@ const baseURL = (process.env.ALGOBOT_VISUAL_BASE_URL || 'https://algobot.dpdns.o
 const username = process.env.ALGOBOT_VISUAL_USERNAME || '';
 const password = process.env.ALGOBOT_VISUAL_PASSWORD || '';
 const totpSecret = process.env.ALGOBOT_VISUAL_TOTP_SECRET || '';
-const routes = [...new Set((process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/profile/,/settings/,/account/identity/')
+const routes = [...new Set((process.env.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/billing/,/developer/,/developer/api/explorer/,/profile/,/settings/,/account/identity/')
   .split(',').map(value => value.trim()).filter(Boolean))];
 const outputDir = process.env.VISUAL_OUTPUT_DIR || 'artifacts/chromium';
 const viewports = [
@@ -129,6 +129,14 @@ try {
           fullPage: true,
         });
         if (normalizedRoute === '/settings/') {
+          const preferenceStatus = page.locator('[data-settings-status]');
+          await preferenceStatus.waitFor({ state: 'visible', timeout: 15000 });
+          await page.waitForFunction(() => document.querySelector('[data-settings-status]')?.textContent?.trim() === 'Preferences loaded', null, { timeout: 15000 }).catch(() => null);
+          const loadedStatus = (await preferenceStatus.textContent() || '').trim();
+          if (loadedStatus !== 'Preferences loaded') {
+            const detail = (await page.locator('[data-settings-message]').textContent().catch(() => '') || '').trim();
+            failures.push(normalizedRoute + ' at ' + viewport.name + ': preferences did not load (' + (loadedStatus || detail || 'unknown error') + ')');
+          }
           await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
           const timezone = page.locator('#settings-timezone');
           if (await timezone.count()) {
@@ -169,6 +177,54 @@ try {
             await page.keyboard.press('Escape');
           } else {
             failures.push(`${normalizedRoute} at ${viewport.name}: timezone preference control is missing`);
+          }
+        }
+
+        if (normalizedRoute === '/developer/' || normalizedRoute === '/billing/') {
+          const selector = normalizedRoute === '/developer/' ? '.dev-tabs a[href^="#"]' : '.billing-tabs a[href^="#"]';
+          const tabs = page.locator(selector);
+          const count = await tabs.count();
+          if (count < 2) {
+            failures.push(normalizedRoute + ' at ' + viewport.name + ': expected multiple workspace tabs, found ' + count);
+          } else {
+            const panelIds = await tabs.evaluateAll(links => links.map(link => (link.getAttribute('href') || '').slice(1)));
+            for (let index = 0; index < count; index += 1) {
+              const tab = tabs.nth(index);
+              const id = panelIds[index];
+              await tab.click();
+              const panel = page.locator('#' + id);
+              if (!(await panel.isVisible().catch(() => false))) {
+                failures.push(normalizedRoute + ' at ' + viewport.name + ': tab ' + id + ' did not reveal its panel');
+              }
+              if (await tab.getAttribute('aria-selected') !== 'true') {
+                failures.push(normalizedRoute + ' at ' + viewport.name + ': tab ' + id + ' did not receive aria-selected=true');
+              }
+              for (const otherId of panelIds.filter(value => value !== id)) {
+                if (await page.locator('#' + otherId).isVisible().catch(() => false)) {
+                  failures.push(normalizedRoute + ' at ' + viewport.name + ': inactive panel ' + otherId + ' remained visible after selecting ' + id);
+                }
+              }
+            }
+          }
+        }
+
+        if (normalizedRoute === '/developer/api/explorer/') {
+          const tabs = page.locator('.api-tabs button[data-tab]');
+          const count = await tabs.count();
+          if (count < 2) {
+            failures.push(normalizedRoute + ' at ' + viewport.name + ': API Explorer tab controls are missing');
+          } else {
+            for (let index = 0; index < count; index += 1) {
+              const tab = tabs.nth(index);
+              const id = await tab.getAttribute('data-tab');
+              await tab.click();
+              if (!(await page.locator('[data-panel="' + id + '"]').isVisible().catch(() => false))) {
+                failures.push(normalizedRoute + ' at ' + viewport.name + ': API Explorer tab ' + id + ' did not reveal its panel');
+              }
+              if (await tab.getAttribute('aria-selected') !== 'true') {
+                failures.push(normalizedRoute + ' at ' + viewport.name + ': API Explorer tab ' + id + ' did not receive aria-selected=true');
+              }
+            }
           }
         }
       }
