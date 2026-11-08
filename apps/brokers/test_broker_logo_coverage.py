@@ -41,4 +41,3 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertIn("AlgoBotBrokerBranding?.identityMarkup", topbar)
         self.assertIn("accountIdentity(current)", topbar)
         self.assertNotIn("name[0]?.toUpperCase()", topbar)
-        self.assertNotIn("name[0]?.toUpperCase()", topbar)
