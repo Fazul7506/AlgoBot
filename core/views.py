@@ -253,6 +253,7 @@ def profile_completion_page(request):
         "phone": request.POST.get("phone", profile.phone),
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
+        "timezone_choices": ["UTC"] + sorted(available_timezones() - {"UTC"}),
         "bio": request.POST.get("bio", profile.bio),
         "terms_accepted": bool(profile.terms_accepted_at) or request.POST.get("terms_accepted") in {"on", "true", "1"},
         "terms_already_accepted": bool(profile.terms_accepted_at),
