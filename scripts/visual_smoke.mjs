@@ -222,6 +222,13 @@ try {
           if (count < 2) {
             failures.push(normalizedRoute + ' at ' + viewport.name + ': API Explorer tab controls are missing');
           } else {
+            if (viewport.name === 'mobile') {
+              const clipped = await tabs.evaluateAll(buttons => buttons.some(button => {
+                const bounds = button.getBoundingClientRect();
+                return bounds.left < 0 || bounds.right > window.innerWidth;
+              }));
+              if (clipped) failures.push(normalizedRoute + ': API Explorer tab labels overflow the mobile viewport');
+            }
             for (let index = 0; index < count; index += 1) {
               const tab = tabs.nth(index);
               const id = await tab.getAttribute('data-tab');
