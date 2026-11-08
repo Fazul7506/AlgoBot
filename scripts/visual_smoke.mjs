@@ -217,6 +217,10 @@ try {
         }
 
         if (normalizedRoute === '/developer/api/explorer/') {
+          const selectedTitle = (await page.locator('[data-selected-title]').textContent().catch(() => '') || '').trim();
+          if (selectedTitle === 'The type of the None singleton.') {
+            failures.push(normalizedRoute + ': API contract generator exposed the NoneType docstring as an endpoint title');
+          }
           const tabs = page.locator('.api-tabs button[data-tab]');
           const count = await tabs.count();
           if (count < 2) {
