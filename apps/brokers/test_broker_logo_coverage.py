@@ -1,5 +1,8 @@
 from pathlib import Path
 from unittest import TestCase
+from types import SimpleNamespace
+
+from apps.brokers.serializers import BrokerAccountSerializer
 
 from apps.brokers.constants import BROKER_TYPES
 
@@ -37,11 +40,18 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertNotIn("Generic broker symbol", template)
 
     def test_deriv_country_identity_is_normalized_for_svg_flags(self):
-        root = Path(__file__).resolve().parents[2]
-        serializer = (root / "apps" / "brokers" / "serializers.py").read_text(encoding="utf-8")
-        self.assertIn("identity.get('country')", serializer)
-        self.assertIn("'UNITED STATES':'US'", serializer)
-        self.assertIn("https://flagcdn.com/'+country.lower()+'.svg", serializer)
+        serializer = BrokerAccountSerializer()
+        serializer._realtime = lambda obj: {}
+        serializer._broker_metadata = lambda obj: {}
+        serializer.get_account_type = lambda obj: obj.account_type
+        serializer.get_deriv_identity = lambda obj: obj.credentials['deriv_identity']
+        broker = SimpleNamespace(broker_type='deriv', name='Deriv')
+        for country in ('US', 'USA', 'United States'):
+            with self.subTest(country=country):
+                account = SimpleNamespace(credentials={'deriv_identity': {'country': country}}, broker=broker, account_type='real')
+                branding = serializer.get_branding(account)
+                self.assertEqual(branding['country_code'], 'US')
+                self.assertEqual(branding['flag'], 'https://flagcdn.com/us.svg')
 
     def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
         root = Path(__file__).resolve().parents[2]
