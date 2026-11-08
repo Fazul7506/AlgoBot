@@ -234,3 +234,15 @@ class DeveloperPlatformTests(TestCase):
         self.assertEqual(explorer.status_code, 200)
         self.assertIn("20261104-accessible-tabs1", explorer.content.decode())
         self.assertRegex(explorer.content.decode(), r"developer_api_hardening\.css\?v=[A-Za-z0-9_-]+")
+    def test_missing_endpoint_docstring_uses_operation_name_not_none_type_doc(self):
+        from django.urls.resolvers import RoutePattern, URLPattern
+        from apps.developer.contract import _operation
+
+        def endpoint(request):
+            return None
+
+        pattern = URLPattern(RoutePattern("api/developer/sample/"), endpoint, name="sample_endpoint")
+        operation, methods = _operation(pattern)
+        self.assertEqual(methods, ["get"])
+        self.assertEqual(operation["summary"], "Sample Endpoint")
+        self.assertNotEqual(operation["summary"], type(None).__doc__)
