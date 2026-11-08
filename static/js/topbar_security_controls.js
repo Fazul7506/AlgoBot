@@ -17,9 +17,10 @@
   const accountIdentity = account => {
     const type = String(account?.account_type || account?.credentials?.account_type || 'unknown').toLowerCase();
     const identity = window.AlgoBotBrokerBranding?.identityMarkup?.(account, 'topbar') || '';
-    const label = type === 'real' ? 'REAL' : type === 'demo' ? 'DEMO' : '';
+    // The shared branding renderer already supplies the broker-specific DEMO/REAL
+    // SVG mark. Keep this wrapper purely structural to avoid duplicate badges.
     return '<span class="topbar-account-identity-wrap" data-account-type="' + safe(type) + '">' +
-      identity + (label ? '<span class="topbar-account-type-badge topbar-account-type-badge--' + safe(type) + '">' + label + '</span>' : '') +
+      identity +
       '</span>';
   };
   const accountLabel = account => ({
