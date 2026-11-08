@@ -64,7 +64,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
         shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
         self.assertIn("Background/polling GET failures are rendered by their owning page state", client)
-        self.assertIn("API_TIMEOUT','NETWORK_ERROR'", client)
+        self.assertIn("error?.code === 'API_TIMEOUT'", client)
+        self.assertIn("error?.code === 'NETWORK_ERROR'", client)
         self.assertIn("API_ERROR_DEDUPE_MS = 30000", shell)
 
     def test_intasend_badge_is_limited_to_intasend_billing_surfaces(self):
