@@ -114,6 +114,9 @@ def profile_completion_page(request):
             errors.append("Enter your first and last name to complete your profile.")
         if not profile.terms_accepted_at and not terms_accepted:
             errors.append("Please accept the Terms of Service and Privacy Policy to continue.")
+        timezone_name = str(request.POST.get("timezone") or "UTC").strip() or "UTC"
+        if timezone_name not in available_timezones():
+            errors.append("Choose a valid time zone.")
         if not username or len(username) > 150:
             errors.append("Enter a valid username (150 characters or fewer).")
         else:
@@ -199,7 +202,7 @@ def profile_completion_page(request):
                     submitted_country = str(request.POST.get("country") or "").strip()
                     if submitted_country:
                         profile.country = submitted_country[:100]
-                    profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
+                    profile.timezone = timezone_name[:100]
                     profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
                     # Blank optional fields must not erase values previously provided
                     # by the user or a verified identity claim.
