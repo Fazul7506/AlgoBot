@@ -441,3 +441,8 @@
 .topbar-account-option-copy{min-width:0}
 .topbar-account-option-copy strong,.topbar-account-option-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:700px){.topbar-account-identity-wrap{flex-basis:32px;width:32px;height:32px}.topbar-account-identity-wrap .topbar-broker-identity{width:30px;height:30px}.topbar-account-type-badge{right:-7px;top:-5px;font-size:6px}}
+
+.account-type-badge{position:absolute;right:-7px;top:-5px;z-index:3;min-width:24px;padding:2px 4px;border:1px solid #183a5b;border-radius:999px;background:#102d4b;color:#dcecff;font-size:7px;font-weight:900;line-height:1.2;text-align:center}
+.account-type-badge--real{border-color:#8b3b46;background:#4a1c28;color:#ffd8dc}
+.account-type-badge--demo{border-color:#17634f;background:#0b3a31;color:#8af0cf}
+.broker-svg-avatar{overflow:visible}
