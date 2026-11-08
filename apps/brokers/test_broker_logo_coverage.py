@@ -36,8 +36,8 @@ class BrokerLogoCoverageTests(TestCase):
     def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
         root = Path(__file__).resolve().parents[2]
         topbar = (root / "static" / "js" / "topbar_security_controls.js").read_text(encoding="utf-8")
-        self.assertIn("const accountVisual = a =>", topbar)
-        self.assertIn("b.country_code", topbar)
-        self.assertIn("https://flagcdn.com/${rawCode}.svg", topbar)
-        self.assertIn("BROKER_SVG[type]", topbar)
+        self.assertIn("accountIdentity(a)", topbar)
+        self.assertIn("AlgoBotBrokerBranding?.identityMarkup", topbar)
+        self.assertIn("accountIdentity(current)", topbar)
+        self.assertNotIn("name[0]?.toUpperCase()", topbar)
         self.assertNotIn("name[0]?.toUpperCase()", topbar)
