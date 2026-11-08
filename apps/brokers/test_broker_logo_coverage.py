@@ -39,6 +39,23 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertIn("mt4", template)
         self.assertNotIn("Generic broker symbol", template)
 
+    def test_deriv_demo_and_real_account_modes_use_svg_identity_assets(self):
+        root = Path(__file__).resolve().parents[2]
+        live_ui = (root / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
+        self.assertIn("account-demo.svg", live_ui)
+        self.assertIn("account-real-us.svg", live_ui)
+        self.assertIn("type==='demo'", live_ui)
+        self.assertIn("type==='real'&&brokerType(a)==='deriv'", live_ui)
+        self.assertTrue((root / "static" / "icons" / "account-demo.svg").is_file())
+        self.assertTrue((root / "static" / "icons" / "account-real-us.svg").is_file())
+
+    def test_broker_marketplace_never_renders_text_logo_fallback(self):
+        root = Path(__file__).resolve().parents[2]
+        template = (root / "templates" / "core" / "broker_marketplace.html").read_text(encoding="utf-8")
+        self.assertNotIn("broker-logo-fallback", template)
+        self.assertNotIn("fallback.textContent", template)
+        self.assertIn("is-logo-unavailable", template)
+
     def test_deriv_country_identity_is_normalized_for_svg_flags(self):
         serializer = BrokerAccountSerializer()
         serializer._realtime = lambda obj: {}
