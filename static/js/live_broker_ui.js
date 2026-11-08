@@ -8,6 +8,11 @@
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
+    if(!document.getElementById('algobot-broker-svg-avatar-style')){
+      const style=document.createElement('style');style.id='algobot-broker-svg-avatar-style';
+      style.textContent='.broker-svg-avatar{display:inline-flex;align-items:center;justify-content:center;overflow:hidden}.broker-svg-avatar img,.broker-svg-avatar svg{width:100%;height:100%;object-fit:contain}.broker-svg-avatar .broker-svg-fallback{display:none}.broker-svg-avatar.is-fallback img{display:none}.broker-svg-avatar.is-fallback .broker-svg-fallback{display:block}';
+      document.head.appendChild(style);
+    }
     document.documentElement.classList.add('material-symbols-ready');
   }
 
@@ -51,8 +56,8 @@
     const type=String(a?.broker?.broker_type||a?.broker_type||'').toLowerCase();
     const url=String(BROKER_SVG[type]||a?.broker?.logo_svg_url||a?.logo_svg_url||'').trim();
     const cls=`algobot-account-avatar${small?' small':''}`;
-    const fallback='<svg viewBox="0 0 40 40" role="img" aria-label="Broker symbol" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    return `<span class="${cls} broker-svg-avatar" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.parentElement.innerHTML='${fallback.replace(/'/g,"&#39;")}'">`:fallback}</span>`;
+    const fallback='<svg class="broker-svg-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker symbol" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
+    return `<span class="${cls} broker-svg-avatar" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.parentElement.classList.add('is-fallback')">${fallback}`:fallback}</span>`;
   };
 
   function placeLogout() {
