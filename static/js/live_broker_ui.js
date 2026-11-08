@@ -59,9 +59,12 @@
   };
   const identityMarkup=(a,scope)=>{
     const logo=logoUrl(a),flag=flagUrl(a),name=a?.broker?.name||a?.broker_name||'Connected broker';
-    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+'">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async">':'')+(flag?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async">':'')+'</span>';
+    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+'">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async" onerror="this.hidden=true">':'')+(flag?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async" onerror="this.hidden=true">':'')+'</span>';
   };
-  const avatar=(a,small)=>'<span class="algobot-account-avatar'+(small?' small':'')+' broker-svg-avatar" data-broker-icon="'+safe(brokerType(a))+'">'+identityMarkup(a,'account')+'</span>';
+  const avatar=(a,small)=>{
+    const type=typeOf(a),label=type==='real'?'REAL':type==='demo'?'DEMO':'';
+    return '<span class="algobot-account-avatar'+(small?' small':'')+' broker-svg-avatar" data-broker-icon="'+safe(brokerType(a))+'" data-account-type="'+safe(type)+'">'+identityMarkup(a,'account')+(label?'<span class="account-type-badge account-type-badge--'+safe(type)+'">'+label+'</span>':'')+'</span>';
+  };
   window.AlgoBotBrokerBranding=Object.freeze({logoUrl:logoUrl,flagUrl:flagUrl,identityMarkup:identityMarkup});
 
   function placeLogout() {
