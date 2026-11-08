@@ -49,15 +49,17 @@
     dxtrade:'https://cdn.simpleicons.org/dxtrade',bybit:'https://cdn.simpleicons.org/bybit',
     forex_com:'https://cdn.simpleicons.org/forexcom',ic_markets:'https://cdn.simpleicons.org/icmarkets',
     interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',
-    alpaca:'https://cdn.simpleicons.org/alpaca'
+    alpaca:'https://cdn.simpleicons.org/alpaca',metaquotes:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',metatrader5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',forexcom:'https://cdn.simpleicons.org/forexcom',icmarkets:'https://cdn.simpleicons.org/icmarkets'
   };
+  const svgSource = value => { const s=String(value||'').trim(); return /^(https:\/\/|\/static\/)/i.test(s) && (/\.svg(?:[?#]|$)/i.test(s) || s.startsWith('/static/icons/brokers/')) ? s : ''; };
+  const accountBrand = a => a?.branding || {};
+  const brokerSvg = a => { const b=accountBrand(a),type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(); return svgSource(b.logo_svg_url)||svgSource(a?.broker?.logo_svg_url)||svgSource(a?.broker?.avatar_url)||svgSource(a?.logo_svg_url)||BROKER_SVG[type]||''; };
+  const flagSvg = a => { const b=accountBrand(a),d=a?.deriv_identity||{}; const code=String(b.country_code||d.country_code||d.country||'').trim().toLowerCase(); return /^[a-z]{2}$/.test(code)?`https://flagcdn.com/${code}.svg`:''; };
   const avatar = (a, small = false) => {
-    const name=a?.broker?.name||a?.broker_name||'Broker';
-    const type=String(a?.broker?.broker_type||a?.broker_type||'').toLowerCase();
-    const url=String(BROKER_SVG[type]||a?.broker?.logo_svg_url||a?.logo_svg_url||'').trim();
+    const name=a?.broker?.name||a?.broker_name||'Broker',type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(),url=brokerSvg(a),flag=flagSvg(a);
     const cls=`algobot-account-avatar${small?' small':''}`;
-    const fallback='<svg class="broker-svg-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker symbol" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    return `<span class="${cls} broker-svg-avatar" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.parentElement.classList.add('is-fallback')">${fallback}`:fallback}</span>`;
+    const fallback='<svg class="broker-svg-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker mark unavailable" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
+    return `<span class="${cls} broker-svg-avatar" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.remove();this.parentElement.classList.add('is-fallback')">${fallback}`:fallback}${flag?`<img class="broker-country-flag" src="${safe(flag)}" alt="${safe(accountBrand(a).country_name||'Account country')}" loading="lazy" decoding="async">`:''}</span>`;
   };
 
   function placeLogout() {
