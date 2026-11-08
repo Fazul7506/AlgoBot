@@ -20,18 +20,19 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertNotIn("broker-svg-fallback", live_ui)
         self.assertIn("window.AlgoBotBrokerBranding", live_ui)
         self.assertIn("flagcdn.com", live_ui)
-        self.assertIn("accountBrand(a)", live_ui)
-        self.assertIn("https://flagcdn.com/${code}.svg", live_ui)
+        self.assertIn("identityMarkup", live_ui)
+        self.assertIn("https://flagcdn.com/", live_ui)
         self.assertNotIn("name[0]?.toUpperCase()", live_ui)
 
-    def test_logo_component_uses_brand_svg_sources_and_official_fallbacks(self):
+    def test_logo_component_uses_brand_svg_sources_without_generic_or_text_fallbacks(self):
         root = Path(__file__).resolve().parents[2]
         template = (root / "templates" / "components" / "broker_logo.html").read_text(encoding="utf-8")
         self.assertIn("cdn.simpleicons.org", template)
-        self.assertIn("data-fallback-src=", template)
+        self.assertNotIn("data-fallback-src=", template)
         self.assertNotIn("Generic broker symbol", template)
         self.assertNotIn("safe(name[0]?.toUpperCase()", Path(__file__).resolve().parents[2].joinpath("static/js/live_broker_ui.js").read_text(encoding="utf-8"))
-        self.assertIn("metatrader4.com/favicon.ico", template)
+        self.assertIn("mt4", template)
+        self.assertNotIn("Generic broker symbol", template)
 
     def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
         root = Path(__file__).resolve().parents[2]
