@@ -40,7 +40,8 @@ class ProfileCompletionTests(TestCase):
         self.assertContains(response, "First name")
         self.assertContains(response, "Last name")
         self.assertContains(response, "Google account connected")
-        self.assertContains(response, "Broker marketplace")
+        self.assertContains(response, "choose a broker connection")
+        self.assertNotContains(response, 'class="profile-onboarding__steps"')
 
     def test_required_names_are_validated(self):
         self.client.force_login(self.user)

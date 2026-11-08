@@ -419,7 +419,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-connected-account-branding6", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-account-brand-mode1", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
