@@ -4,9 +4,9 @@
 {% block content %}
 <section class="api-status-page" data-api-status-page>
 <header class="hero-panel"><p class="eyebrow">DEVELOPER PLATFORM</p><h1>API Status</h1><p>Live operational visibility for the public API contract, authentication layer, market-data services and execution boundaries.</p><button class="btn ghost" type="button" data-status-refresh>Refresh status</button></header>
-<div class="status-grid"><article class="panel"><span>API gateway</span><strong data-status="gateway">Checking…</strong><small>HTTP request routing and authentication</small></article><article class="panel"><span>API contract</span><strong data-status="contract">Checking…</strong><small data-contract-version>OpenAPI version —</small></article><article class="panel"><span>Realtime</span><strong data-status="realtime">Checking…</strong><small>WebSocket market/account event channel</small></article><article class="panel"><span>Execution</span><strong data-status="execution">Gated</strong><small>Live orders remain behind risk and account gates</small></article></div>
+<div class="status-grid"><article class="panel"><span>API gateway</span><strong data-status="gateway">Checking…</strong><small>HTTP request routing and authentication</small></article><article class="panel"><span>API contract</span><strong data-status="contract">Checking…</strong><small data-contract-version>OpenAPI version —</small></article><article class="panel"><span>Realtime</span><strong data-status="realtime">Checking…</strong><small>WebSocket market/account event channel</small></article><article class="panel"><span>Execution API</span><strong data-status="execution">Checking…</strong><small>Contract visibility only; no live order is submitted by this check</small></article></div>
 <section class="panel status-details"><div><p class="eyebrow">SERVICES</p><h2>Service health</h2></div><div data-status-list><p>Loading service health…</p></div></section>
 </section>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/developer_api_hardening.css' %}?v=20261108-design-tokens1">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/api_status.js' %}?v=20261008-api2" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/api_status.js' %}?v=20261108-live-health1" defer></script>{% endblock %}
