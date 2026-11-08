@@ -43,26 +43,36 @@
     const current = selectedAccount();
     const name = $('[data-topbar-account-name]', control);
     const meta = $('[data-topbar-account-meta]', control);
-    const brand = $('[data-topbar-account-brand]', control);
+    const identity = $('[data-topbar-account-identity]', control);
     const options = $('[data-topbar-account-options]', control);
     if (!current) {
       if (name) name.textContent = 'No active account';
       if (meta) meta.textContent = 'Connect a broker to continue';
-      if (brand) brand.innerHTML = '';
+      if (identity) identity.replaceChildren();
       if (options) options.innerHTML = '<span class="topbar-menu-empty">No active broker account is selected.</span>';
       return;
     }
     const currentLabel = accountLabel(current);
+    const formattedBalance = window.AlgoBotMoney?.format
+      ? window.AlgoBotMoney.format(currentLabel.balance, currentLabel.currency || 'USD')
+      : '$' + (Number(currentLabel.balance) || 0).toFixed(2);
     if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
-    if (meta) meta.textContent = [currentLabel.type, accountCountry(current), currentLabel.currency, (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(currentLabel.balance,currentLabel.currency||'USD') : '$'+(Number(currentLabel.balance)||0).toFixed(2))].filter(Boolean).join(' · ');
-    if (brand) brand.innerHTML = accountIdentity(current);
+    if (meta) meta.textContent = currentLabel.type + ' · ' + formattedBalance;
+    if (identity) identity.innerHTML = accountIdentity(current);
     const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];
     if (options) {
       const eligible = accounts.filter(a => a?.id);
       options.innerHTML = eligible.length ? eligible.map(a => {
-        const label = accountLabel(a), active = String(a.id) === String(current.id);
-        const detail = [label.type, accountCountry(a), label.currency, (window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(label.balance,label.currency||'USD') : '$'+(Number(label.balance)||0).toFixed(2))].filter(Boolean).join(' · ');
-        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '>' + accountIdentity(a) + '<span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) + '</strong><small>' + safe(detail) + '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
+        const label = accountLabel(a);
+        const active = String(a.id) === String(current.id);
+        const balance = window.AlgoBotMoney?.format
+          ? window.AlgoBotMoney.format(label.balance, label.currency || 'USD')
+          : '$' + (Number(label.balance) || 0).toFixed(2);
+        return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(a.id) + '"' + (active ? ' disabled' : '') + '>' +
+          accountIdentity(a) +
+          '<span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) +
+          '</strong><small>' + safe(label.type + ' · ' + balance) +
+          '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
       }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
     }
   }
