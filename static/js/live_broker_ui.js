@@ -39,28 +39,34 @@
   };
   const BROKER_SVG={
     deriv:'/static/icons/brokers/deriv.svg',binance:'/static/icons/brokers/binance.svg',coinbase:'/static/icons/brokers/coinbase.svg',
-    exness:'https://d33vw3iu5hs0zi.cloudfront.net/media/exness_logo_76096879aa.svg',
-    oanda:'https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg',
+    exness:'https://d33vw3iu5hs0zi.cloudfront.net/media/exness_logo_76096879aa.svg',oanda:'https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg',
     pepperstone:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt170ddde20eb927c5/6aa8ac0963177a84cc7771bb/Pepperstone_logo.svg?branch=main',
     ctrader:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt3a4db3259d633e7d/6aa8abe5ca2a94302fe1269b/ctrader_logo.svg?branch=main',
     mt4:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt147ccf6e97a62074/6aa8abfb22a09568933cb3c1/MT4_logo.svg?branch=main',
     mt5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
     metatrader_gateway:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
-    dxtrade:'https://cdn.simpleicons.org/dxtrade',bybit:'https://cdn.simpleicons.org/bybit',
-    forex_com:'https://cdn.simpleicons.org/forexcom',ic_markets:'https://cdn.simpleicons.org/icmarkets',
-    interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',
-    alpaca:'https://cdn.simpleicons.org/alpaca',metaquotes:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',metatrader5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',forexcom:'https://cdn.simpleicons.org/forexcom',icmarkets:'https://cdn.simpleicons.org/icmarkets'
+    metatrader5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    metaquotes:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    dxtrade:'https://cdn.simpleicons.org/dxtrade',bybit:'https://cdn.simpleicons.org/bybit',forex_com:'https://cdn.simpleicons.org/forexcom',
+    ic_markets:'https://cdn.simpleicons.org/icmarkets',interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',
+    kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',alpaca:'https://cdn.simpleicons.org/alpaca'
   };
-  const svgSource = value => { const s=String(value||'').trim(); return /^(https:\/\/|\/static\/)/i.test(s) && (/\.svg(?:[?#]|$)/i.test(s) || s.startsWith('/static/icons/brokers/')) ? s : ''; };
-  const accountBrand = a => a?.branding || {};
-  const brokerSvg = a => { const b=accountBrand(a),type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(); return svgSource(b.logo_svg_url)||svgSource(a?.broker?.logo_svg_url)||svgSource(a?.broker?.avatar_url)||svgSource(a?.logo_svg_url)||BROKER_SVG[type]||''; };
-  const flagSvg = a => { const b=accountBrand(a),d=a?.deriv_identity||{}; const code=String(b.country_code||d.country_code||d.country||'').trim().toLowerCase(); return /^[a-z]{2}$/.test(code)?`https://flagcdn.com/${code}.svg`:''; };
-  const avatar = (a, small = false) => {
-    const name=a?.broker?.name||a?.broker_name||'Broker',type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(),url=brokerSvg(a),flag=flagSvg(a);
-    const cls=`algobot-account-avatar${small?' small':''}`;
-    const fallback='<svg class="broker-svg-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker mark unavailable" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    return `<span class="${cls} broker-svg-avatar${url?'':' is-fallback'}" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.remove();this.parentElement.classList.add('is-fallback')">`:''}${fallback}${flag?`<img class="broker-country-flag" src="${safe(flag)}" alt="${safe(accountBrand(a).country_name||'Account country')}" loading="lazy" decoding="async">`:''}</span>`;
+  const brokerType=a=>String(a?.broker?.broker_type||a?.broker?.type||a?.broker_type||'').trim().toLowerCase();
+  const logoUrl=a=>String(a?.branding?.avatar_url||a?.avatar_url||a?.broker?.avatar_url||a?.broker?.logo_svg_url||BROKER_SVG[brokerType(a)]||'').trim();
+  const flagUrl=a=>{
+    const branding=a?.branding||{},identity=a?.deriv_identity||{};
+    const supplied=String(branding.flag||identity.flag||'').trim();
+    if(/^https:\/\//i.test(supplied))return supplied;
+    let code=String(branding.country_code||identity.country_code||identity.country?.code||identity.country||'').trim().toUpperCase();
+    code=({'USA':'US','UNITED STATES':'US','UNITED STATES OF AMERICA':'US','UK':'GB','UNITED KINGDOM':'GB'})[code]||code;
+    return /^[A-Z]{2}$/.test(code)?'https://flagcdn.com/'+code.toLowerCase()+'.svg':'';
   };
+  const identityMarkup=(a,scope)=>{
+    const logo=logoUrl(a),flag=flagUrl(a),name=a?.broker?.name||a?.broker_name||'Connected broker';
+    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+'">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async">':'')+(flag?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async">':'')+'</span>';
+  };
+  const avatar=(a,small)=>'<span class="algobot-account-avatar'+(small?' small':'')+' broker-svg-avatar" data-broker-icon="'+safe(brokerType(a))+'">'+identityMarkup(a,'account')+'</span>';
+  window.AlgoBotBrokerBranding=Object.freeze({logoUrl:logoUrl,flagUrl:flagUrl,identityMarkup:identityMarkup});
 
   function placeLogout() {
     const side = $('.sidebar-user');
