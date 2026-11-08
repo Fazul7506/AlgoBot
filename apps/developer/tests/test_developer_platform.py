@@ -230,7 +230,7 @@ class DeveloperPlatformTests(TestCase):
         html = response.content.decode()
         self.assertIn("developer_api_hardening.css?v=20261108-design-tokens1", html)
         self.assertIn("workspace_theme_contract.css?v=20261108-theme-contract1", html)
-        self.assertIn("developer_portal.js?v=20261108-design-tokens1", html)
+        self.assertIn("developer_portal.js?v=20261108-devapi-mobile3", html)
 
         explorer = session.get("/developer/api/explorer/")
         self.assertEqual(explorer.status_code, 200)
