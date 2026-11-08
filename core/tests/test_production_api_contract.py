@@ -70,7 +70,7 @@ class ProductionApiContractTests(SimpleTestCase):
     def test_repeated_api_errors_are_coalesced_during_polling(self):
         source = (ROOT / "static/js/base_shell.js").read_text(encoding="utf-8")
         self.assertIn("const recentApiErrors = new Map()", source)
-        self.assertIn("const API_ERROR_DEDUPE_MS = 10000", source)
+        self.assertIn("const API_ERROR_DEDUPE_MS = 30000", source)
         self.assertIn("if(now-previous<API_ERROR_DEDUPE_MS)return", source)
 
     def test_deriv_tick_watchdog_uses_bounded_backoff_and_recovers_after_valid_tick(self):
