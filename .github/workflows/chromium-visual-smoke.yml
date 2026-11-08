@@ -124,7 +124,7 @@ jobs:
 
       - name: Capture desktop, tablet, and mobile screenshots
         env:
-          ALGOBOT_VISUAL_PATHS: ${{ format('{0},/profile/,/settings/,/account/identity/', vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/') }}
+          ALGOBOT_VISUAL_PATHS: ${{ format('{0},/profile/,/settings/,/account/identity/', vars.ALGOBOT_VISUAL_PATHS || '/notifications/,/operations/security/,/analysis/,/billing/,/developer/,/developer/api/explorer/') }}
         run: node scripts/visual_smoke.mjs
 
       - name: Upload Chromium screenshots
