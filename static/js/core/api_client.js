@@ -38,6 +38,8 @@
   }
   function emitError(error, options={}) {
     if (options?.notifyOnError === false) return;
+    // Background/polling GET failures are rendered by their owning page state; never broadcast them as global toasts.
+    if (String(error?.method || 'GET').toUpperCase() === 'GET' && (error?.code === 'API_TIMEOUT' || error?.code === 'NETWORK_ERROR' || Number(error?.status) >= 500)) return;
     // A signed-out public page can legitimately encounter a protected endpoint
     // from a stale/third-party page module. Do not turn that expected 401 into a
     // global error toast; the server remains authoritative for authenticated use.
