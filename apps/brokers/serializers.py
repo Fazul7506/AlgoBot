@@ -51,7 +51,12 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_display_name(self,obj): return f'{obj.broker.name} · {obj.account_id}'
     def get_branding(self,obj):
         r,m=self._realtime(obj),self._broker_metadata(obj); t=self.get_account_type(obj); p=str(m.get('provider') or obj.broker.name); a=str(r.get('avatar_url') or m.get('avatar_url') or '')
-        return {'provider':p,'powered_by':p,'country_code':str(r.get('country_code') or m.get('country_code') or '').upper(),'country_name':str(r.get('country_name') or m.get('country_name') or ''),'flag':str(r.get('flag') or m.get('flag') or ''),'avatar_url':a,'account_type':t,'label':f'{p} Demo Account' if t=='demo' else f'{p} Real Account' if t=='real' else f'{p} Account'}
+        identity=self.get_deriv_identity(obj) if obj.broker.broker_type == 'deriv' else {}
+        raw_country=r.get('country_code') or r.get('country') or identity.get('country_code') or identity.get('country') or m.get('country_code') or ''
+        country=str(raw_country).strip().upper()
+        if len(country)!=2 or not country.isalpha(): country=''
+        country_name=str(r.get('country_name') or identity.get('country_name') or m.get('country_name') or '')
+        return {'provider':p,'powered_by':p,'country_code':country,'country_name':country_name,'flag':str(r.get('flag') or identity.get('flag') or m.get('flag') or ''),'avatar_url':a,'account_type':t,'label':f'{p} Demo Account' if t=='demo' else f'{p} Real Account' if t=='real' else f'{p} Account'}
     def get_is_active(self,obj): return self._active_account_id == obj.pk
     def get_is_connected(self,obj):
         prefetched = getattr(obj, '_connected_connections', None)
