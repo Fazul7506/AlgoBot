@@ -18,6 +18,8 @@ class BrokerLogoCoverageTests(TestCase):
         missing = [broker_type for broker_type in BROKER_TYPES if f"{broker_type}:" not in mapping]
         self.assertEqual(missing, [], f"Account switcher SVG mappings are missing for: {missing}")
         self.assertIn("broker-svg-fallback", live_ui)
+        self.assertIn("branding.country_code", live_ui)
+        self.assertIn("https://flagcdn.com/${code}.svg", live_ui)
         self.assertNotIn("name[0]?.toUpperCase()", live_ui)
 
     def test_logo_component_uses_brand_svg_sources_and_official_fallbacks(self):
@@ -28,3 +30,12 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertIn("Generic broker symbol", template)
         self.assertNotIn("safe(name[0]?.toUpperCase()", Path(__file__).resolve().parents[2].joinpath("static/js/live_broker_ui.js").read_text(encoding="utf-8"))
         self.assertIn("metatrader4.com/favicon.ico", template)
+
+    def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
+        root = Path(__file__).resolve().parents[2]
+        topbar = (root / "static" / "js" / "topbar_security_controls.js").read_text(encoding="utf-8")
+        self.assertIn("function accountVisual", topbar)
+        self.assertIn("branding.country_code", topbar)
+        self.assertIn("https://flagcdn.com/${rawCode}.svg", topbar)
+        self.assertIn("BROKER_SVG[type]", topbar)
+        self.assertNotIn("name[0]?.toUpperCase()", topbar)
