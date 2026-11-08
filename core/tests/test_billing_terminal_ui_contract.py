@@ -59,6 +59,14 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('Checkout unavailable', template)
         self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
 
+    def test_global_error_bus_does_not_toast_background_read_failures(self):
+        from pathlib import Path
+        client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("Background/polling GET failures are rendered by their owning page state", client)
+        self.assertIn("API_TIMEOUT','NETWORK_ERROR'", client)
+        self.assertIn("API_ERROR_DEDUPE_MS = 30000", shell)
+
     def test_intasend_badge_is_limited_to_intasend_billing_surfaces(self):
         from pathlib import Path
 
