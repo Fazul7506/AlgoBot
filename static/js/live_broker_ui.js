@@ -59,7 +59,7 @@
     const name=a?.broker?.name||a?.broker_name||'Broker',type=String(a?.broker?.type||a?.broker?.broker_type||a?.broker_type||'').toLowerCase(),url=brokerSvg(a),flag=flagSvg(a);
     const cls=`algobot-account-avatar${small?' small':''}`;
     const fallback='<svg class="broker-svg-fallback" viewBox="0 0 40 40" role="img" aria-label="Broker mark unavailable" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="17" fill="#0b4d86" stroke="#7acbff" stroke-width="2"/><path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    return `<span class="${cls} broker-svg-avatar" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.remove();this.parentElement.classList.add('is-fallback')">${fallback}`:fallback}${flag?`<img class="broker-country-flag" src="${safe(flag)}" alt="${safe(accountBrand(a).country_name||'Account country')}" loading="lazy" decoding="async">`:''}</span>`;
+    return `<span class="${cls} broker-svg-avatar${url?'':' is-fallback'}" data-broker-icon="${safe(type)}">${url?`<img src="${safe(url)}" alt="${safe(name)} logo" loading="lazy" decoding="async" onerror="this.remove();this.parentElement.classList.add('is-fallback')">`:''}${fallback}${flag?`<img class="broker-country-flag" src="${safe(flag)}" alt="${safe(accountBrand(a).country_name||'Account country')}" loading="lazy" decoding="async">`:''}</span>`;
   };
 
   function placeLogout() {
