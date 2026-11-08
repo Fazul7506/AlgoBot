@@ -35,7 +35,7 @@ class WorkflowExecution(models.Model):
     duration=models.DurationField(null=True,blank=True)
     trigger_payload=models.JSONField(default=dict,blank=True)
     result=models.JSONField(default=dict,blank=True)
-    audit_log=models.JSONField(default=list,blank=True)
+    execution_trace=models.JSONField(default=list,blank=True)
 
 class AutomationRule(models.Model):
     name=models.CharField(max_length=180,db_index=True)
