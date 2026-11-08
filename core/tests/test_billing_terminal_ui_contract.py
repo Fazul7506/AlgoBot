@@ -59,6 +59,18 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('Checkout unavailable', template)
         self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
 
+    def test_payment_provider_controls_are_svg_only_with_accessible_names(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn("icons/payments/pesapal.svg", template)
+        self.assertIn("EW5SO1YUyLv7luuQQdXwh1wLKa4.svg", template)
+        self.assertIn("paypal-mark-color.svg", template)
+        self.assertIn('aria-label="Continue with Pesapal', template)
+        self.assertIn('aria-label="Continue with IntaSend', template)
+        self.assertNotIn("<span>Continue with Pesapal</span>", template)
+        self.assertNotIn("<span>Continue with IntaSend</span>", template)
+        self.assertNotIn("<span>Continue with PayPal", template)
+
     def test_global_error_bus_does_not_toast_background_read_failures(self):
         from pathlib import Path
         client = Path("static/js/core/api_client.js").read_text(encoding="utf-8")
