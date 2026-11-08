@@ -11,6 +11,15 @@ class BrokerLogoCoverageTests(TestCase):
         missing = [broker_type for broker_type in BROKER_TYPES if f"'{broker_type}'" not in template]
         self.assertEqual(missing, [], f"Broker logo mappings are missing for: {missing}")
 
+    def test_demo_and_real_account_switcher_uses_svg_mapping_for_every_broker(self):
+        root = Path(__file__).resolve().parents[2]
+        live_ui = (root / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
+        mapping = live_ui.split("const BROKER_SVG={", 1)[1].split("};", 1)[0]
+        missing = [broker_type for broker_type in BROKER_TYPES if f"{broker_type}:" not in mapping]
+        self.assertEqual(missing, [], f"Account switcher SVG mappings are missing for: {missing}")
+        self.assertIn("broker-svg-fallback", live_ui)
+        self.assertNotIn("name[0]?.toUpperCase()", live_ui)
+
     def test_logo_component_uses_brand_svg_sources_and_official_fallbacks(self):
         root = Path(__file__).resolve().parents[2]
         template = (root / "templates" / "components" / "broker_logo.html").read_text(encoding="utf-8")
