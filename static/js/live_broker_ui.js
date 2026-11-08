@@ -58,8 +58,14 @@
     return /^[A-Z]{2}$/.test(code)?'https://flagcdn.com/'+code.toLowerCase()+'.svg':'';
   };
   const identityMarkup=(a,scope)=>{
-    const logo=logoUrl(a),flag=flagUrl(a),name=a?.broker?.name||a?.broker_name||'Connected broker';
-    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+'">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async">':'')+(flag?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async">':'')+'</span>';
+    const logo=logoUrl(a),name=a?.broker?.name||a?.broker_name||'Connected broker';
+    const type=typeOf(a);
+    // Deriv account identity mirrors its own account selector: the broker's D mark
+    // remains visible, DEMO is explicitly marked, and REAL carries the US flag.
+    let flag=flagUrl(a);
+    if(brokerType(a)==='deriv'&&type==='real')flag='/static/icons/account-real-us.svg';
+    const mode=type==='demo'?'<img class="'+scope+'-account-mode-icon '+scope+'-account-mode-icon--demo" src="/static/icons/account-demo.svg" alt="Demo account" loading="lazy" decoding="async">':(type==='real'&&brokerType(a)==='deriv'?'<img class="'+scope+'-account-mode-icon '+scope+'-account-mode-icon--real" src="/static/icons/account-real-us.svg" alt="Real account · United States flag" loading="lazy" decoding="async">':'');
+    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+' '+safe(type)+' account">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async">':'')+(flag&&!(brokerType(a)==='deriv'&&type==='real')?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async">':'')+mode+'</span>';
   };
   const avatar=(a,small)=>'<span class="algobot-account-avatar'+(small?' small':'')+' broker-svg-avatar" data-broker-icon="'+safe(brokerType(a))+'">'+identityMarkup(a,'account')+'</span>';
   window.AlgoBotBrokerBranding=Object.freeze({logoUrl:logoUrl,flagUrl:flagUrl,identityMarkup:identityMarkup});
