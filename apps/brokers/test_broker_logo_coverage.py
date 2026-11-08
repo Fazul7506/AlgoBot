@@ -22,6 +22,8 @@ class BrokerLogoCoverageTests(TestCase):
         self.assertIn("flagcdn.com", live_ui)
         self.assertIn("identityMarkup", live_ui)
         self.assertIn("https://flagcdn.com/", live_ui)
+        self.assertIn("isSvgUrl", live_ui)
+        self.assertIn(".svg(?:[?#]|$)", live_ui)
         self.assertNotIn("name[0]?.toUpperCase()", live_ui)
 
     def test_logo_component_uses_brand_svg_sources_without_generic_or_text_fallbacks(self):
