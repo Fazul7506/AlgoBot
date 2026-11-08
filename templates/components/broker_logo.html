@@ -1,9 +1,9 @@
 {% load static %}
 <div class="broker-logo bi-logo bi-logo--provider{% if compact %} broker-logo--small bi-logo--small{% endif %} broker-logo--{{ broker.broker_type|slugify }} bi-logo--{{ broker.broker_type|slugify }}">
   {% with provider=broker.broker_type|lower %}
-    {% if provider == 'alpaca' %}<img data-provider-name="{{ broker.name|escape }}" src="https://alpaca.markets/img/newsroom/brand-assets/primary-alpaca-logo.png" alt="Alpaca official brand logo" loading="lazy" referrerpolicy="no-referrer">
+    {% if provider == 'alpaca' %}<img data-provider-name="{{ broker.name|escape }}" src="https://cdn.simpleicons.org/alpaca" alt="Alpaca brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'binance' %}<img data-provider-name="{{ broker.name|escape }}" src="{% static 'icons/brokers/binance.svg' %}" alt="Binance brand SVG" loading="lazy" referrerpolicy="no-referrer">
-    {% elif provider == 'bybit' %}<img data-provider-name="{{ broker.name|escape }}" src="https://www.bybit.com/common-static/fht-static/cms/7ef736d3-a12d-4e27-9bc6-42b0b0b47d8a.png?format=webp&amp;quality=65&amp;width=512" alt="Bybit official brand logo" loading="lazy" referrerpolicy="no-referrer">
+    {% elif provider == 'bybit' %}<img data-provider-name="{{ broker.name|escape }}" src="https://cdn.simpleicons.org/bybit" alt="Bybit brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'ctrader' %}<img data-provider-name="{{ broker.name|escape }}" src="https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt3a4db3259d633e7d/6aa8abe5ca2a94302fe1269b/ctrader_logo.svg?branch=main" alt="cTrader official SVG logo" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'deriv' %}<img data-provider-name="{{ broker.name|escape }}" src="{% static 'icons/brokers/deriv.svg' %}" alt="Deriv brand SVG" loading="lazy" referrerpolicy="no-referrer">
     {% elif provider == 'dxtrade' %}<img data-provider-name="{{ broker.name|escape }}" src="https://cdn.simpleicons.org/dxtrade" alt="DXtrade brand mark" loading="lazy" referrerpolicy="no-referrer">
