@@ -70,7 +70,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
-        self.assertIn("developer_api_hardening.css?v=20261108-devapi-tabs1", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-devapi-mobile2", html)
         css = (Path(settings.BASE_DIR) / "static" / "css" / "developer_api_hardening.css").read_text(encoding="utf-8")
         self.assertIn(".dev-dashboard .dev-dashboard-layout", css)
         self.assertIn("@media(max-width:900px)", css)
