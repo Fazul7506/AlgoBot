@@ -422,3 +422,5 @@
   .topbar-notifications { flex-basis:34px; width:34px; min-width:34px; height:36px; }
   .topbar-notifications .topbar-icon-button { flex-basis:32px; width:32px; height:32px; min-width:32px; }
 }
+
+.topbar-account-visual{position:relative;display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:#102d4b;overflow:visible}.topbar-account-visual>svg,.topbar-broker-mark{display:block;width:28px;height:28px;object-fit:contain}.topbar-country-flag{position:absolute;right:-5px;bottom:-4px;width:17px;height:12px;object-fit:cover;border:1px solid #d5e6f8;border-radius:2px;box-shadow:0 1px 4px #0008}.topbar-account-option-icon{display:none!important}.topbar-account-menu [data-topbar-select-account] .topbar-account-visual{flex:0 0 36px}.broker-svg-avatar{position:relative}.broker-country-flag{position:absolute;right:-4px;bottom:-4px;width:18px;height:13px;object-fit:cover;border:1px solid #d5e6f8;border-radius:2px;box-shadow:0 1px 4px #0008}
