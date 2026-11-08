@@ -57,7 +57,7 @@ class BrokerMarketplaceRequestAndLogoTests(SimpleTestCase):
         self.assertNotIn('window.prompt("Which broker', template)
         self.assertNotIn('window.prompt("What markets', template)
 
-    def test_deriv_logo_is_not_placeholder_and_remote_logos_have_first_party_fallbacks(self):
+    def test_deriv_logo_is_not_placeholder_and_failed_remote_logos_fail_gracefully(self):
         logo = Path("templates/components/broker_logo.html").read_text(encoding="utf-8")
         deriv = Path("static/icons/brokers/deriv.svg").read_text(encoding="utf-8")
         self.assertIn('aria-label="Deriv"', deriv)
@@ -67,5 +67,9 @@ class BrokerMarketplaceRequestAndLogoTests(SimpleTestCase):
         self.assertNotIn("Trading Platform", deriv)
         self.assertIn('data-provider-name="{{ broker.name|escape }}"', logo)
         marketplace = Path("templates/core/broker_marketplace.html").read_text(encoding="utf-8")
-        self.assertIn('img.dataset.fallbackSrc', marketplace)
-        self.assertIn('broker-logo-fallback', marketplace)
+        # A failed remote asset is hidden rather than replaced with a fabricated
+        # provider wordmark; the provider status and name remain visible.
+        self.assertIn('img.hidden=true', marketplace)
+        self.assertIn('is-logo-unavailable', marketplace)
+        self.assertIn('Never fabricate a broker wordmark', marketplace)
+        self.assertIn('data-provider-name="{{ broker.name|escape }}"', logo)
