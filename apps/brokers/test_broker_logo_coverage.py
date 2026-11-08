@@ -17,7 +17,9 @@ class BrokerLogoCoverageTests(TestCase):
         mapping = live_ui.split("const BROKER_SVG={", 1)[1].split("};", 1)[0]
         missing = [broker_type for broker_type in BROKER_TYPES if f"{broker_type}:" not in mapping]
         self.assertEqual(missing, [], f"Account switcher SVG mappings are missing for: {missing}")
-        self.assertIn("broker-svg-fallback", live_ui)
+        self.assertNotIn("broker-svg-fallback", live_ui)
+        self.assertIn("window.AlgoBotBrokerBranding", live_ui)
+        self.assertIn("flagcdn.com", live_ui)
         self.assertIn("accountBrand(a)", live_ui)
         self.assertIn("https://flagcdn.com/${code}.svg", live_ui)
         self.assertNotIn("name[0]?.toUpperCase()", live_ui)
@@ -27,7 +29,7 @@ class BrokerLogoCoverageTests(TestCase):
         template = (root / "templates" / "components" / "broker_logo.html").read_text(encoding="utf-8")
         self.assertIn("cdn.simpleicons.org", template)
         self.assertIn("data-fallback-src=", template)
-        self.assertIn("Generic broker symbol", template)
+        self.assertNotIn("Generic broker symbol", template)
         self.assertNotIn("safe(name[0]?.toUpperCase()", Path(__file__).resolve().parents[2].joinpath("static/js/live_broker_ui.js").read_text(encoding="utf-8"))
         self.assertIn("metatrader4.com/favicon.ico", template)
 
