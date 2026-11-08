@@ -136,6 +136,14 @@ try {
           if (loadedStatus !== 'Preferences loaded') {
             const detail = (await page.locator('[data-settings-message]').textContent().catch(() => '') || '').trim();
             failures.push(normalizedRoute + ' at ' + viewport.name + ': preferences did not load (' + (loadedStatus || detail || 'unknown error') + ')');
+          } else if (viewport.name === 'desktop') {
+            await page.locator('[data-save-settings]').click();
+            await page.waitForFunction(() => document.querySelector('[data-settings-status]')?.textContent?.trim() === 'Preferences saved', null, { timeout: 15000 }).catch(() => null);
+            const savedStatus = (await preferenceStatus.textContent() || '').trim();
+            if (savedStatus !== 'Preferences saved') {
+              const detail = (await page.locator('[data-settings-message]').textContent().catch(() => '') || '').trim();
+              failures.push(normalizedRoute + ': preferences failed to save (' + (savedStatus || detail || 'unknown error') + ')');
+            }
           }
           await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
           const timezone = page.locator('#settings-timezone');
