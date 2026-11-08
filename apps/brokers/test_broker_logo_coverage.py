@@ -18,7 +18,7 @@ class BrokerLogoCoverageTests(TestCase):
         missing = [broker_type for broker_type in BROKER_TYPES if f"{broker_type}:" not in mapping]
         self.assertEqual(missing, [], f"Account switcher SVG mappings are missing for: {missing}")
         self.assertIn("broker-svg-fallback", live_ui)
-        self.assertIn("branding.country_code", live_ui)
+        self.assertIn("accountBrand(a)", live_ui)
         self.assertIn("https://flagcdn.com/${code}.svg", live_ui)
         self.assertNotIn("name[0]?.toUpperCase()", live_ui)
 
@@ -34,8 +34,8 @@ class BrokerLogoCoverageTests(TestCase):
     def test_topbar_account_switcher_uses_same_broker_and_country_svg_assets(self):
         root = Path(__file__).resolve().parents[2]
         topbar = (root / "static" / "js" / "topbar_security_controls.js").read_text(encoding="utf-8")
-        self.assertIn("function accountVisual", topbar)
-        self.assertIn("branding.country_code", topbar)
+        self.assertIn("const accountVisual = a =>", topbar)
+        self.assertIn("b.country_code", topbar)
         self.assertIn("https://flagcdn.com/${rawCode}.svg", topbar)
         self.assertIn("BROKER_SVG[type]", topbar)
         self.assertNotIn("name[0]?.toUpperCase()", topbar)
