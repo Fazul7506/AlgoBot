@@ -543,6 +543,16 @@ class ProfileCompletionTests(TestCase):
         self.assertIn("event.key === 'Escape'", template)
 
 
+    def test_topbar_account_switcher_has_isolated_responsive_layout_contract(self):
+        from pathlib import Path
+        css = Path("static/css/topbar_security_controls.css").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn(".topbar-account-control{position:relative;z-index:4;isolation:isolate", css)
+        self.assertIn(".topbar-account-trigger{display:flex;width:100%;min-width:0;max-width:100%;overflow:hidden", css)
+        self.assertIn("@media(max-width:700px)", css)
+        self.assertIn("@media(max-width:390px)", css)
+        self.assertIn("account-switcher-isolation1", base)
+
     def test_profile_modal_initializes_phone_widget_after_deferred_script(self):
         from pathlib import Path
 
