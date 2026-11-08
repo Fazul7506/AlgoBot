@@ -46,11 +46,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
         self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
-        self.assertIn("data-provider=\\"pesapal\\"", template)
+        self.assertIn('data-provider=\"pesapal\"', template)
         self.assertIn("billing-provider-logo pesapal-logo", template)
-        self.assertIn("data-provider=\\"intasend\\"", template)
+        self.assertIn('data-provider=\"intasend\"', template)
         self.assertIn("billing-provider-logo intasend-logo", template)
-        self.assertIn("data-provider=\\"paypal\\"", template)
+        self.assertIn('data-provider=\"paypal\"', template)
         self.assertIn("paypal-mark-color.svg", template)
         self.assertIn("PayPal unavailable", template)
         self.assertNotIn("Pay with IntaSend", template)
@@ -419,7 +419,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261030-shared-catalogue2", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-connected-account-branding6", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
@@ -595,7 +595,7 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
     def test_payment_provider_buttons_use_image_logos_not_letter_placeholders(self):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
-        self.assertIn('src="https://shop.jbs.co.ke/assets/img/pesapal.jpg"', template)
+        self.assertIn("icons/payments/pesapal.svg", template)
         self.assertIn('src="https://framerusercontent.com/images/EW5SO1YUyLv7luuQQdXwh1wLKa4.svg', template)
         self.assertNotIn('aria-hidden="true">P</span>', template)
         self.assertNotIn('aria-hidden="true">S</span>', template)

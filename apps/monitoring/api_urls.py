@@ -14,7 +14,6 @@ urlpatterns = [
     path("alerts/acknowledge/", api.acknowledge_alert, name="alerts-acknowledge"),
     path("incidents/", api.incidents, name="incidents"),
     path("metrics/", api.metrics, name="metrics"),
-    path("audit/", api.audit, name="audit"),
     path("logs/", api.logs, name="logs"),
     path("traces/", api.traces, name="traces"),
 ]

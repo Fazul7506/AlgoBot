@@ -6,7 +6,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
 from .constants import DEFAULT_THRESHOLDS
-from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
+from .models import Alert, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
 logger=logging.getLogger(__name__)
 @dataclass(frozen=True)
 class HealthCheckResult: service_name:str; status:str; response_time:float; details:dict[str,Any]
@@ -234,8 +234,6 @@ class IncidentService:
     def create_from_alert(self,alert,assigned_to=None): return Incident.objects.create(title=alert.title,severity=alert.severity,alert=alert,assigned_to=assigned_to)
     def resolve(self,incident_id,root_cause="",postmortem=""):
         incident=Incident.objects.get(pk=incident_id); incident.status="resolved"; incident.resolved_at=timezone.now(); incident.root_cause=root_cause; incident.postmortem=postmortem; incident.save(update_fields=["status","resolved_at","root_cause","postmortem"]); return incident
-class AuditService:
-    def record(self,action,module,user=None,resource="",old_value=None,new_value=None,ip_address=None): return AuditLog.objects.create(user=user,action=action,module=module,resource=resource,old_value=old_value,new_value=new_value,ip_address=ip_address)
 class LogAggregationService:
     def ingest(self,stream,level,message,source="",context=None): return LogEntry.objects.create(stream=stream,level=level,message=message,source=source,context=context or {})
     def search(self,query="",stream=None):

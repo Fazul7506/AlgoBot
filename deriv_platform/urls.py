@@ -133,7 +133,6 @@ urlpatterns = [
     path("trade-history/", login_required(trade_history_page), name="trade_history_page"),
     path("trade-history/postmortems/", login_required(trade_postmortems), name="trade_postmortems"),
     path("automation/", login_required(lambda request: operations_center(request, "automation")), name="automation_page"),
-    path("operations/audit/", login_required(lambda request: operations_center(request, "audit")), name="audit_center"),
     path("operations/security/", login_required(lambda request: operations_center(request, "security")), name="security_center"),
     path("operations/broker-integrations/", broker_integration_management_page, name="broker_integration_management"),
     path("operations/broker-integrations/assistant/", broker_integration_assistant_chat, name="broker_integration_assistant_chat"),

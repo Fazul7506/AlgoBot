@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Alert, AuditLog, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
+from .models import Alert, BrokerHealth, Incident, LogEntry, Metric, SystemHealth, TraceSpan
 
 
 class ReadOnlyMonitoringAdmin(admin.ModelAdmin):
@@ -42,14 +42,6 @@ class AlertAdmin(ReadOnlyMonitoringAdmin):
     readonly_fields = [field.name for field in Alert._meta.fields]
     date_hierarchy = "created_at"
 
-
-@admin.register(AuditLog)
-class AuditLogAdmin(ReadOnlyMonitoringAdmin):
-    list_display = ("user", "action", "module", "resource", "timestamp", "hash")
-    list_filter = ("module", "action")
-    search_fields = ("resource", "action", "module", "hash")
-    readonly_fields = [field.name for field in AuditLog._meta.fields]
-    date_hierarchy = "timestamp"
 
 
 @admin.register(Metric)

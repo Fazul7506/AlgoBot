@@ -1,8 +1,7 @@
-"""Request audit capture and safe browser messaging for API outcomes.
+"""Authenticated request activity capture and safe browser messaging for API outcomes.
 
 Never persist request/response bodies: they can contain passwords, API keys,
-broker tokens, MFA codes, or personal data. Mutations and failed requests are
-also copied into the structured monitoring audit stream for the Audit Log UI.
+broker tokens, MFA codes, or personal data. Authenticated request outcomes are recorded once in the canonical observability event stream.
 """
 import json
 import logging
@@ -12,22 +11,21 @@ import uuid
 from django.contrib import messages
 from django.utils.deprecation import MiddlewareMixin
 
-from core.models import AuditLog as RequestAuditLog
 
-audit_logger = logging.getLogger("audit")
+activity_logger = logging.getLogger("activity")
 
 
-class AuditMiddleware(MiddlewareMixin):
+class ActivityMiddleware(MiddlewareMixin):
     EXCLUDED_PATHS = ("/static/", "/media/", "/health/", "/favicon.ico")
 
-    def should_audit(self, request):
+    def should_capture_activity(self, request):
         return not any(request.path.startswith(path) for path in self.EXCLUDED_PATHS)
 
     def process_request(self, request):
         request.algobot_request_id = uuid.uuid4().hex
 
     def process_response(self, request, response):
-        if not self.should_audit(request):
+        if not self.should_capture_activity(request):
             return response
         request_id = getattr(request, "algobot_request_id", uuid.uuid4().hex)
         response["X-Request-ID"] = request_id
@@ -35,44 +33,32 @@ class AuditMiddleware(MiddlewareMixin):
             self._bridge_message(request, response)
             user = getattr(request, "user", None)
             if user and user.is_authenticated:
-                # Keep the existing request-level ledger used by billing and
-                # operational analytics. Bodies are intentionally never stored.
                 try:
-                    RequestAuditLog.objects.create(
-                        user=user,
-                        path=request.path[:500],
-                        method=request.method[:10],
-                        status_code=response.status_code,
+                    from apps.observability.models import AuditEvent
+                    module = self._module_for_path(request.path)
+                    failed = response.status_code >= 400
+                    action = f"{request.method.lower()}_{'failed' if failed else 'completed'}"
+                    AuditEvent.objects.create(
+                        actor_id=user.pk,
+                        action=action,
+                        resource_type=module,
+                        resource_id=f"{request.path[:150]} | status={response.status_code} | request_id={request_id[:32]}",
+                        outcome="failed" if failed else "success",
                         ip_address=self._get_client_ip(request),
-                        user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-                        error="",
+                        request_path=request.path[:500],
+                        http_method=request.method[:10].upper(),
+                        http_status=response.status_code,
+                        module=module,
+                        resource=request.path[:220],
+                        metadata={"source": "authenticated_request"},
                     )
                 except Exception:
-                    audit_logger.exception("Could not persist request audit record")
-                # Keep the richer, hash-chained audit stream useful: record
-                # writes and failures, not every successful page poll.
-                if request.method not in {"GET", "HEAD", "OPTIONS"} or response.status_code >= 400:
-                    try:
-                        from apps.monitoring.services import AuditService
-                        module = self._module_for_path(request.path)
-                        action = f"{request.method.lower()}_{'failed' if response.status_code >= 400 else 'completed'}"
-                        resource = f"{request.path[:150]} | status={response.status_code} | request_id={request_id[:32]}"
-                        AuditService().record(
-                            action=action,
-                            module=module,
-                            user=user,
-                            resource=resource,
-                            ip_address=self._get_client_ip(request),
-                        )
-                    except Exception:
-                        # Audit logging must not break the user's trading/API
-                        # request; the failure is still visible in server logs.
-                        audit_logger.exception("Could not persist structured audit event")
+                    activity_logger.exception("Could not persist canonical request activity event")
 
                 if request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
                     self._notify_successful_activity(request, user)
         except Exception:
-            audit_logger.exception("AuditMiddleware failed")
+            activity_logger.exception("ActivityMiddleware failed")
         return response
 
 
@@ -109,7 +95,7 @@ class AuditMiddleware(MiddlewareMixin):
             )
         except Exception:
             # Notifications are best-effort and must never break the action.
-            audit_logger.exception("Could not publish in-app activity notification")
+            activity_logger.exception("Could not publish in-app activity notification")
 
 
     @classmethod

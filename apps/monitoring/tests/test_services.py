@@ -1,6 +1,8 @@
 from django.test import TestCase
-from apps.monitoring.models import Alert, AuditLog, Metric
-from apps.monitoring.services import AlertEngine, AuditService, MetricsService, SelfHealingService
+from apps.monitoring.models import Alert, Metric
+from apps.monitoring.services import AlertEngine, MetricsService, SelfHealingService
+from apps.observability.models import AuditEvent
+from apps.observability.services import AuditService
 
 class MonitoringServiceTests(TestCase):
     def test_alert_engine_creates_threshold_alerts(self):
@@ -14,9 +16,9 @@ class MonitoringServiceTests(TestCase):
         self.assertEqual(Metric.objects.count(), 1)
 
     def test_audit_service_hashes_records(self):
-        log = AuditService().record("login", "authentication", resource="session")
+        log = AuditService().record(actor_id=None, action="login", resource_type="authentication", resource_id="session")
         self.assertTrue(log.hash)
-        self.assertEqual(AuditLog.objects.count(), 1)
+        self.assertEqual(AuditEvent.objects.count(), 1)
 
     def test_self_healing_rejects_unknown_action(self):
         result = SelfHealingService().execute("unknown", "monitoring")

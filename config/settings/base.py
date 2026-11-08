@@ -50,7 +50,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware", "core.middleware.mission_control.MissionControlRequestLoggingMiddleware", "core.middleware.two_factor_enforcement.TwoFactorEnforcementMiddleware", "core.middleware.broker_onboarding.BrokerOnboardingMiddleware", "apps.developer.middleware.DeveloperAPIMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.middleware.audit_middleware.AuditMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
+    "core.middleware.activity_middleware.ActivityMiddleware", "core.middleware.plan_entitlement_middleware.PlanEntitlementMiddleware",
 ]
 
 REST_FRAMEWORK = {

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
-
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -86,29 +83,6 @@ class Alert(models.Model):
         self.resolved_at = timezone.now()
         self.save(update_fields=["resolved", "status", "resolved_at"])
 
-
-class AuditLog(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    action = models.CharField(max_length=120, db_index=True)
-    module = models.CharField(max_length=120, db_index=True)
-    resource = models.CharField(max_length=220, blank=True)
-    old_value = models.JSONField(null=True, blank=True)
-    new_value = models.JSONField(null=True, blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
-    previous_hash = models.CharField(max_length=64, blank=True)
-    hash = models.CharField(max_length=64, editable=False, db_index=True)
-
-    class Meta:
-        ordering = ["-timestamp"]
-
-    def save(self, *args, **kwargs):
-        if not self.previous_hash:
-            previous = AuditLog.objects.order_by("-timestamp").first()
-            self.previous_hash = previous.hash if previous else "genesis"
-        payload = json.dumps({"user": self.user_id, "action": self.action, "module": self.module, "resource": self.resource, "old": self.old_value, "new": self.new_value, "ip": self.ip_address, "previous": self.previous_hash}, sort_keys=True, default=str)
-        self.hash = hashlib.sha256(payload.encode()).hexdigest()
-        super().save(*args, **kwargs)
 
 
 class Metric(models.Model):

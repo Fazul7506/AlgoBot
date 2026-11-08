@@ -1,7 +1,5 @@
 """Independent trader-facing workspaces for operational features."""
 
-import hashlib
-
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -11,7 +9,6 @@ from types import SimpleNamespace
 
 from apps.automation.models import ScheduledTask, Workflow, WorkflowExecution
 from apps.developer.models import APIKey
-from apps.monitoring.models import AuditLog
 from apps.observability.models import AuditEvent
 from core.account_context import get_active_account
 
@@ -28,114 +25,6 @@ def automation_workspace(request):
     return render(request, "core/automation_workspace.html", {"workflows": workflows[:20], "running": executions.filter(status="running").count(), "failed": executions.filter(status="failed").count(), "scheduled": schedules.count()})
 
 
-@login_required
-def audit_workspace(request):
-    """Render a merged, private feed from structured and application audit streams."""
-    from datetime import timedelta
-    from django.utils.dateparse import parse_date
-
-    request_noise = tuple(f"{method}_{outcome}" for method in ("get", "head", "options", "post", "put", "patch", "delete") for outcome in ("completed", "failed"))
-    structured = AuditLog.objects.filter(user=request.user).exclude(action__in=request_noise)
-    application = AuditEvent.objects.filter(actor_id=request.user.pk).exclude(action__in=request_noise)
-    action = request.GET.get("action", "").strip()[:120]
-    module = request.GET.get("module", "").strip()[:120]
-    search = request.GET.get("q", "").strip()[:160]
-    date_range = request.GET.get("range", "7d").strip()[:12]
-    severity_filter = request.GET.get("severity", "").strip().lower()[:16]
-    start_date = parse_date(request.GET.get("start", ""))
-    end_date = parse_date(request.GET.get("end", ""))
-
-    if action:
-        structured = structured.filter(action__icontains=action)
-        application = application.filter(action__icontains=action)
-    if module:
-        structured = structured.filter(module__icontains=module)
-        application = application.filter(resource_type__icontains=module)
-    if search:
-        structured = structured.filter(
-            Q(action__icontains=search) | Q(module__icontains=search) | Q(resource__icontains=search)
-        )
-        application = application.filter(
-            Q(action__icontains=search) | Q(resource_type__icontains=search) |
-            Q(resource_id__icontains=search) | Q(outcome__icontains=search)
-        )
-    if start_date:
-        structured = structured.filter(timestamp__date__gte=start_date)
-        application = application.filter(created_at__date__gte=start_date)
-    elif date_range in ("24h", "7d", "30d"):
-        cutoff = timezone.now() - timedelta(hours=24) if date_range == "24h" else timezone.now() - timedelta(days=7 if date_range == "7d" else 30)
-        structured = structured.filter(timestamp__gte=cutoff)
-        application = application.filter(created_at__gte=cutoff)
-    if end_date:
-        structured = structured.filter(timestamp__date__lte=end_date)
-        application = application.filter(created_at__date__lte=end_date)
-
-    # Bound cross-model merging to the most recent 1,000 matching records.
-    structured_events = list(structured.order_by("-timestamp", "-id")[:500])
-    application_events = list(application.order_by("-created_at", "-id")[:500])
-    merged = [
-        SimpleNamespace(
-            pk=event.pk, action=event.action, module=event.module, resource=event.resource,
-            timestamp=event.timestamp, outcome="recorded", severity="info",
-        )
-        for event in structured_events
-    ]
-    merged.extend(
-        SimpleNamespace(
-            pk=event.pk, action=event.action, module=event.resource_type or "application",
-            resource=event.resource_id or "Account activity",
-            timestamp=event.created_at, outcome=str(event.outcome or "recorded"), severity="info",
-        )
-        for event in application_events
-    )
-    for event in merged:
-        label = f"{event.action} {event.module} {event.outcome}".lower()
-        if any(term in label for term in ("failed", "failure", "denied", "error", "blocked", "security alert")):
-            event.severity = "high"
-        elif any(term in label for term in ("withdraw", "risk", "permission", "password", "changed", "delete", "revoke")):
-            event.severity = "medium"
-        elif any(term in label for term in ("trade", "order", "api", "connect", "login", "create", "update")):
-            event.severity = "low"
-    merged.sort(key=lambda event: (event.timestamp, str(event.pk)), reverse=True)
-    if severity_filter in ("info", "low", "medium", "high"):
-        merged = [event for event in merged if event.severity == severity_filter]
-    if request.GET.get("export") == "csv":
-        import csv
-        from django.http import HttpResponse
-
-        response = HttpResponse(content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = 'attachment; filename="algobot-audit-log.csv"'
-        writer = csv.writer(response)
-        writer.writerow(["Time", "Activity", "Details", "Result"])
-        for event in merged:
-            writer.writerow([
-                event.timestamp.isoformat() if event.timestamp else "",
-                event.action,
-                event.resource,
-                event.outcome or "Recorded",
-            ])
-        return response
-    summary = {
-        level: sum(1 for event in merged if event.severity == level)
-        for level in ("info", "low", "medium", "high")
-    }
-    summary_percent = {
-        level: round((count / len(merged)) * 100, 1) if merged else 0
-        for level, count in summary.items()
-    }
-    recent_events = [
-        SimpleNamespace(action=event.action, module=event.module, timestamp=event.timestamp, severity=event.severity)
-        for event in merged[:5]
-    ]
-    from django.core.paginator import Paginator
-    page = Paginator(merged, 10).get_page(request.GET.get("page", 1))
-    return render(request, "core/audit_log.html", {
-        "events": page.object_list, "event_count": len(merged), "page_obj": page,
-        "audit_filters": {"action": action, "module": module, "q": search, "range": date_range,
-                          "severity": severity_filter, "start": request.GET.get("start", ""),
-                          "end": request.GET.get("end", "")},
-        "event_summary": summary, "event_summary_percent": summary_percent, "recent_events": recent_events,
-    })
 
 @login_required
 def security_workspace(request):
@@ -283,22 +172,14 @@ def security_workspace(request):
 
     # Security Center activity is drawn only from persisted, user-scoped audit
     # records. Do not synthesize login attempts or expose another user's events.
-    security_audit_logs = list(AuditLog.objects.filter(user=request.user).order_by("-timestamp", "-id")[:30])
-    security_audit_events = list(AuditEvent.objects.filter(actor_id=request.user.pk).order_by("-created_at", "-id")[:30])
     security_events = [
         SimpleNamespace(
-            timestamp=item.timestamp, action=item.action, module=item.module,
-            details=item.resource or "—", outcome="recorded", source="Audit log",
-        ) for item in security_audit_logs
-    ]
-    security_events.extend(
-        SimpleNamespace(
             timestamp=item.created_at, action=item.action,
-            module=item.resource_type or "application",
-            details=item.resource_id or "—", outcome=item.outcome or "unknown",
-            source="Application event",
-        ) for item in security_audit_events
-    )
+            module=item.resource_type or item.module or "application",
+            details=item.resource_id or item.resource or "—",
+            outcome=item.outcome or "unknown", source="Activity event",
+        ) for item in AuditEvent.objects.filter(actor_id=request.user.pk).order_by("-created_at", "-id")[:30]
+    ]
     security_events.sort(key=lambda item: item.timestamp, reverse=True)
     security_events = security_events[:12]
     login_events = [item for item in security_events if any(
@@ -306,7 +187,7 @@ def security_workspace(request):
         for term in ("login", "sign-in", "signin", "auth", "session", "password")
     )][:6]
     # A concise alert list can only be derived from recorded failed/blocked auth
-    # events. The underlying audit trail is preserved and remains user-scoped.
+    # events. The underlying activity history is preserved and remains user-scoped.
     security_alerts = [item for item in login_events if any(
         term in (str(item.action) + " " + str(item.outcome)).lower()
         for term in ("fail", "denied", "blocked", "rejected", "suspicious")

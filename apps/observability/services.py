@@ -1,6 +1,3 @@
-import time
-from django.utils import timezone
-from apps.monitoring.models import AuditLog as StructuredAuditLog
 from .models import HealthCheck, SystemMetric, OperationalEvent, AuditEvent
 
 class HealthService:
@@ -42,40 +39,24 @@ class AuditService:
 class MonitoringService:
     @staticmethod
     def _audit_feed(actor_id=None, include_global=False):
-        """Normalize structured operational records and application audit events."""
+        """Return one user-scoped activity stream; request and business events share a model."""
         if actor_id is not None:
-            request_logs = StructuredAuditLog.objects.filter(user_id=actor_id)
-            app_events = AuditEvent.objects.filter(actor_id=actor_id)
+            queryset = AuditEvent.objects.filter(actor_id=actor_id)
         elif include_global:
-            request_logs = StructuredAuditLog.objects.all()
-            app_events = AuditEvent.objects.all()
+            queryset = AuditEvent.objects.all()
         else:
             return []
-        items = []
-        for record in request_logs.order_by("-timestamp", "-id")[:100]:
-            items.append({
-                "_sort": record.timestamp,
-                "id": f"request-{record.pk}",
-                "action": record.action,
-                "resource_type": record.module,
-                "resource_id": record.resource,
-                "outcome": "recorded",
-                "created_at": record.timestamp.isoformat(),
-                "source": "request",
-            })
-        for event in app_events.order_by("-created_at", "-id")[:100]:
-            items.append({
-                "_sort": event.created_at,
-                "id": f"event-{event.pk}",
-                "action": event.action,
-                "resource_type": event.resource_type,
-                "resource_id": event.resource_id,
-                "outcome": event.outcome,
-                "created_at": event.created_at.isoformat(),
-                "source": "application",
-            })
-        items.sort(key=lambda item: item["_sort"], reverse=True)
-        return [{key: value for key, value in item.items() if key != "_sort"} for item in items[:100]]
+        request_noise = ("get_completed", "head_completed", "options_completed")
+        queryset = queryset.exclude(action__in=request_noise)
+        return [{
+            "id": f"event-{event.pk}",
+            "action": event.action,
+            "resource_type": event.resource_type or event.module,
+            "resource_id": event.resource_id or event.resource,
+            "outcome": event.outcome,
+            "created_at": event.created_at.isoformat(),
+            "source": "request" if event.request_path else "application",
+        } for event in queryset.order_by("-created_at", "-id")[:100]]
 
     def dashboard(self, actor_id=None, include_global=False):
         health = HealthService().snapshot()

@@ -48,7 +48,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         routes = (
             "/analysis/",
             "/notifications/",
-            "/operations/audit/",
             "/operations/security/",
             "/developer/",
         )
@@ -101,7 +100,7 @@ class UniversalWorkspaceAccessTests(TestCase):
             "/dashboard/", "/trading/", "/markets/", "/orders/", "/trade-history/",
             "/positions/", "/signals/", "/strategies/", "/backtesting/", "/performance/",
             "/predictions/", "/analysis/", "/risk/", "/monitoring/", "/notifications/",
-            "/automation/", "/operations/audit/",
+            "/automation/",
             "/operations/security/", "/portfolio/", "/operations/brokers/", "/billing/",
             "/developer/",
         ):
@@ -114,7 +113,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         for label, href in (
             ("Analysis", "/analysis/"),
             ("Notifications", "/notifications/"),
-            ("Audit Log", "/operations/audit/"),
             ("Account Settings", "/settings/"),
             ("Developer & API", "/developer/"),
         ):
@@ -270,7 +268,6 @@ class UniversalWorkspaceAccessTests(TestCase):
         from pathlib import Path
         for relative in (
             "templates/components/enterprise_page.html",
-            "templates/core/audit_log.html",
         ):
             content = (Path(settings.BASE_DIR) / relative).read_text(encoding="utf-8")
             self.assertNotIn("<style", content.lower(), relative)

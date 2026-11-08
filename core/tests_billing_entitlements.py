@@ -3,7 +3,8 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import TestCase, RequestFactory
 from django.utils import timezone
-from core.models import AuditLog, Subscription
+from apps.observability.models import AuditEvent
+from core.models import Subscription
 from core.billing_entitlements import PLAN_ENTITLEMENTS, effective_plan, entitlement_payload, usage, reset_at
 from core.middleware.plan_entitlement_middleware import PlanEntitlementMiddleware
 
@@ -46,18 +47,18 @@ class BillingEntitlementTests(TestCase):
         self.assertEqual(payload['features']['live_trading'], True)
 
     def test_api_usage_ignores_dashboard_reads_and_non_execution_posts(self):
-        AuditLog.objects.create(user=self.user, path='/api/brokers/accounts/', method='GET', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/market/catalogue/', method='GET', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/dashboard/signals/', method='GET', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/billing/change-plan/', method='POST', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/strategies/', method='POST', status_code=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/brokers/accounts/', http_method='GET', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/market/catalogue/', http_method='GET', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/dashboard/signals/', http_method='GET', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/billing/change-plan/', http_method='POST', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/strategies/', http_method='POST', http_status=200)
         self.assertEqual(usage(self.user, 'api_calls'), 0)
 
     def test_api_usage_counts_only_execution_triggers(self):
-        AuditLog.objects.create(user=self.user, path='/api/orders/', method='POST', status_code=201)
-        AuditLog.objects.create(user=self.user, path='/api/trading/execute/', method='POST', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/trades/execute/', method='PUT', status_code=200)
-        AuditLog.objects.create(user=self.user, path='/api/positions/open/', method='POST', status_code=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/orders/', http_method='POST', http_status=201)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/trading/execute/', http_method='POST', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/trades/execute/', http_method='PUT', http_status=200)
+        AuditEvent.objects.create(actor_id=self.user.pk, request_path='/api/positions/open/', http_method='POST', http_status=200)
         self.assertEqual(usage(self.user, 'api_calls'), 3)
 
     def test_middleware_does_not_gate_read_only_or_non_execution_api_requests(self):
