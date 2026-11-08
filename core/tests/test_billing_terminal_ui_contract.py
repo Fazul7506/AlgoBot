@@ -18,7 +18,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
-            "Usage is measured from persisted platform audit/database records",
+            "Usage is measured from persisted platform activity/database records",
             "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
             with self.subTest(marker=marker):
@@ -35,7 +35,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("ENTERPRISE", template)
         self.assertIn("currency='USD'", template)
         self.assertIn("!Number.isFinite(raw)?0:raw", template)
-        self.assertIn("Usage is measured from persisted platform audit/database records", template)
+        self.assertIn("Usage is measured from persisted platform activity/database records", template)
         self.assertNotIn("filter(p=>p.plan!=='ENTERPRISE'||admin)", template)
         self.assertNotIn("Contact sales", template)
         self.assertIn("support@algobot.dpdns.org", template)
