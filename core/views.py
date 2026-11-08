@@ -133,6 +133,10 @@ def profile_completion_page(request):
                 errors.append("Enter a valid date of birth.")
         if gender and gender not in {"female", "male", "non_binary", "prefer_not_to_say", "self_described"}:
             errors.append("Choose a valid gender option.")
+        timezone_name = str(request.POST.get("timezone") or "UTC").strip()
+        if timezone_name not in available_timezones():
+            errors.append("Choose a valid time zone from the list.")
+
         phone_raw = str(request.POST.get("phone") or "").strip()
         if phone_raw:
             # The form submits an international number; validate it server-side too.
@@ -199,7 +203,7 @@ def profile_completion_page(request):
                     submitted_country = str(request.POST.get("country") or "").strip()
                     if submitted_country:
                         profile.country = submitted_country[:100]
-                    profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
+                    profile.timezone = timezone_name[:100] or "UTC"
                     profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
                     # Blank optional fields must not erase values previously provided
                     # by the user or a verified identity claim.
