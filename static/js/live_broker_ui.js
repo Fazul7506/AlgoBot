@@ -52,7 +52,7 @@
     kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',alpaca:'https://cdn.simpleicons.org/alpaca'
   };
   const brokerType=a=>String(a?.broker?.broker_type||a?.broker?.type||a?.broker_type||'').trim().toLowerCase();
-  const logoUrl=a=>String(a?.branding?.avatar_url||a?.avatar_url||a?.broker?.avatar_url||a?.broker?.logo_svg_url||BROKER_SVG[brokerType(a)]||'').trim();
+  const logoUrl=a=>String(a?.broker?.logo_svg_url||BROKER_SVG[brokerType(a)]||a?.branding?.avatar_url||a?.avatar_url||a?.broker?.avatar_url||'').trim();
   const flagUrl=a=>{
     const branding=a?.branding||{},identity=a?.deriv_identity||{};
     const supplied=String(branding.flag||identity.flag||'').trim();
