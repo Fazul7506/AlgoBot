@@ -52,11 +52,12 @@
     kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',alpaca:'https://cdn.simpleicons.org/alpaca'
   };
   const brokerType=a=>String(a?.broker?.broker_type||a?.broker?.type||a?.broker_type||'').trim().toLowerCase();
-  const logoUrl=a=>String(a?.broker?.logo_svg_url||BROKER_SVG[brokerType(a)]||a?.branding?.avatar_url||a?.avatar_url||a?.broker?.avatar_url||'').trim();
+  const isSvgUrl=value=>/^(https:\/\/|\/static\/)/i.test(String(value||'').trim())&&(/\.svg(?:[?#]|$)/i.test(String(value||'').trim())||String(value||'').trim().startsWith('/static/icons/brokers/'));
+  const logoUrl=a=>{const mapped=BROKER_SVG[brokerType(a)];if(mapped)return mapped;const candidates=[a?.broker?.logo_svg_url,a?.branding?.logo_svg_url,a?.logo_svg_url,a?.branding?.avatar_url,a?.avatar_url,a?.broker?.avatar_url];return candidates.find(isSvgUrl)||'';};
   const flagUrl=a=>{
     const branding=a?.branding||{},identity=a?.deriv_identity||{};
     const supplied=String(branding.flag||identity.flag||'').trim();
-    if(/^https:\/\//i.test(supplied))return supplied;
+    if(/^https:\/\//i.test(supplied)&&/\.svg(?:[?#]|$)/i.test(supplied))return supplied;
     let code=String(branding.country_code||identity.country_code||identity.country?.code||identity.country||'').trim().toUpperCase();
     code=({'USA':'US','UNITED STATES':'US','UNITED STATES OF AMERICA':'US','UK':'GB','UNITED KINGDOM':'GB'})[code]||code;
     return /^[A-Z]{2}$/.test(code)?'https://flagcdn.com/'+code.toLowerCase()+'.svg':'';
