@@ -69,3 +69,22 @@ Deriv tick/candle streams do not provide bid/ask depth quantities for the releva
 - `ORDER_BOOK_SYMBOLS`: comma-separated AlgoBot symbols actually supported by that provider. Set this explicitly; otherwise AlgoBot will attempt every active/tradable symbol.
 
 The endpoint must return JSON with non-empty `bids` and `asks` arrays, each containing `[price, quantity]` levels. AlgoBot validates the top ten levels, persists snapshots, and computes `(bid_volume - ask_volume) / (bid_volume + ask_volume)`. No candle-volume or quote-only substitute is used. Do not enable this feature for symbols unsupported by the chosen provider.
+
+
+## Cloudflare Workers Builds configuration
+
+The Git-connected Worker build must be scoped to this directory so the
+repository-level Python requirements.txt is not installed for a JavaScript
+Worker, and Wrangler loads this Worker's own wrangler.jsonc (including its
+required empty previews block).
+
+- Root directory: /cloudflare/ai-training-dispatcher
+- Production deploy command: npx wrangler deploy
+- Preview deploy command: npx wrangler preview
+
+Do not set the build root to the repository root: that makes Wrangler resolve
+the wrong configuration and causes Preview builds to fail with a missing
+previews block. The Worker consumes the Cloudflare secret binding
+AI_TRAINING_WEBHOOK_TOKEN; the GitHub Actions secret may retain its
+CLOUDFLARE_TRAINING_WEBHOOK_TOKEN source name, but the wrangler secret put
+target must match the Worker binding exactly.

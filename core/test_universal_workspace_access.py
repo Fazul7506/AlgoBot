@@ -70,14 +70,15 @@ class UniversalWorkspaceAccessTests(TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, html)
-        self.assertIn("developer_api_hardening.css?v=20261020-devapi3", html)
+        self.assertIn("developer_api_hardening.css?v=20261108-devapi-tabs1", html)
         css = (Path(settings.BASE_DIR) / "static" / "css" / "developer_api_hardening.css").read_text(encoding="utf-8")
         self.assertIn(".dev-dashboard .dev-dashboard-layout", css)
         self.assertIn("@media(max-width:900px)", css)
         self.assertIn("@media(max-width:620px)", css)
         self.assertIn("@media(max-width:360px)", css)
         portal = (Path(settings.BASE_DIR) / "static" / "js" / "developer_portal.js").read_text(encoding="utf-8")
-        self.assertIn("function bindSectionNavigation()", portal)
+        self.assertNotIn("bindSectionNavigation", portal)
+        self.assertIn("function bindCopyButtons()", portal)
         self.assertIn("function bindCopyButtons()", portal)
 
     def test_removed_bot_runtime_page_has_no_route_or_sidebar_entry(self):
@@ -286,3 +287,19 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("prefetchedNavigation.size >= 5", shell)
         self.assertIn("connection?.saveData", shell)
         self.assertContains(response, 'href="/static/icons/favicon.ico')
+
+
+    def test_developer_workspace_tabs_promote_nested_panels_and_use_one_controller(self):
+        from pathlib import Path
+        root = Path(settings.BASE_DIR)
+        template = (root / "templates/developer/dashboard.html").read_text()
+        tabs = (root / "static/js/workspace_tabs.js").read_text()
+        portal = (root / "static/js/developer_portal.js").read_text()
+        css = (root / "static/css/developer_api_hardening.css").read_text()
+        for panel in ("dev-overview", "dev-api-keys", "dev-documentation", "dev-webhooks", "dev-code-examples", "dev-sandbox"):
+            self.assertIn(f'href="#{panel}"', template)
+            self.assertIn(f'id="{panel}"', template)
+        self.assertIn("targetPanels.forEach", tabs)
+        self.assertIn("content.appendChild(panel)", tabs)
+        self.assertNotIn("bindSectionNavigation", portal)
+        self.assertIn("[data-workspace-tab-content] > [hidden]", css)

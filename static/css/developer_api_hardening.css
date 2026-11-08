@@ -296,3 +296,28 @@
 @media(max-width:900px){.dev-dashboard .dev-hero{grid-template-columns:60px minmax(0,1fr)}.dev-dashboard .dev-hero-mark{width:58px;height:64px}.dev-dashboard .dev-hero-status{grid-column:1/-1;grid-template-columns:auto 1fr auto;align-items:center}.dev-dashboard .dev-hero-status small{display:none}.dev-dashboard .dev-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.dev-dashboard .dev-dashboard-layout{grid-template-columns:1fr}.dev-dashboard .dev-side-column{grid-template-columns:repeat(2,minmax(0,1fr))}.dev-dashboard .dev-security-note{grid-column:1/-1}.dev-dashboard .dev-two-column{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.dev-dashboard{padding:10px}.dev-dashboard .dev-hero{grid-template-columns:46px minmax(0,1fr);gap:12px;padding:15px}.dev-dashboard .dev-hero-mark{width:45px;height:50px;border-radius:13px}.dev-dashboard .dev-hero-mark .material-symbols-rounded{font-size:27px}.dev-dashboard .dev-hero-copy h1{font-size:25px}.dev-dashboard .dev-hero-copy p:not(.eyebrow){font-size:12px}.dev-dashboard .dev-hero-status{grid-template-columns:1fr;gap:6px}.dev-dashboard .dev-hero-status small{display:block}.dev-dashboard .dev-tabs{margin:10px 0 13px}.dev-dashboard .dev-tabs a{padding:0 12px;font-size:12px}.dev-dashboard .dev-metrics{gap:8px}.dev-dashboard .dev-metric{padding:12px;gap:8px}.dev-dashboard .dev-metric>strong{font-size:22px}.dev-dashboard .dev-metric>span{font-size:10px}.dev-dashboard .dev-side-column,.dev-dashboard .dev-two-column{grid-template-columns:1fr}.dev-dashboard .dev-security-note{grid-column:auto}.dev-dashboard .dev-quickstart,.dev-dashboard .dev-endpoints,.dev-dashboard .dev-sample,.dev-dashboard .dev-resources,.dev-dashboard .dev-management-section{padding:14px}.dev-dashboard .dev-quick-actions{display:grid;grid-template-columns:1fr}.dev-dashboard .dev-quick-actions .btn{width:100%}.dev-dashboard .dev-row{align-items:stretch;flex-direction:column}.dev-dashboard .dev-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.dev-dashboard .dev-actions form,.dev-dashboard .dev-actions button{width:100%;min-width:0}.dev-dashboard .dev-form fieldset{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.dev-dashboard .dev-form button[type=submit]{width:100%}.dev-dashboard .secret-panel>div{grid-template-columns:1fr}.dev-dashboard .dev-docs{font-size:10px}.dev-dashboard .dev-endpoint-row{grid-template-columns:43px minmax(0,1fr) 15px;padding:9px;gap:7px}}
 @media(max-width:360px){.dev-dashboard .dev-metrics{grid-template-columns:1fr}.dev-dashboard .dev-hero{grid-template-columns:1fr}.dev-dashboard .dev-hero-mark{display:none}.dev-dashboard .dev-actions{grid-template-columns:1fr}.dev-dashboard .dev-form fieldset{grid-template-columns:1fr}.dev-dashboard .dev-mini-key{grid-template-columns:19px minmax(0,1fr)}.dev-dashboard .dev-status-pill{grid-column:2;justify-self:start}}
+
+/* In-place workspace navigation: hidden panels must stay out of layout. */
+.dev-dashboard [data-workspace-tab-content] > [hidden],
+.api-explorer .api-panel[hidden] {
+  display: none !important;
+}
+.dev-dashboard [data-workspace-tab-content] > :not([hidden]) {
+  display: block;
+}
+.dev-dashboard .dev-tabs {
+  align-items: stretch;
+  min-width: 0;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.dev-dashboard .dev-tabs a {
+  flex: 0 0 auto;
+  min-height: 46px;
+  border-radius: 8px 8px 0 0;
+}
+.dev-dashboard .dev-tabs a:focus-visible,
+.api-explorer .api-tabs button:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}

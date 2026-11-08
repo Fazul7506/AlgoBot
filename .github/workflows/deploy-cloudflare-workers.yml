@@ -88,7 +88,7 @@ jobs:
           printf '%s' "$CLOUDFLARE_TASK_DISPATCH_TOKEN" | npx --yes wrangler secret put ALGOBOT_TASK_DISPATCH_TOKEN --config cloudflare/background-scheduler/wrangler.jsonc
           printf '%s' "$CLOUDFLARE_MARKET_STREAM_TOKEN" | npx --yes wrangler secret put CLOUDFLARE_MARKET_STREAM_TOKEN --config cloudflare/market-stream/wrangler.jsonc
           printf '%s' "$MARKET_STREAM_CONTROL_TOKEN" | npx --yes wrangler secret put MARKET_STREAM_CONTROL_TOKEN --config cloudflare/market-stream/wrangler.jsonc
-          printf '%s' "$CLOUDFLARE_TRAINING_WEBHOOK_TOKEN" | npx --yes wrangler secret put CLOUDFLARE_TRAINING_WEBHOOK_TOKEN --config cloudflare/ai-training-dispatcher/wrangler.jsonc
+          printf '%s' "$CLOUDFLARE_TRAINING_WEBHOOK_TOKEN" | npx --yes wrangler secret put AI_TRAINING_WEBHOOK_TOKEN --config cloudflare/ai-training-dispatcher/wrangler.jsonc
 
       - name: Verify Django endpoints and matching Render secrets before activation
         if: github.event_name != 'pull_request'

@@ -24,6 +24,7 @@ check(market.vars?.CLOUDFLARE_MARKET_STREAM_ACTIVE === "false", "Market stream m
 check(scheduler.vars?.CLOUDFLARE_SCHEDULER_ACTIVE === "false", "Unified scheduler must default to disabled");
 check(scheduler.vars?.ENABLE_EXECUTION_QUEUE_RECOVERY === "false", "Execution queue recovery must default to disabled");
 check(legacy.vars?.AI_TRAINING_DISPATCH_ACTIVE === "false", "Legacy AI dispatcher must default to disabled");
+check(Object.hasOwn(legacy, "previews"), "Legacy AI dispatcher must declare a Wrangler previews block");
 
 const queueCheck = (config, queueName, dlqName, producerBinding, requiredConsumer = true) => {
   const producers = config.queues?.producers || [];
@@ -64,8 +65,14 @@ const marketSource = await read("cloudflare/market-stream/src/index.js");
 const schedulerSource = await read("cloudflare/background-scheduler/src/index.js");
 const dispatcherSource = await read("apps/automation/cloudflare_hooks.py");
 const trainingHookSource = await read("apps/ai_engine/cloudflare_hooks.py");
+const legacySource = await read("cloudflare/ai-training-dispatcher/src/index.js");
+const workflowSource = await read(".github/workflows/deploy-cloudflare-workers.yml");
+const legacyDocs = await read("cloudflare/ai-training-dispatcher/README.md");
 const marketDocs = await read("cloudflare/market-stream/README.md");
 const schedulerDocs = await read("cloudflare/README.md");
+check(legacySource.includes("AI_TRAINING_WEBHOOK_TOKEN"), "Legacy dispatcher must consume AI_TRAINING_WEBHOOK_TOKEN");
+check(workflowSource.includes("secret put AI_TRAINING_WEBHOOK_TOKEN"), "Worker deployment workflow must write the secret under the dispatcher's binding name");
+check(legacyDocs.includes("/cloudflare/ai-training-dispatcher") && legacyDocs.includes("npx wrangler preview"), "Legacy Worker build documentation must pin the correct Cloudflare Workers Builds root and preview command");
 
 const requiredSchedules = [
   ["ai-training-every-6-hours", "apps.ai_engine.tasks.scheduled_ai_training"],

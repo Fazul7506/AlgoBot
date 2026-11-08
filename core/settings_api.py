@@ -3,11 +3,13 @@ import json
 import math
 from zoneinfo import available_timezones
 
-from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+from core.api_authentication import BrokerGateJWTAuthentication, BrowserSessionAuthentication
 from core.models import BotSettings, UserProfile
 
 
@@ -61,8 +63,9 @@ TRADING_FLOAT_LIMITS = {
 }
 
 
-@login_required
-@require_http_methods(["GET", "PATCH"])
+@api_view(["GET", "PATCH"])
+@authentication_classes([BrokerGateJWTAuthentication, BrowserSessionAuthentication])
+@permission_classes([IsAuthenticated])
 def account_settings_api(request):
     """Read/write settings for the current user without exposing credentials or tokens."""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
