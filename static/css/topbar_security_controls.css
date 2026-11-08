@@ -431,3 +431,8 @@
 .topbar-broker-identity{position:relative;display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:#102d4b;overflow:visible}.topbar-broker-logo{display:block;width:28px;height:28px;object-fit:contain}.topbar-country-flag{position:absolute;right:-5px;bottom:-4px;width:17px;height:12px;object-fit:cover;border:1px solid #d5e6f8;border-radius:2px;box-shadow:0 1px 4px #0008}.topbar-account-menu [data-topbar-select-account] .topbar-broker-identity{flex:0 0 36px}
 
 .topbar-account-identity-host{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px}.topbar-account-identity-host .topbar-broker-identity{width:36px;height:36px}.topbar-account-identity-host .topbar-broker-logo{max-width:30px;max-height:30px}
+
+/* Broker mark plus Deriv-style account mode badge; no text fallback. */
+.topbar-account-mode-icon,.sidebar-account-mode-icon,.account-account-mode-icon{position:absolute;right:-6px;top:-6px;width:17px;height:17px;object-fit:cover;border:1px solid #dce9f8;border-radius:50%;background:#071426;box-shadow:0 1px 4px #0009}
+.topbar-account-menu .topbar-account-mode-icon{width:16px;height:16px;right:-5px;top:-5px}
+.sidebar-account-mode-icon{width:14px;height:14px;right:-4px;top:-4px}
