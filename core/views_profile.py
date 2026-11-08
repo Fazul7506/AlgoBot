@@ -160,7 +160,7 @@ def profile_page(request):
     )
     profile_completion_percent = round(100 * sum(bool(value and str(value).strip()) for value in completion_fields) / len(completion_fields))
 
-    # Show only genuine, user-scoped authentication audit records. The audit
+    # Show only genuine, user-scoped authentication activity events. The audit
     # model deliberately stores no raw credentials and this view omits IP data.
     from apps.observability.models import AuditEvent
     recent_activity = list(
