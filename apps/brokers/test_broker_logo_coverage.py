@@ -16,4 +16,6 @@ class BrokerLogoCoverageTests(TestCase):
         template = (root / "templates" / "components" / "broker_logo.html").read_text(encoding="utf-8")
         self.assertIn("cdn.simpleicons.org", template)
         self.assertIn("data-fallback-src=", template)
+        self.assertIn("Generic broker symbol", template)
+        self.assertNotIn("safe(name[0]?.toUpperCase()", Path(__file__).resolve().parents[2].joinpath("static/js/live_broker_ui.js").read_text(encoding="utf-8"))
         self.assertIn("metatrader4.com/favicon.ico", template)
