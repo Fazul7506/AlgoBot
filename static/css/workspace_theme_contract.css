@@ -1,0 +1,29 @@
+/* Shared visual contract for workspace pages. Page layouts remain page-owned;
+   surfaces, text, controls and focus states inherit the user's active AlgoBot theme. */
+#app-content{color:var(--text,var(--ds-text,#e7f0ff))}
+#app-content :where(.panel,.kpi-card,.ds-card,.workspace-panel,.dashboard-card,.dashboard-panel,.section-card,.metric-card,.stat-card,.trade-card,.market-card,.scanner-card,.feature-card,.table-container,.table-wrap,.data-panel,.data-card,.monitoring-card,.monitoring-panel,.api-sidebar,.api-main,.api-panel,.api-meta-grid article,.status-row,.status-grid article){
+  background-color:var(--panel,var(--ds-surface-1,#0d1b2e))!important;
+  background-image:none!important;
+  color:var(--text,var(--ds-text,#e7f0ff))!important;
+  border-color:var(--line,var(--ds-border,#203653))!important;
+}
+#app-content :where(.panel,.kpi-card,.ds-card,.workspace-panel,.dashboard-card,.dashboard-panel,.section-card,.metric-card,.stat-card,.trade-card,.market-card,.scanner-card,.feature-card,.table-container,.table-wrap,.data-panel,.data-card,.monitoring-card,.monitoring-panel) :where(h1,h2,h3,h4,h5,h6,strong,th,td,label,legend){color:var(--text,var(--ds-text,#e7f0ff))}
+#app-content :where(.panel,.kpi-card,.ds-card,.workspace-panel,.dashboard-card,.dashboard-panel,.section-card,.metric-card,.stat-card,.trade-card,.market-card,.scanner-card,.feature-card,.table-container,.table-wrap,.data-panel,.data-card,.monitoring-card,.monitoring-panel) :where(p,small,.muted,.text-muted,.helper-text,.description,.subtitle,.hint){color:var(--muted,var(--ds-muted,#9db1cc))}
+#app-content :where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea){background:var(--bg,var(--ds-surface-0,#07111f));color:var(--text,var(--ds-text,#e7f0ff));border-color:var(--line,var(--ds-border,#203653))}
+#app-content :where(input,select,textarea)::placeholder{color:var(--muted,var(--ds-muted,#9db1cc));opacity:1}
+#app-content :where(pre,code,.code-block,.terminal-output,.log-output,.console-output){background-color:var(--panel2,var(--ds-surface-2,#10233d));color:var(--text,var(--ds-text,#e7f0ff));border-color:var(--line,var(--ds-border,#203653))}
+#app-content :where(.btn:not(.primary):not(.btn-primary),button:not(.btn-primary):not(.primary):not([data-theme-toggle]),[role=tab]){border-color:var(--line,var(--ds-border,#203653));color:var(--text,var(--ds-text,#e7f0ff))}
+#app-content :where(.btn:not(.primary):not(.btn-primary),button:not(.btn-primary):not(.primary):not([data-theme-toggle]),[role=tab]):hover{border-color:var(--accent,var(--ds-info,#29d3ff))}
+#app-content :where([role=tab][aria-selected=true],.tab-active,.is-active){color:var(--accent,var(--ds-info,#29d3ff))}
+#app-content :where(table,th,td,.table-container,.table-wrap){border-color:var(--line,var(--ds-border,#203653))}
+#app-content :where(.status-ok,.status-success,.is-success,.text-success){color:var(--green,var(--ds-success,#33d69f))}
+#app-content :where(.status-warn,.status-warning,.is-warning,.text-warning){color:var(--gold,var(--ds-warning,#ffd166))}
+#app-content :where(.status-bad,.status-error,.is-error,.text-danger){color:var(--red,var(--ds-danger,#ff5c7a))}
+#app-content :where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:2px solid var(--accent,var(--ds-info,#29d3ff));outline-offset:2px}
+@media(prefers-reduced-motion:reduce){#app-content *,#app-content *::before,#app-content *::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+/* Broker SVG identity is styled in CSS, never injected as a runtime style tag. */
+.broker-svg-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:visible}
+.broker-svg-avatar .account-broker-identity{position:relative;display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%}
+.broker-svg-avatar img.account-broker-logo{width:100%;height:100%;object-fit:contain}
+.broker-svg-avatar img.account-country-flag{position:absolute;right:-4px;bottom:-3px;width:13px;height:10px;object-fit:cover;border:1px solid var(--line,#dce9f8);border-radius:2px}
