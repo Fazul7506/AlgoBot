@@ -57,6 +57,7 @@
       store.transition(store.STATES.SYNCING,{account},'broker-account-snapshot-sync-started');
       try{return await syncAccountSnapshot(store,account,generation)}
       catch(error){
+        if(generation!==syncGeneration)return window.AlgoBotAccountContext?.getSelected?.()||null;
         store.transition(store.STATES.DEGRADED,{account,lastError:'Broker connection is verified, but its financial snapshot could not be refreshed.'},'broker-account-snapshot-sync-failed');
         window.dispatchEvent(new CustomEvent('algobot:account-sync-error',{detail:{error,account}}));return account;
       }
