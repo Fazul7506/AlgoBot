@@ -709,7 +709,7 @@ class BillingIndependentLoadingContractTests(SimpleTestCase):
         self.assertIn("api('/billing/entitlements/')", template)
         self.assertIn("api('/billing/plans/')", template)
         self.assertIn("renderPlans(plans,catalogPlan", template)
-        self.assertIn("Plan catalogue is temporarily unavailable", template)
+        self.assertIn("live plan catalogue is temporarily unavailable", template)
         self.assertNotIn("const [status,ent,plansData]=await Promise.all", template)
 
 
