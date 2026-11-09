@@ -107,6 +107,8 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertEqual(self.account.credentials["account_type"], account_type)
         self.assertEqual(self.account.credentials["connection_health"], "verified")
         self.assertEqual(str(self.account.balance), "125.50000000")
+        # A connection handshake is not a complete financial snapshot.
+        self.assertIsNone(self.account.last_synced_at)
         return connection
 
     def test_demo_account_connects_and_is_verified(self):
