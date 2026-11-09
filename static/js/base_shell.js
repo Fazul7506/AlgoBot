@@ -161,8 +161,8 @@
 
   function bindTheme(){
     const button=$('[data-theme-toggle]');
-    if(!button||button.dataset.themeBound==='true')return;
-    button.dataset.themeBound='true';
+    if(button?.dataset.themeBound==='true')return;
+    if(button)button.dataset.themeBound='true';
     const storageKey='algobot-theme';
     const preferenceKey='algobot-theme-preference';
     const validThemes=new Set(['light','dark','system']);
@@ -182,7 +182,7 @@
       html.dataset.themePreference=preference;
       const theme=resolvedTheme(preference);
       html.dataset.theme=theme;
-      button.setAttribute('aria-pressed',String(theme==='light'));
+      if(button)button.setAttribute('aria-pressed',String(theme==='light'));
       const meta=$('meta[name="theme-color"]');
       if(meta)meta.content=theme==='light'?'#f3f7fc':'#07111f';
       const selected=document.querySelector('input[name="theme"][value="'+preference+'"]');
@@ -193,7 +193,7 @@
       let stored='';
       try{stored=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||'';}catch(_){}
       const current=document.documentElement.dataset.themePreference;
-      const preference=validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:(validThemes.has(stored)?stored:'dark'));
+      const preference=validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(stored)?stored:(validThemes.has(current)?current:'dark'));
       persistLocal(preference);
       apply(preference);
       if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;
@@ -208,7 +208,7 @@
     try{stored=localStorage.getItem(storageKey)||'';storedPreference=localStorage.getItem(preferenceKey)||'';}catch(_){}
     const initial=validThemes.has(storedPreference)?storedPreference:(validThemes.has(stored)?stored:'dark');
     apply(initial);
-    button.addEventListener('click',async()=>{
+    if(button)button.addEventListener('click',async()=>{
       const html=document.documentElement;
       const previous=validThemes.has(html.dataset.themePreference)?html.dataset.themePreference:(html.dataset.theme||'dark');
       const next=html.dataset.theme==='dark'?'light':'dark';
@@ -225,6 +225,9 @@
         showDjangoMessage('Theme could not be saved to your account. The previous theme has been restored. '+String(error?.message||''),'warning');
       }finally{button.disabled=false;}
     });
+    // Load account preferences on every authenticated page, not only pages
+    // that happen to render the theme toggle. This keeps server and local
+    // preference state synchronized across full-page navigation.
     if(document.body.dataset.authenticated==='true'&&!document.documentElement.dataset.accountPreferencesLoaded){
       document.documentElement.dataset.accountPreferencesLoaded='pending';
       const client=window.AlgoBotFrontendData;
