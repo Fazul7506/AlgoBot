@@ -106,10 +106,13 @@ def profile_completion_page(request):
         confirm_password = str(request.POST.get("confirm_password") or "")
         dob_raw = str(request.POST.get("date_of_birth") or "").strip()
         gender = str(request.POST.get("gender") or "").strip()
+        submitted_timezone = str(request.POST.get("timezone") or "UTC").strip()
         terms_accepted = request.POST.get("terms_accepted") in {"on", "true", "1"}
         avatar_file = request.FILES.get("profile_picture")
         picture_data = None
         errors = []
+        if submitted_timezone not in available_timezones() and submitted_timezone != "UTC":
+            errors.append("Choose a valid IANA time zone from the list.")
         if not first_name or not last_name:
             errors.append("Enter your first and last name to complete your profile.")
         if not profile.terms_accepted_at and not terms_accepted:
@@ -199,7 +202,7 @@ def profile_completion_page(request):
                     submitted_country = str(request.POST.get("country") or "").strip()
                     if submitted_country:
                         profile.country = submitted_country[:100]
-                    profile.timezone = str(request.POST.get("timezone") or "UTC").strip()[:100] or "UTC"
+                    profile.timezone = submitted_timezone[:100] or "UTC"
                     profile.bio = str(request.POST.get("bio") or "").strip()[:5000]
                     # Blank optional fields must not erase values previously provided
                     # by the user or a verified identity claim.
@@ -241,6 +244,7 @@ def profile_completion_page(request):
                 request.session.pop("google_profile_completion_pending", None)
                 return redirect("broker_marketplace_page")
 
+    timezone_choices = ["UTC"] + sorted(available_timezones() - {"UTC"})
     return render(request, "core/profile_completion.html", {
         "first_name": request.POST.get("first_name", request.user.first_name),
         "last_name": request.POST.get("last_name", request.user.last_name),
@@ -250,6 +254,7 @@ def profile_completion_page(request):
         "phone": request.POST.get("phone", profile.phone),
         "country": request.POST.get("country", profile.country),
         "timezone_value": request.POST.get("timezone", profile.timezone or "UTC"),
+        "timezone_choices": timezone_choices,
         "bio": request.POST.get("bio", profile.bio),
         "terms_accepted": bool(profile.terms_accepted_at) or request.POST.get("terms_accepted") in {"on", "true", "1"},
         "terms_already_accepted": bool(profile.terms_accepted_at),

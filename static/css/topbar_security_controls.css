@@ -431,3 +431,39 @@
 .topbar-broker-identity{position:relative;display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:#102d4b;overflow:visible}.topbar-broker-logo{display:block;width:28px;height:28px;object-fit:contain}.topbar-country-flag{position:absolute;right:-5px;bottom:-4px;width:17px;height:12px;object-fit:cover;border:1px solid #d5e6f8;border-radius:2px;box-shadow:0 1px 4px #0008}.topbar-account-menu [data-topbar-select-account] .topbar-broker-identity{flex:0 0 36px}
 
 .topbar-account-identity-host{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px}.topbar-account-identity-host .topbar-broker-identity{width:36px;height:36px}.topbar-account-identity-host .topbar-broker-logo{max-width:30px;max-height:30px}
+
+/* Broker mark plus Deriv-style account mode badge; no text fallback. */
+.topbar-account-mode-icon,.sidebar-account-mode-icon,.account-account-mode-icon{position:absolute;right:-6px;top:-6px;width:17px;height:17px;object-fit:cover;border:1px solid #dce9f8;border-radius:50%;background:#071426;box-shadow:0 1px 4px #0009}
+.topbar-account-menu .topbar-account-mode-icon{width:16px;height:16px;right:-5px;top:-5px}
+.sidebar-account-mode-icon{width:14px;height:14px;right:-4px;top:-4px}
+
+
+/* Account-switcher layout contract: its width is isolated from adjacent controls. */
+.topbar{min-width:0;gap:clamp(8px,1.2vw,18px)}
+.topbar-title{flex:1 1 auto;min-width:0;max-width:100%}
+.topbar-actions{display:flex;flex:0 1 auto;min-width:0;max-width:100%;align-items:center;justify-content:flex-end;gap:clamp(5px,.7vw,10px)}
+.topbar-account-control{position:relative;z-index:4;isolation:isolate;flex:0 1 clamp(156px,24vw,264px);min-width:0;max-width:100%}
+.topbar-account-trigger{display:flex;width:100%;min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box}
+.topbar-account-brand,.topbar-account-identity-wrap{flex:0 0 36px;min-width:36px}
+.topbar-account-label{display:flex;flex:1 1 0;flex-direction:column;min-width:0;overflow:hidden}
+.topbar-account-label strong,.topbar-account-label small{display:block;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-account-trigger>.topbar-chevron{flex:0 0 auto}
+.topbar-notifications,.topbar-profile{position:relative;flex:0 0 auto;min-width:0}
+.topbar-account-menu{right:0;left:auto;max-width:calc(100vw - 20px);overflow-x:hidden;overscroll-behavior:contain}
+.topbar-account-menu [data-topbar-select-account]{min-width:0;max-width:100%}
+.topbar-account-menu .topbar-account-option-copy{flex:1 1 0;min-width:0}
+@media(max-width:700px){
+ .topbar{gap:6px}
+ .topbar-title{flex:0 1 auto;max-width:34vw}
+ .topbar-actions{flex:1 1 auto;min-width:0;max-width:100%;overflow:visible}
+ .topbar-account-control{flex:1 1 0;min-width:0;max-width:min(48vw,230px)}
+ .topbar-account-trigger{min-width:0;max-width:100%}
+ .topbar-account-brand,.topbar-account-identity-wrap{flex-basis:30px;min-width:30px}
+ .topbar-account-menu{width:min(390px,calc(100vw - 20px))}
+}
+@media(max-width:390px){
+ .topbar-title{max-width:27vw}
+ .topbar-actions{gap:4px}
+ .topbar-account-control{max-width:43vw}
+ .topbar-account-brand,.topbar-account-identity-wrap{flex-basis:26px;min-width:26px}
+}

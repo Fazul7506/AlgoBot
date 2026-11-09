@@ -135,18 +135,13 @@
     <span class="profile-onboarding__badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg> Verified sign-in</span>
   </div>
 
-  <nav class="profile-onboarding__steps" aria-label="Signup progress">
-    <span class="profile-onboarding__step is-active" aria-current="step"><b>1</b><span>Profile Details</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
-    <span class="profile-onboarding__step"><b>2</b><span>Additional Info</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
-    <span class="profile-onboarding__step"><b>3</b><span>Preferences</span></span><span class="profile-onboarding__rule" aria-hidden="true"></span>
-    <span class="profile-onboarding__step"><b>4</b><span>Complete</span></span>
-  </nav>
+
 
   <div class="profile-onboarding__content-grid">
   <form method="post" enctype="multipart/form-data" class="profile-onboarding__card" autocomplete="on">
     {% csrf_token %}
     <div class="profile-onboarding__cardhead">
-      <h2><span class="profile-onboarding__section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Personal information</h2>
+      <h2><span class="profile-onboarding__section-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Your details</h2>
       <p>Only the details needed to set up your AlgoBot account. Google-provided names are prefilled when available.</p>
     </div>
     {% for message in messages %}
@@ -233,8 +228,8 @@
       </div>
       <div class="profile-onboarding__field">
         <label for="timezone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time zone</label>
-        <input id="timezone" name="timezone" type="text" maxlength="100" value="{{ timezone_value|default:'UTC' }}" placeholder="e.g. Africa/Nairobi">
-        <span class="profile-onboarding__hint">Use an IANA time zone such as Africa/Nairobi or UTC.</span>
+        <select id="timezone" name="timezone" autocomplete="off" data-ab-searchable="true" required><option value="UTC" {% if timezone_value == "UTC" %}selected{% endif %}>UTC</option>{% for zone in timezone_choices %}{% if zone != "UTC" %}<option value="{{ zone }}" {% if timezone_value == zone %}selected{% endif %}>{{ zone }}</option>{% endif %}{% endfor %}</select>
+        <span class="profile-onboarding__hint">Choose your IANA time zone from the searchable list.</span>
       </div>
       <div class="profile-onboarding__field">
         <label for="bio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Trading or research focus <span class="profile-onboarding__hint">(optional)</span></label>
@@ -267,10 +262,7 @@
   </aside>
   </div>
 
-  <section class="profile-onboarding__next" aria-label="Next steps">
-    <article><strong>Next: Broker marketplace</strong><p>After saving your profile, choose a supported broker connection. AlgoBot will not create a broker connection without your action.</p></article>
-    <article><strong>Your account, your control</strong><p>Your AlgoBot profile details are separate from your broker credentials and account balances.</p></article>
-  </section>
+
   <div class="avatar-editor" data-avatar-editor hidden role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title">
     <div class="avatar-editor__panel">
       <h2 id="avatar-editor-title">Edit profile photo</h2>

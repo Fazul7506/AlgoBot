@@ -14,7 +14,15 @@
   const accountContext = () => window.AlgoBotAccountContext;
   const selectedAccount = () => accountContext()?.getSelected?.() || window.AlgoBotBrokerState?.get?.()?.account || null;
   const accountType = account => String(account?.account_type || account?.credentials?.account_type || 'unknown').toUpperCase();
-  const accountIdentity = account => window.AlgoBotBrokerBranding?.identityMarkup?.(account, 'topbar') || '';
+  const accountIdentity = account => {
+    const type = String(account?.account_type || account?.credentials?.account_type || 'unknown').toLowerCase();
+    const identity = window.AlgoBotBrokerBranding?.identityMarkup?.(account, 'topbar') || '';
+    // The shared branding renderer already supplies the broker-specific DEMO/REAL
+    // SVG mark. Keep this wrapper purely structural to avoid duplicate badges.
+    return '<span class="topbar-account-identity-wrap" data-account-type="' + safe(type) + '">' +
+      identity +
+      '</span>';
+  };
   const accountLabel = account => ({
     broker: account?.broker?.name || account?.broker_name || 'Broker',
     id: account?.broker_account_id || account?.account_id || account?.id || '',
@@ -63,7 +71,7 @@
     }
     const currentLabel = accountLabel(current);
     if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
-    if (meta) meta.textContent = [currentLabel.type, current?.branding?.country_code || current?.deriv_identity?.country_code || '', currentLabel.currency, formatBalance(currentLabel)].filter(Boolean).join(' · ');
+    if (meta) meta.textContent = [currentLabel.type, current?.branding?.country_name || current?.branding?.country_code || current?.deriv_identity?.country_name || current?.deriv_identity?.country_code || '', currentLabel.currency, formatBalance(currentLabel)].filter(Boolean).join(' · ');
     if (identity) identity.innerHTML = accountIdentity(current);
 
     const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];

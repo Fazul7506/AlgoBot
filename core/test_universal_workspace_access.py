@@ -278,7 +278,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "css/runtime_recovery.css?v=20261026-toast-severity1")
         self.assertContains(response, "css/sidebar_responsive_contract.css?v=20261013-shell2")
-        self.assertContains(response, "js/sidebar_account_switch.js?v=20261108-connected-account-branding4")
+        self.assertContains(response, "js/sidebar_account_switch.js?v=20261108-account-brand-mode1")
         self.assertRegex(response.content.decode("utf-8"), r"js/base_shell\.js(?:\?v=[^\"\s]+)?")
         shell = (Path("static/js/base_shell.js")).read_text(encoding="utf-8")
         self.assertIn("function bindNavigationPrefetch(links)", shell)

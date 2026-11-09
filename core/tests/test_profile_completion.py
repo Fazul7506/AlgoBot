@@ -40,7 +40,8 @@ class ProfileCompletionTests(TestCase):
         self.assertContains(response, "First name")
         self.assertContains(response, "Last name")
         self.assertContains(response, "Google account connected")
-        self.assertContains(response, "Broker marketplace")
+        self.assertContains(response, "choose a broker connection")
+        self.assertNotContains(response, 'class="profile-onboarding__steps"')
 
     def test_required_names_are_validated(self):
         self.client.force_login(self.user)
@@ -368,14 +369,45 @@ class ProfileCompletionTests(TestCase):
         from pathlib import Path
         template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
         base = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("Profile Details", template)
-        self.assertIn("Additional Info", template)
-        self.assertIn("Preferences", template)
+        self.assertNotIn('class="profile-onboarding__steps"', template)
+        self.assertNotIn("Profile Details", template)
+        self.assertNotIn("Additional Info", template)
+        self.assertNotIn("Preferences", template)
+        self.assertIn('id="timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', template)
         self.assertIn('id="phone_country_code"', template)
         self.assertIn('id="country" name="country"', template)
         self.assertIn("anchored_selects.js", base)
         self.assertIn("anchored_selects.css", base)
 
+
+
+    def test_profile_completion_uses_searchable_iana_timezone_dropdown_and_no_progress_tabs(self):
+        from pathlib import Path
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile_completion_page"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Africa/Nairobi", response.context["timezone_choices"])
+        template = Path("templates/core/profile_completion.html").read_text(encoding="utf-8")
+        self.assertIn('id="timezone" name="timezone" autocomplete="off" data-ab-searchable="true"', template)
+        self.assertNotIn('class="profile-onboarding__steps"', template)
+        self.assertNotIn("Additional Info", template)
+        self.assertNotIn("Preferences", template)
+
+    def test_invalid_timezone_is_rejected_server_side(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("profile_completion_page"),
+            {
+                "first_name": "Taylor",
+                "last_name": "Example",
+                "terms_accepted": "on",
+                "timezone": "Not/A_Real_Timezone",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a valid IANA time zone")
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.timezone, "UTC")
 
     def test_invalid_international_phone_is_rejected_server_side(self):
         self.client.force_login(self.user)
@@ -511,6 +543,16 @@ class ProfileCompletionTests(TestCase):
         self.assertIn('aria-modal="true"', template)
         self.assertIn("event.key === 'Escape'", template)
 
+
+    def test_topbar_account_switcher_has_isolated_responsive_layout_contract(self):
+        from pathlib import Path
+        css = Path("static/css/topbar_security_controls.css").read_text(encoding="utf-8")
+        base = Path("templates/base.html").read_text(encoding="utf-8")
+        self.assertIn(".topbar-account-control{position:relative;z-index:4;isolation:isolate", css)
+        self.assertIn(".topbar-account-trigger{display:flex;width:100%;min-width:0;max-width:100%;overflow:hidden", css)
+        self.assertIn("@media(max-width:700px)", css)
+        self.assertIn("@media(max-width:390px)", css)
+        self.assertIn("account-switcher-isolation1", base)
 
     def test_profile_modal_initializes_phone_widget_after_deferred_script(self):
         from pathlib import Path

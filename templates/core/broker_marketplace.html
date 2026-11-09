@@ -182,14 +182,12 @@
  }
  root.querySelectorAll(".broker-logo img").forEach(function(img){
    img.addEventListener("error",function(){
-     if(img.dataset.fallbackTried!=="true"&&img.dataset.fallbackSrc){img.dataset.fallbackTried="true";img.src=img.dataset.fallbackSrc;return;}
-     const holder=img.closest(".broker-logo");if(!holder||holder.dataset.logoFallback==="true")return;
-     holder.dataset.logoFallback="true";
-     const label=(img.dataset.providerName||img.alt||"Broker").trim();
-     const initials=label.split(/\\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"BR";
-     const fallback=document.createElement("span");fallback.className="broker-logo-fallback";fallback.setAttribute("role","img");fallback.setAttribute("aria-label",label+" logo unavailable; text mark shown");fallback.textContent=initials;
-     img.replaceWith(fallback);
-   });
+     // Never fabricate a broker wordmark. Hide a failed asset and keep the
+     // provider's explicit availability/status information visible.
+     const holder=img.closest(".broker-logo");
+     img.hidden=true;
+     if(holder)holder.classList.add("is-logo-unavailable");
+   },{once:true});
  });
  document.addEventListener("submit",async function(event){
    const form=event.target.closest("[data-broker-disconnect]");if(!form||!root.contains(form))return;
