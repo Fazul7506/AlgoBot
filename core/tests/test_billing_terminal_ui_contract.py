@@ -700,6 +700,19 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         )
 
 
+class BillingIndependentLoadingContractTests(SimpleTestCase):
+    def test_plan_catalogue_does_not_wait_for_subscription_and_entitlement_reads(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn("Promise.allSettled", template)
+        self.assertIn("api('/billing/status/')", template)
+        self.assertIn("api('/billing/entitlements/')", template)
+        self.assertIn("api('/billing/plans/')", template)
+        self.assertIn("renderPlans(plans,catalogPlan", template)
+        self.assertIn("Plan catalogue is temporarily unavailable", template)
+        self.assertNotIn("const [status,ent,plansData]=await Promise.all", template)
+
+
 class WorkspaceTabsContractTests(SimpleTestCase):
     def test_backtesting_job_status_separates_queued_from_running(self):
         from pathlib import Path
