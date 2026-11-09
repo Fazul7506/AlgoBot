@@ -163,6 +163,42 @@
 @media(max-width:360px){.billing-dashboard .billing-summary-grid{grid-template-columns:1fr}.billing-dashboard .billing-plan-grid,.billing-dashboard .billing-usage-grid{grid-template-columns:1fr}.billing-dashboard .billing-summary-card h2{font-size:19px}.billing-dashboard .billing-tabs>a{padding:0 9px}.billing-dashboard .billing-small-label{display:none}.billing-dashboard .billing-section-heading{flex-direction:column}.billing-dashboard .billing-row,.billing-dashboard .billing-payment-head{min-width:480px}}
 @media(prefers-reduced-motion:reduce){.billing-dashboard *{scroll-behavior:auto!important;transition:none!important}}
 
+
+/* Mobile plan cards and feature rows: prevent intrinsic value widths from
+   collapsing feature labels into one-character columns. */
+.billing-dashboard .billing-plan-features li{
+  grid-template-columns:18px minmax(0,1fr) minmax(0,40%);
+  align-items:start;
+}
+.billing-dashboard .plan-feature-label{
+  min-width:0;
+  white-space:normal;
+  word-break:normal;
+  overflow-wrap:break-word;
+  hyphens:auto;
+  line-height:1.45;
+}
+.billing-dashboard .billing-plan-features strong{
+  min-width:0;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.45;
+}
+.billing-dashboard .billing-plan-card,
+.billing-dashboard .billing-plan-actions,
+.billing-dashboard .billing-provider-choices{min-width:0;width:100%}
+@media(max-width:680px){
+  .billing-dashboard .billing-plan-grid{grid-template-columns:minmax(0,1fr)!important}
+  .billing-dashboard .billing-plan-card{padding:16px}
+  .billing-dashboard .billing-plan-features li{grid-template-columns:20px minmax(0,1fr) minmax(0,38%);gap:9px}
+  .billing-dashboard .billing-plan-features strong{font-size:12px;text-align:right}
+  .billing-dashboard .billing-plan-actions .btn{width:100%;white-space:normal}
+}
+@media(min-width:681px) and (max-width:1200px){
+  .billing-dashboard .billing-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 </style>{% endblock %}
 {% block extra_js %}<script>
 (()=> {
