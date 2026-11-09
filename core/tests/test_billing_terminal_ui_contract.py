@@ -787,7 +787,7 @@ class GlobalThemeNavigationPersistenceRegressionTests(SimpleTestCase):
         from pathlib import Path
         shell = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text(encoding="utf-8")
         self.assertIn(
-            "const preference=validThemes.has(stored)?stored:(validThemes.has(current)?current:(validThemes.has(prefs.theme)?prefs.theme:'dark'));",
+            "const preference=validThemes.has(stored)?stored:(validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:'dark'));",
             shell,
         )
 
