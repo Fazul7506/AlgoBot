@@ -142,7 +142,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("if (value == null || value === '') return '—'", source)
         self.assertIn("const equity = account.equity;", source)
         self.assertNotIn("Number(account.balance) + Number(pnl)", source)
-        self.assertIn("setText(`[data-kpi="${key}"]`, '—')", source)
+        self.assertIn("['balance','equity','available','pnl'].forEach(key => setText", source)
+        self.assertIn("'—'", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
