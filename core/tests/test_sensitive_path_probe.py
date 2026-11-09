@@ -15,9 +15,11 @@ class SensitivePathProbeMiddlewareTests(SimpleTestCase):
         client = Client()
         paths = (
             "/.env", "/.env.production", "/.aws/credentials", "/.git/config",
-            "/.docker/config.json", "/admin/.env", "/actuator/env",
+            "/.docker/config.json", "/.cursor/mcp.json", "/.claude/settings.local.json",
+            "/admin/.env", "/api/.env", "/actuator/env",
             "/api/actuator/env", "/Dockerfile", "/docker-compose.yml",
-            "/phpinfo.php", "/storage/logs/laravel.log",
+            "/phpinfo.php", "/storage/logs/laravel.log", "/appsettings.Production.json",
+            "/config/config.js", "/credentials.json", "/secrets.json", "/.gitlab-ci.yml",
         )
         for path in paths:
             with self.subTest(path=path):
@@ -32,6 +34,13 @@ class SensitivePathProbeMiddlewareTests(SimpleTestCase):
         self.assertFalse(
             WordPressProbeMiddleware.is_sensitive_path("/.well-known/security.txt")
         )
+
+    def test_encoded_secret_probe_paths_are_rejected(self):
+        from core.middleware.wordpress_probe import WordPressProbeMiddleware
+
+        for path in ("/.%65nv", "/%2eenv.production", "/%252eenv.backup"):
+            with self.subTest(path=path):
+                self.assertTrue(WordPressProbeMiddleware.is_sensitive_path(path))
 
     def test_normal_application_paths_are_not_blocked(self):
         from core.middleware.wordpress_probe import WordPressProbeMiddleware
