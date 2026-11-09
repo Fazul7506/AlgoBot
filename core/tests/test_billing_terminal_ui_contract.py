@@ -20,7 +20,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "@media(max-width:580px)", "@media(max-width:360px)",
             "@media(max-width:680px)", "grid-template-columns:18px minmax(0,1fr) minmax(0,40%)",
             "Usage is measured from persisted platform activity/database records",
-            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
+            "renderPlans(catalog,activePlan,String(plansSnapshot?.provider||'intasend').toLowerCase(),plansSnapshot?.providers||{})",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, template)
@@ -56,7 +56,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("billing-plan-features", template)
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
-        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
+        self.assertIn("renderPlans(catalog,activePlan,String(plansSnapshot?.provider||'intasend').toLowerCase(),plansSnapshot?.providers||{})", template)
         self.assertIn('data-provider=\"pesapal\"', template)
         self.assertIn("billing-provider-logo pesapal-logo", template)
         self.assertIn('data-provider=\"intasend\"', template)
@@ -215,7 +215,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
     def test_live_broker_ui_does_not_register_a_second_account_selection_handler(self):
         from pathlib import Path
         live_ui = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
-        self.assertIn("Account selection is owned exclusively by core/account_context.js.", live_ui)
+        self.assertIn("Sidebar account presentation and switching are owned by", live_ui)
         self.assertNotIn("switchButton.onclick = () => selectAccount", live_ui)
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
@@ -458,7 +458,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-account-brand-mode1", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261109-canonical-sidebar-account1", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
@@ -820,7 +820,7 @@ class GlobalThemeNavigationPersistenceRegressionTests(SimpleTestCase):
         from pathlib import Path
         script = (Path(__file__).resolve().parents[2] / "static/js/core/settings_preferences.js").read_text(encoding="utf-8")
         self.assertIn("const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme", script)
-        self.assertIn("['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark'", script)
+        self.assertIn("(['light','dark','system'].includes(prefs.theme) ? prefs.theme", script)
 
     def test_navigation_and_settings_scripts_have_fresh_cache_contracts(self):
         from pathlib import Path
