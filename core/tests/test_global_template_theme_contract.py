@@ -29,7 +29,7 @@ class GlobalTemplateThemeContractTests(SimpleTestCase):
         theme_styles = base.index("workspace_theme_contract.css")
         self.assertGreater(theme_styles, page_styles)
         self.assertIn("global-template-theme1", base)
-        self.assertIn("theme-navigation-stability1", base)
+        self.assertIn("theme-navigation-stability2", base)
 
     def test_light_and_dark_themes_define_complete_shared_tokens(self):
         css = (ROOT / "static/css/workspace_theme_contract.css").read_text(encoding="utf-8")
