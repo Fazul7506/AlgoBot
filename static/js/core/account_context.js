@@ -70,6 +70,7 @@
     // the previous account after the server accepts this switch.
     selectionRevision+=1;
     switching=true;
+    window.dispatchEvent(new CustomEvent('algobot:account-switch-started',{detail:{targetAccountId:String(target.id),previousAccountId:previous?.id??null}}));
     clearTransientState('account-switch-started');
     try{
       const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
