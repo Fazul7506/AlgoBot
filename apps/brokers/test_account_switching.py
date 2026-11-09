@@ -68,11 +68,33 @@ class AccountSwitchingTests(TestCase):
             self.assertEqual(result.data['active_account_id'], account.pk)
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
-    def test_disconnected_account_cannot_become_active(self):
+    def test_credential_ready_disconnected_account_is_verified_before_becoming_active(self):
         candidate = self.make_account('DEMO-2', connected=False)
-        result = self.client.post(f'/api/brokers/accounts/{candidate.pk}/select/', {}, format='json')
-        self.assertEqual(result.status_code, 409)
-        self.assertIn('not connected', result.data['detail'])
+        def establish_connection(coro, timeout):
+            coro.close()
+            self.assertEqual(timeout, 12.0)
+            return BrokerConnection.objects.create(
+                broker=self.broker, broker_account=candidate, status='connected',
+                last_ping=timezone.now(), connected_at=timezone.now(),
+            )
+        with patch('apps.brokers.views._run_bounded', side_effect=establish_connection) as connect:
+            result = self.client.post(f'/api/brokers/accounts/{candidate.pk}/select/', {}, format='json')
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['active_account_id'], candidate.pk)
+        connect.assert_called_once()
+
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_connection_timeout_keeps_previous_session_account_selected(self):
+        previous = self.make_account('DEMO-PREVIOUS', connected=True)
+        candidate = self.make_account('REAL-TIMEOUT', account_type='real', connected=False)
+        first = self.client.post(f'/api/brokers/accounts/{previous.pk}/select/', {}, format='json')
+        self.assertEqual(first.status_code, 200)
+        import asyncio
+        with patch('apps.brokers.views._run_bounded', side_effect=asyncio.TimeoutError):
+            result = self.client.post(f'/api/brokers/accounts/{candidate.pk}/select/', {}, format='json')
+        self.assertEqual(result.status_code, 504)
+        active = self.client.get('/api/brokers/accounts/active/')
+        self.assertEqual(active.data['active_account_id'], previous.pk)
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_inactive_account_cannot_become_active(self):
