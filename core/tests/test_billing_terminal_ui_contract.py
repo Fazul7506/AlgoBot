@@ -778,3 +778,36 @@ class GlobalThemeShellContractTests(SimpleTestCase):
         self.assertIn("background:var(--panel2)!important", css)
         self.assertIn("color:var(--text)!important", css)
 
+
+
+class GlobalThemeNavigationPersistenceRegressionTests(SimpleTestCase):
+    def test_local_explicit_theme_preference_wins_over_stale_account_response(self):
+        from pathlib import Path
+        shell = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn(
+            "const preference=validThemes.has(stored)?stored:(validThemes.has(current)?current:(validThemes.has(prefs.theme)?prefs.theme:'dark'));",
+            shell,
+        )
+
+    def test_inflight_preferences_response_never_broadcasts_stale_theme(self):
+        from pathlib import Path
+        shell = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("let effectivePrefs=prefs;", shell)
+        self.assertIn("effectivePrefs={...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme};", shell)
+        self.assertIn("detail:effectivePrefs", shell)
+        self.assertNotIn("detail:prefs", shell)
+        self.assertIn("if(themeInteractionVersion!==preferenceLoadVersion)", shell)
+
+    def test_settings_page_uses_local_theme_before_server_default(self):
+        from pathlib import Path
+        script = (Path(__file__).resolve().parents[2] / "static/js/core/settings_preferences.js").read_text(encoding="utf-8")
+        self.assertIn("const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme", script)
+        self.assertIn("['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark'", script)
+
+    def test_navigation_and_settings_scripts_have_fresh_cache_contracts(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        base = (root / "templates/base.html").read_text(encoding="utf-8")
+        settings = (root / "templates/core/settings.html").read_text(encoding="utf-8")
+        self.assertIn("theme-navigation-stability1", base)
+        self.assertIn("theme-preference-stability1", settings)
