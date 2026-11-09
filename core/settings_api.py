@@ -69,9 +69,9 @@ TRADING_FLOAT_LIMITS = {
 def account_settings_api(request):
     """Read/write settings for the current user without exposing credentials or tokens."""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
-    bot, _ = BotSettings.objects.get_or_create(user=request.user)
 
     if request.method == "GET":
+        bot, _ = BotSettings.objects.get_or_create(user=request.user)
         return JsonResponse({
             "user": {
                 "username": request.user.username,
@@ -110,6 +110,11 @@ def account_settings_api(request):
     preferences_data = payload.get("preferences", {})
     if not isinstance(profile_data, dict) or not isinstance(trading_data, dict) or not isinstance(preferences_data, dict):
         return JsonResponse({"detail": "Profile, trading and preferences settings must be objects."}, status=400)
+
+    # Preference-only writes (including theme changes) must not create or
+    # lock trading settings rows. Load BotSettings only when trading fields
+    # are explicitly included in this PATCH.
+    bot = BotSettings.objects.get_or_create(user=request.user)[0] if trading_data else None
 
     profile_updates = {}
     for field, limit in PROFILE_TEXT_LIMITS.items():
@@ -198,23 +203,27 @@ def account_settings_api(request):
     }
     changed_trading = {
         field: value for field, value in trading_updates.items()
-        if getattr(bot, field) != value
+        if bot is not None and getattr(bot, field) != value
     }
 
     updated_preferences = {**current_preferences, **preference_updates}
     changed_preferences = bool(preference_updates) and updated_preferences != current_preferences
+
+    # Coalesce profile and preference changes into one UPDATE. Theme saves are
+    # common and should not issue two writes to the same profile row.
+    profile_fields = list(changed_profile)
+    if changed_preferences:
+        profile.account_preferences = updated_preferences
+        profile_fields.append("account_preferences")
 
     with transaction.atomic():
         for field, value in changed_profile.items():
             setattr(profile, field, value)
         for field, value in changed_trading.items():
             setattr(bot, field, value)
-        if changed_profile:
-            profile.save(update_fields=[*changed_profile.keys(), "updated_at"])
+        if profile_fields:
+            profile.save(update_fields=[*profile_fields, "updated_at"])
         if changed_trading:
             bot.save(update_fields=[*changed_trading.keys(), "updated_at"])
-        if changed_preferences:
-            profile.account_preferences = updated_preferences
-            profile.save(update_fields=["account_preferences", "updated_at"])
 
     return JsonResponse({"ok": True, "message": "Settings saved.", "changed": bool(changed_profile or changed_trading or changed_preferences)})
