@@ -152,6 +152,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         scripts = [
             ROOT / "static" / "js" / "dashboard_command_center.js",
             ROOT / "static" / "js" / "core" / "account_context.js",
+            ROOT / "static" / "js" / "core" / "broker_state_bridge.js",
+            ROOT / "static" / "js" / "live_broker_ui.js",
+            ROOT / "static" / "js" / "sidebar_account_switch.js",
+            ROOT / "static" / "js" / "core" / "settings_preferences.js",
             ROOT / "static" / "js" / "base_shell.js",
         ]
         for script in scripts:
