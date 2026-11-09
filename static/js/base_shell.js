@@ -166,6 +166,7 @@
     const storageKey='algobot-theme';
     const preferenceKey='algobot-theme-preference';
     const validThemes=new Set(['light','dark','system']);
+    let themeInteractionVersion=0;
     const resolvedTheme=preference=>preference==='system'
       ? (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark')
       : preference;
@@ -209,6 +210,7 @@
     const initial=validThemes.has(storedPreference)?storedPreference:(validThemes.has(stored)?stored:'dark');
     apply(initial);
     if(button)button.addEventListener('click',async()=>{
+      themeInteractionVersion+=1;
       const html=document.documentElement;
       const previous=validThemes.has(html.dataset.themePreference)?html.dataset.themePreference:(html.dataset.theme||'dark');
       const next=html.dataset.theme==='dark'?'light':'dark';
@@ -232,9 +234,16 @@
       document.documentElement.dataset.accountPreferencesLoaded='pending';
       const client=window.AlgoBotFrontendData;
       if(typeof client?.request==='function'){
-        client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
+        const preferenceLoadVersion=themeInteractionVersion;
+      client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
           const prefs=data?.profile?.account_preferences||{};
-          applyPreferences(prefs);
+          if(themeInteractionVersion===preferenceLoadVersion){
+            applyPreferences(prefs);
+          }else{
+            let latest=document.documentElement.dataset.themePreference;
+            try{latest=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||latest;}catch(_){}
+            applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});
+          }
           document.documentElement.dataset.accountPreferencesLoaded='true';
           const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};
           if(window.location.pathname==='/dashboard/'&&targets[prefs.default_page]&&targets[prefs.default_page]!=='/dashboard/'){window.location.replace(targets[prefs.default_page]);return;}
@@ -254,8 +263,10 @@
       else if(colorScheme.addListener)colorScheme.addListener(syncSystemTheme);
     }
     window.addEventListener('storage',event=>{
-      if(event.key===preferenceKey&&validThemes.has(event.newValue))apply(event.newValue);
-      else if(event.key===storageKey&&(event.newValue==='light'||event.newValue==='dark')&&!localStorage.getItem(preferenceKey))apply(event.newValue);
+      try{
+        if(event.key===preferenceKey&&validThemes.has(event.newValue))apply(event.newValue);
+        else if(event.key===storageKey&&(event.newValue==='light'||event.newValue==='dark')&&!localStorage.getItem(preferenceKey))apply(event.newValue);
+      }catch(_){}
     });
   }
   function boot(){bindNavigation();bindTheme();bindApiMessages();if(window.AlgoBotBrokerState)window.AlgoBotBrokerState.subscribe(setBrokerStateAttribute);const target=stack();target?.querySelectorAll('.toast').forEach(node=>wireToast(node,MESSAGE_TTL));if(target)trimToastStack(target);}
