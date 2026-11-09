@@ -70,7 +70,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('Checkout unavailable', template)
         self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
 
-    def test_payment_provider_controls_are_svg_only_with_accessible_names(self):
+    def test_payment_provider_controls_show_provider_names_and_keep_accessible_labels(self):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertIn("icons/payments/pesapal.svg", template)
@@ -78,9 +78,31 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("paypal-mark-color.svg", template)
         self.assertIn('aria-label="Continue with Pesapal', template)
         self.assertIn('aria-label="Continue with IntaSend', template)
-        self.assertNotIn("<span>Continue with Pesapal</span>", template)
-        self.assertNotIn("<span>Continue with IntaSend</span>", template)
-        self.assertNotIn("<span>Continue with PayPal", template)
+        self.assertIn('class="billing-provider-label">Continue with Pesapal</span>', template)
+        self.assertIn('class="billing-provider-label">Continue with IntaSend</span>', template)
+        self.assertIn('class="billing-provider-label">Continue with PayPal</span>', template)
+        self.assertIn('class="billing-provider-label">PayPal unavailable</span>', template)
+        self.assertIn(".billing-provider-button .billing-provider-label{display:inline!important", template)
+        self.assertNotIn(".billing-provider-button span{display:none}", template)
+
+    def test_billing_uses_algobot_theme_tokens_and_single_column_mobile_plan_cards(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        for token in ("var(--accent", "var(--panel", "var(--panel2", "var(--text", "var(--muted", "var(--line"):
+            self.assertIn(token, template)
+        self.assertIn("@media(max-width:850px)", template)
+        self.assertIn("grid-template-columns:minmax(0,1fr)!important", template)
+        self.assertIn("word-break:normal", template)
+        self.assertIn("overflow-wrap:break-word", template)
+
+    def test_theme_account_preference_load_does_not_overwrite_a_newer_user_toggle(self):
+        from pathlib import Path
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("let themeInteractionVersion=0;", shell)
+        self.assertIn("themeInteractionVersion+=1;", shell)
+        self.assertIn("const preferenceLoadVersion=themeInteractionVersion;", shell)
+        self.assertIn("if(themeInteractionVersion===preferenceLoadVersion)", shell)
+        self.assertIn("applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});", shell)
 
     def test_global_error_bus_does_not_toast_background_read_failures(self):
         from pathlib import Path
