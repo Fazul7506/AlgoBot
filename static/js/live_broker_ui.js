@@ -122,11 +122,8 @@
       global.classList.toggle('connected', ok); global.classList.toggle('error', !ok);
       global.innerHTML = `<i></i><span>${safe(a ? `${a.broker?.name || a.broker_name || 'Broker'} · ${a.broker_account_id || a.account_id} · ${t.toUpperCase()}` : 'No connected broker account')}</span>`;
     }
-    // Account selection is owned exclusively by core/account_context.js.
-    // This module is render-only; attaching another click handler here creates
-    // duplicate POST /select requests and races the canonical account state.
-    const switchButton = $('[data-account-switch]');
-    if (switchButton) switchButton.removeAttribute('data-live-broker-selection-handler');
+    // Account selection is owned exclusively by core/account_context.js
+    // and rendered by sidebar_account_switch.js.
     placeLogout();
   }
 
