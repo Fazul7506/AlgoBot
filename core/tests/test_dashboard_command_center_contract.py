@@ -83,7 +83,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261017-progressive1", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261109-authoritative-snapshot1", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -136,6 +136,13 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
             with self.subTest(script=script.name):
                 result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+    def test_dashboard_never_fabricates_equity_or_zeroes_for_missing_snapshot_values(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("if (value == null || value === '') return '—'", source)
+        self.assertIn("const equity = account.equity;", source)
+        self.assertNotIn("Number(account.balance) + Number(pnl)", source)
+        self.assertIn("setText(`[data-kpi="${key}"]`, '—')", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
