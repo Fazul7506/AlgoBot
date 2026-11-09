@@ -68,3 +68,47 @@ class HealthEndpointTests(TestCase):
         self.assertNotIn("secret", ready.content.decode("utf-8"))
         cache_set.assert_called_once()
         cache_get.assert_called_once_with("healthcheck")
+
+
+class SensitiveFileProbeMiddlewareTests(TestCase):
+    def test_sensitive_file_scans_are_rejected_before_application_routing(self):
+        paths = (
+            "/.env",
+            "/.env.production",
+            "/.aws/credentials",
+            "/.git/config",
+            "/.docker/.env",
+            "/.cursor/mcp.json",
+            "/.claude/settings.local.json",
+            "/admin/.env",
+            "/api/.env",
+            "/env.txt",
+            "/actuator/env",
+            "/api/actuator/env",
+            "/appsettings.Production.json",
+            "/config/config.js",
+            "/credentials.json",
+            "/secrets.json",
+            "/.gitlab-ci.yml",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.content, b"Not found")
+                self.assertEqual(response["Cache-Control"], "no-store")
+                self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+
+    def test_encoded_secret_probe_paths_are_rejected(self):
+        for path in ("/.%65nv", "/%2eenv.production", "/%252eenv.backup"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_probe_guard_does_not_intercept_application_or_health_routes(self):
+        self.assertEqual(self.client.get("/health/").status_code, 200)
+        self.assertEqual(self.client.get("/login/").status_code, 200)
+
+    def test_probe_guard_rejects_non_get_methods_too(self):
+        response = self.client.post("/.env", data={"probe": "ignored"})
+        self.assertEqual(response.status_code, 404)

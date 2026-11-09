@@ -44,7 +44,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.middleware.security.SecurityMiddleware", "core.middleware.sensitive_file_probe.SensitiveFileProbeMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware", "django.middleware.common.CommonMiddleware", "core.middleware.cloudflare_challenge.CloudflareChallengeQueryMiddleware",
     "core.middleware.wordpress_probe.WordPressProbeMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "core.middleware.csrf.APIAwareCsrfViewMiddleware",
