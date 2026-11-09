@@ -5,6 +5,8 @@ scanners routinely probe common CMS paths, dotfiles, credentials, deployment
 manifests, and debug endpoints. Reject those signatures before session,
 authentication, admin routing, or application business logic.
 """
+from urllib.parse import unquote
+
 from django.http import HttpResponseNotFound
 
 
@@ -25,8 +27,8 @@ class WordPressProbeMiddleware:
         "appsettings.production.json", "appsettings.development.json",
         "database.sql", "credentials", "credentials.ini", "credentials.json",
         "secrets.json", "auth.json", "config.env", "config.yaml", "config.yml",
-        "config.php", "config.json", "runtime-config.js", "env", "env.txt",
-        "env.js",
+        "config.php", "config.json", "config.js", "config.production.json",
+        "runtime-config.js", "env", "env.txt", "env.js", "env-config.js",
     }
     _SENSITIVE_PREFIXES = (
         "/.git/", "/.aws/", "/.docker/", "/.cursor/", "/.claude/",
@@ -39,7 +41,12 @@ class WordPressProbeMiddleware:
 
     @classmethod
     def is_sensitive_path(cls, path):
-        normalized = (path or "/").split("?", 1)[0].lower()
+        normalized = (path or "/").split("?", 1)[0].replace("\\", "/").lower()
+        for _ in range(3):
+            decoded = unquote(normalized)
+            if decoded == normalized:
+                break
+            normalized = decoded
         if normalized.startswith(cls._SENSITIVE_PREFIXES):
             return True
         segments = [segment for segment in normalized.split("/") if segment]
