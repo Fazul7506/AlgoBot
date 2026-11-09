@@ -106,7 +106,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("themeInteractionVersion+=1;", shell)
         self.assertIn("const preferenceLoadVersion=themeInteractionVersion;", shell)
         self.assertIn("if(themeInteractionVersion===preferenceLoadVersion)", shell)
+        self.assertIn("applyPreferences(prefs);", shell)
         self.assertIn("applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});", shell)
+        self.assertIn("validThemes.has(prefs.theme)?prefs.theme", shell)
 
     def test_global_error_bus_does_not_toast_background_read_failures(self):
         from pathlib import Path
