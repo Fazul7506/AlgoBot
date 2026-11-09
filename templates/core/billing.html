@@ -418,26 +418,32 @@
   async function load(){
     showError('');
     try{
-      // Load independent billing resources concurrently, but do not let a slow
-      // subscription/entitlements read keep the plan catalogue stuck on "Loading".
-      const [statusResult,entitlementsResult,plansResult]=await Promise.allSettled([
-        api('/billing/status/'),api('/billing/entitlements/'),api('/billing/plans/')
-      ]);
+      // The plan catalogue has its own completion path. It renders immediately
+      // when /billing/plans/ responds, without waiting for status or entitlements.
+      let statusSnapshot=null,entitlementsSnapshot=null,plansSnapshot=null;
+      const renderAvailablePlans=()=>{
+        const catalog=plansSnapshot?.plans||statusSnapshot?.plans||[];
+        if(!catalog.length){
+          if(plansSnapshot!==null||statusSnapshot!==null){
+            $('[data-plan-grid]').innerHTML='<div class="panel" role="status">The live plan catalogue is temporarily unavailable. Use Refresh to retry.</div>';
+          }
+          return;
+        }
+        const activePlan=String(entitlementsSnapshot?.current?.plan||statusSnapshot?.subscription?.plan||'FREE').toUpperCase();
+        renderPlans(catalog,activePlan,String(plansSnapshot?.provider||'intasend').toLowerCase(),plansSnapshot?.providers||{});
+      };
+      const statusPromise=api('/billing/status/').then(data=>{statusSnapshot=data;renderAvailablePlans();return data;});
+      const entitlementsPromise=api('/billing/entitlements/').then(data=>{entitlementsSnapshot=data;renderAvailablePlans();return data;});
+      api('/billing/plans/').then(data=>{plansSnapshot=data;renderAvailablePlans();}).catch(()=>{renderAvailablePlans();});
+      const [statusResult,entitlementsResult]=await Promise.allSettled([statusPromise,entitlementsPromise]);
       const status=statusResult.status==='fulfilled'?statusResult.value:null;
       const ent=entitlementsResult.status==='fulfilled'?entitlementsResult.value:null;
-      const plansData=plansResult.status==='fulfilled'?plansResult.value:null;
-      const plans=plansData?.plans||status?.plans||[];
-      const catalogPlan=String(ent?.current?.plan||status?.subscription?.plan||'FREE').toUpperCase();
-      if(plans.length){
-        renderPlans(plans,catalogPlan,String(plansData?.provider||'intasend').toLowerCase(),plansData?.providers||{});
-      }else{
-        $('[data-plan-grid]').innerHTML='<div class="panel" role="status">The live plan catalogue is temporarily unavailable. Use Refresh to retry.</div>';
-      }
       if(!status||!ent){
         showError('Some billing information could not be loaded. The plan catalogue is shown when available; refresh to retry subscription and usage details.');
         return;
       }
       const current=ent.current||{},plan=String(current.plan||status.subscription?.plan||'FREE').toUpperCase();
+      const plans=plansSnapshot?.plans||statusSnapshot?.plans||[];
       const s=status.subscription||{},expiry=s.expires_at?new Date(s.expires_at).toLocaleString():'';
       const currentPlanData=plans.find(p=>String(p.plan||'').toUpperCase()===plan)||{};
       const currentPrice=money(currentPlanData.price_cents??0,currentPlanData.currency||'USD');
