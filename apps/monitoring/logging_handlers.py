@@ -48,6 +48,21 @@ class MissionControlDatabaseHandler(logging.Handler):
             return
         if record.name.startswith(_IGNORED_LOGGERS):
             return
+        # Do not persist scanner-generated 404s as Mission Control events.
+        # The early probe middleware normally short-circuits these requests;
+        # Django's own request logger can still emit a Not Found warning.
+        if record.name == "django.request":
+            try:
+                from core.middleware.wordpress_probe import WordPressProbeMiddleware
+                request = getattr(record, "request", None)
+                probe_path = getattr(request, "path", "") or ""
+                message = record.getMessage()
+                if not probe_path and "Not Found:" in message:
+                    probe_path = message.split("Not Found:", 1)[1].strip().split()[0]
+                if WordPressProbeMiddleware.is_sensitive_path(probe_path):
+                    return
+            except Exception:
+                pass
         try:
             from django.apps import apps
             if not apps.ready:

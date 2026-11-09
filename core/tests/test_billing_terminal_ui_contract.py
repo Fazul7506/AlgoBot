@@ -18,6 +18,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
+            "@media(max-width:680px)", "grid-template-columns:18px minmax(0,1fr) minmax(0,40%)",
             "Usage is measured from persisted platform activity/database records",
             "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
@@ -28,6 +29,16 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("billing-tabs a", template)
         self.assertNotIn("Visa •••• 4242", template)
         self.assertNotIn("$49.00", template)
+
+
+    def test_theme_preference_boots_and_loads_on_pages_without_a_theme_toggle(self):
+        from pathlib import Path
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("if(button?.dataset.themeBound==='true')return;", shell)
+        self.assertIn("if(button)button.addEventListener('click',async()=>", shell)
+        self.assertIn("Load account preferences on every authenticated page", shell)
+        self.assertIn("document.body.dataset.authenticated==='true'&&!document.documentElement.dataset.accountPreferencesLoaded", shell)
+        self.assertNotIn("if(!button||button.dataset.themeBound==='true')return;", shell)
 
     def test_billing_template_keeps_enterprise_visible_and_quota_source_transparent(self):
         from pathlib import Path
@@ -59,7 +70,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn('Checkout unavailable', template)
         self.assertNotIn("name==='FREE'?'Use Free':'Choose plan'", template)
 
-    def test_payment_provider_controls_are_svg_only_with_accessible_names(self):
+    def test_payment_provider_controls_show_provider_names_and_keep_accessible_labels(self):
         from pathlib import Path
         template = Path("templates/core/billing.html").read_text(encoding="utf-8")
         self.assertIn("icons/payments/pesapal.svg", template)
@@ -67,9 +78,35 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("paypal-mark-color.svg", template)
         self.assertIn('aria-label="Continue with Pesapal', template)
         self.assertIn('aria-label="Continue with IntaSend', template)
-        self.assertNotIn("<span>Continue with Pesapal</span>", template)
-        self.assertNotIn("<span>Continue with IntaSend</span>", template)
-        self.assertNotIn("<span>Continue with PayPal", template)
+        self.assertIn('class="billing-provider-label">Continue with Pesapal</span>', template)
+        self.assertIn('class="billing-provider-label">Continue with IntaSend</span>', template)
+        self.assertIn('class="billing-provider-label">Continue with PayPal</span>', template)
+        self.assertIn('class="billing-provider-label">PayPal unavailable</span>', template)
+        self.assertIn(".billing-provider-button .billing-provider-label{display:inline!important", template)
+        self.assertNotIn(".billing-provider-button span{display:none}", template)
+
+    def test_billing_uses_algobot_theme_tokens_and_single_column_mobile_plan_cards(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        for token in ("var(--accent", "var(--panel", "var(--panel2", "var(--text", "var(--muted", "var(--line"):
+            self.assertIn(token, template)
+        self.assertIn("@media(max-width:850px)", template)
+        self.assertIn("grid-template-columns:minmax(0,1fr)!important", template)
+        self.assertIn("word-break:normal", template)
+        self.assertIn("overflow-wrap:break-word", template)
+        self.assertIn(".billing-side-heading h2", template)
+        self.assertIn(".usage-card", template)
+        self.assertIn(".billing-status-completed", template)
+        self.assertIn(".billing-intasend-security .intasend-trust-badge img", template)
+
+    def test_theme_account_preference_load_does_not_overwrite_a_newer_user_toggle(self):
+        from pathlib import Path
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("let themeInteractionVersion=0;", shell)
+        self.assertIn("themeInteractionVersion+=1;", shell)
+        self.assertIn("const preferenceLoadVersion=themeInteractionVersion;", shell)
+        self.assertIn("if(themeInteractionVersion===preferenceLoadVersion)", shell)
+        self.assertIn("applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});", shell)
 
     def test_global_error_bus_does_not_toast_background_read_failures(self):
         from pathlib import Path
@@ -702,3 +739,42 @@ class WorkspaceTabsContractTests(SimpleTestCase):
             for panel_id in ids:
                 self.assertIn(f'href="#{panel_id}"', template)
                 self.assertIn(f'id="{panel_id}"', template)
+
+class GlobalThemeShellContractTests(SimpleTestCase):
+    def test_shared_theme_contract_is_loaded_after_all_global_and_page_shell_styles(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        base = (root / "templates/base.html").read_text(encoding="utf-8")
+        sidebar = (root / "static/css/sidebar_responsive_contract.css").read_text(encoding="utf-8")
+        topbar = (root / "static/css/topbar_security_controls.css").read_text(encoding="utf-8")
+        workspace = (root / "static/css/workspace_theme_contract.css").read_text(encoding="utf-8")
+        css = sidebar + topbar + workspace
+        self.assertNotIn("theme_shell_contract.css", base)
+        self.assertIn("sidebar_responsive_contract.css", base)
+        self.assertIn("topbar_security_controls.css", base)
+        self.assertIn("workspace_theme_contract.css", base)
+        self.assertIn(".mobile-menu-button", css)
+        self.assertIn(".sidebar-toggle", css)
+        self.assertIn(".app-sidebar", css)
+        self.assertIn(".sidebar-backdrop", css)
+        self.assertIn(".topbar-account-menu", css)
+        self.assertIn(".topbar-notification-menu", css)
+        self.assertIn(".topbar-profile-menu", css)
+        for token in ("var(--bg)", "var(--panel)", "var(--panel2)", "var(--text)", "var(--muted)", "var(--line)", "var(--accent)"):
+            self.assertIn(token, css)
+
+    def test_shared_navigation_menu_has_theme_aware_icon_and_open_states(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        css = "".join((root / path).read_text(encoding="utf-8") for path in (
+            "static/css/sidebar_responsive_contract.css",
+            "static/css/topbar_security_controls.css",
+            "static/css/workspace_theme_contract.css",
+        ))
+        self.assertIn(".mobile-menu-button .material-symbols-rounded", css)
+        self.assertIn('.app-sidebar nav a[aria-current="page"]', css)
+        self.assertIn(".topbar-profile-menu form button", css)
+        self.assertIn(".sidebar-backdrop", css)
+        self.assertIn("background:var(--panel2)!important", css)
+        self.assertIn("color:var(--text)!important", css)
+

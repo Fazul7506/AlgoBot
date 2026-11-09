@@ -130,3 +130,72 @@ body.sidebar-collapsed .app-shell { margin-left:var(--algobot-shell-collapsed); 
 @media (prefers-reduced-motion:reduce) {
   .app-sidebar,.app-shell,.mobile-menu-button { transition:none; }
 }
+
+
+/* Consolidated from PR #475 into the existing AlgoBot theme system. */
+/* Sidebar and both desktop/mobile menu controls. */
+.app-sidebar {
+  color:var(--text)!important;
+  background:var(--panel)!important;
+  background-image:none!important;
+  border-color:var(--line)!important;
+  box-shadow:0 18px 48px color-mix(in srgb,var(--bg) 22%,transparent);
+}
+.app-sidebar .sidebar-header,
+.app-sidebar nav,
+.app-sidebar .sidebar-user,
+.app-sidebar .algobot-sidebar-account { color:var(--text); }
+.app-sidebar nav h2 { color:var(--accent)!important; }
+.app-sidebar nav a,
+.app-sidebar .sidebar-new-trade {
+  color:var(--muted);
+  border-color:transparent;
+}
+.app-sidebar nav a .material-symbols-rounded,
+.app-sidebar .sidebar-new-trade .material-symbols-rounded { color:var(--muted); }
+.app-sidebar nav a:hover,
+.app-sidebar .sidebar-new-trade:hover {
+  color:var(--text)!important;
+  background:var(--algobot-theme-hover)!important;
+  border-color:var(--algobot-theme-border-accent)!important;
+}
+.app-sidebar nav a.active,
+.app-sidebar nav a[aria-current="page"],
+.app-sidebar .sidebar-new-trade.active,
+.app-sidebar .sidebar-new-trade[aria-current="page"] {
+  color:var(--text)!important;
+  background:var(--algobot-theme-active)!important;
+  border-color:var(--algobot-theme-border-accent)!important;
+  box-shadow:inset 3px 0 0 var(--accent)!important;
+}
+.app-sidebar nav a.active .material-symbols-rounded,
+.app-sidebar nav a[aria-current="page"] .material-symbols-rounded,
+.app-sidebar .sidebar-new-trade.active .material-symbols-rounded { color:var(--accent)!important; }
+
+.sidebar-toggle,
+.mobile-menu-button,
+.sidebar-user-actions button {
+  color:var(--text)!important;
+  background:var(--panel2)!important;
+  background-image:none!important;
+  border:1px solid var(--line)!important;
+  box-shadow:none!important;
+}
+.sidebar-toggle:hover,
+.mobile-menu-button:hover,
+.sidebar-user-actions button:hover {
+  color:var(--accent)!important;
+  background:var(--algobot-theme-hover)!important;
+  border-color:var(--accent)!important;
+}
+.mobile-menu-button .material-symbols-rounded,
+.sidebar-toggle .material-symbols-rounded {
+  color:inherit!important;
+}
+.sidebar-backdrop {
+  background:color-mix(in srgb,var(--bg) 68%,transparent)!important;
+  backdrop-filter:blur(4px);
+}
+.app-sidebar .connection-indicator { border-color:var(--line); color:var(--muted); }
+.app-sidebar .connection-indicator.connected { color:var(--green); }
+.app-sidebar .connection-indicator.error { color:var(--red); }

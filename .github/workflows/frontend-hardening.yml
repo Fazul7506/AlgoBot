@@ -44,6 +44,15 @@ jobs:
           python -m pip install --disable-pip-version-check -r requirements.txt
           python manage.py check
 
+      - name: Run health and sensitive-probe regression tests
+        run: python manage.py test apps.health --verbosity 2
+
+      - name: Run consolidated sensitive-path middleware tests
+        run: python manage.py test core.tests.test_sensitive_path_probe --verbosity 2
+
+      - name: Run billing and cross-page theme regression contracts
+        run: python manage.py test core.tests.test_billing_terminal_ui_contract --verbosity 2
+
       - name: Validate static asset references
         run: |
           python manage.py collectstatic --noinput --clear
