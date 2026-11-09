@@ -72,7 +72,7 @@ class AccountSwitchingTests(TestCase):
         candidate = self.make_account('DEMO-2', connected=False)
         def establish_connection(coro, timeout):
             coro.close()
-            self.assertEqual(timeout, 12.0)
+            self.assertEqual(timeout, 30.0)
             return BrokerConnection.objects.create(
                 broker=self.broker, broker_account=candidate, status='connected',
                 last_ping=timezone.now(), connected_at=timezone.now(),
