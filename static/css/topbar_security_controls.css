@@ -467,3 +467,97 @@
  .topbar-account-control{max-width:43vw}
  .topbar-account-brand,.topbar-account-identity-wrap{flex-basis:26px;min-width:26px}
 }
+
+
+/* 2026-11-09: final topbar sizing contract. The mobile menu button is independently
+   positioned at the left edge, so reserve a fixed brand column and let the broker
+   selector consume only the remaining width. No control may overlap or shrink away. */
+@media (max-width: 700px) {
+  .topbar {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+  .topbar-title {
+    display: flex;
+    flex: 0 0 112px !important;
+    width: 112px !important;
+    min-width: 0 !important;
+    max-width: 112px !important;
+    overflow: hidden;
+    align-items: center;
+  }
+  .topbar-brand { flex: 0 0 auto; min-width: 0; gap: 6px; }
+  .topbar-brand-favicon { width: 24px; height: 24px; flex-basis: 24px; }
+  .topbar-brand-name { font-size: 15px; }
+  .topbar-actions {
+    display: flex !important;
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .topbar-account-control {
+    display: block;
+    flex: 1 1 150px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 230px !important;
+  }
+  .topbar-account-trigger {
+    display: flex;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 42px;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    gap: 7px;
+  }
+  .topbar-account-brand { flex: 0 0 30px; width: 30px; min-width: 30px; }
+  .topbar-account-label { display: flex; flex: 1 1 0; min-width: 0; overflow: hidden; }
+  .topbar-account-label strong,
+  .topbar-account-label small { display: block; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-account-label strong { font-size: 10px; }
+  .topbar-account-label small { display: block; font-size: 9px; }
+  .topbar-chevron { flex: 0 0 auto; font-size: 17px; }
+  .topbar-notifications { display: flex; flex: 0 0 38px !important; width: 38px; min-width: 38px; align-items: center; justify-content: center; }
+  .topbar-notifications .topbar-icon-button { flex: 0 0 36px; width: 36px; min-width: 36px; height: 36px; }
+  .topbar-profile { display: flex; flex: 0 0 34px !important; width: 34px; min-width: 34px; align-items: center; justify-content: center; }
+  .topbar-profile-trigger { display: flex; min-width: 32px; min-height: 36px; padding: 2px; justify-content: center; }
+  .topbar-profile-avatar { flex: 0 0 30px; width: 30px; height: 30px; }
+  .topbar-profile-name,
+  .topbar-profile-trigger > .material-symbols-rounded { display: none !important; }
+  .topbar-actions > kbd,
+  .topbar-actions > [data-theme-toggle] { display: none !important; }
+}
+@media (max-width: 420px) {
+  .topbar { gap: 5px !important; }
+  .topbar-title { flex-basis: 96px !important; width: 96px !important; max-width: 96px !important; }
+  .topbar-brand { gap: 5px; }
+  .topbar-brand-favicon { width: 22px; height: 22px; flex-basis: 22px; }
+  .topbar-brand-name { font-size: 13px; }
+  .topbar-actions { gap: 5px !important; }
+  .topbar-account-control { flex-basis: 125px !important; max-width: 190px !important; }
+  .topbar-account-trigger { padding-inline: 5px; gap: 5px; }
+  .topbar-account-brand { flex-basis: 26px; width: 26px; min-width: 26px; }
+  .topbar-account-label strong { font-size: 9px; }
+  .topbar-account-label small { font-size: 8px; }
+  .topbar-notifications { flex-basis: 34px !important; width: 34px; min-width: 34px; }
+  .topbar-notifications .topbar-icon-button { flex-basis: 32px; width: 32px; min-width: 32px; height: 32px; }
+  .topbar-profile { flex-basis: 30px !important; width: 30px; min-width: 30px; }
+  .topbar-profile-avatar { flex-basis: 28px; width: 28px; height: 28px; }
+}
