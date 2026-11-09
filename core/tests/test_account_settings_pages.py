@@ -362,6 +362,18 @@ class AccountSettingsPagesTests(TestCase):
         self.assertEqual(profile.account_preferences["theme"], "system")
         self.assertEqual(profile.account_preferences["density"], "comfortable")
 
+    def test_theme_only_preference_save_does_not_create_trading_settings(self):
+        from core.models import BotSettings
+        self.assertFalse(BotSettings.objects.filter(user=self.user).exists())
+        response = self.client.patch(
+            reverse("account_settings_api"),
+            data=json.dumps({"preferences": {"theme": "light"}}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(UserProfile.objects.get(user=self.user).account_preferences["theme"], "light")
+        self.assertFalse(BotSettings.objects.filter(user=self.user).exists())
+
     def test_settings_api_rejects_non_object_payload(self):
         response = self.client.patch(
             reverse("account_settings_api"),
