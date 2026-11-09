@@ -57,9 +57,11 @@ const initializePreferences = () => {
     const profile = data.profile || {};
     const prefs = profile.account_preferences || {};
     const storedTheme = (() => { try { return localStorage.getItem('algobot-theme-preference') || localStorage.getItem('algobot-theme'); } catch (_) { return ''; } })();
-    const effectiveTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme
+    // Preserve the browser's explicit selection while account preferences load.
+    // Use the server value only when this browser has no saved preference.
+    const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme
       : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference
-      : (['light','dark','system'].includes(storedTheme) ? storedTheme : 'dark'));
+      : (['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark'));
     setRadio('theme', effectiveTheme);
     setRadio('density', prefs.density || 'default');
     setRadio('accent', prefs.accent || 'cyan');
