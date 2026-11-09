@@ -115,6 +115,19 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("isSwitching:()=>switching", source)
         self.assertIn("if(switching)return;if(selected&&accounts.some", source)
 
+    def test_switch_reconciliation_is_retried_after_an_inflight_sync_finishes(self):
+        bridge = (ROOT / "static" / "js" / "core" / "broker_state_bridge.js").read_text(encoding="utf-8")
+        self.assertIn("syncGeneration=0,syncAgain=false", bridge)
+        self.assertIn("if(syncPromise){syncAgain=true;return syncPromise;}", bridge)
+        self.assertIn("if(syncAgain){syncAgain=false;Promise.resolve().then(syncFromBackend);}", bridge)
+        self.assertIn("if(generation!==syncGeneration)return window.AlgoBotAccountContext?.getSelected?.()||null;", bridge)
+
+    def test_browser_and_server_account_switch_deadlines_are_aligned(self):
+        context = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        views = (ROOT / "apps" / "brokers" / "views.py").read_text(encoding="utf-8")
+        self.assertIn("},35000);", context)
+        self.assertIn("BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=30.0", views)
+
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
         self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;", source)
