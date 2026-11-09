@@ -307,6 +307,58 @@
   .billing-dashboard .billing-plan-features li{grid-template-columns:18px minmax(0,1fr) minmax(76px,34%);}
 }
 
+
+/* Complete theme coverage for secondary Billing surfaces and semantic states. */
+.billing-dashboard .billing-hero-mark{background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 68%,var(--panel)));box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 22%,transparent);}
+.billing-dashboard .billing-hero-mark .material-symbols-rounded{color:var(--accent-foreground,#fff);}
+.billing-dashboard .billing-account-status strong,
+.billing-dashboard .billing-status-icon,
+.billing-dashboard .billing-plan-card .billing-plan-detail .material-symbols-rounded,
+.billing-dashboard .billing-security-list .material-symbols-rounded{color:var(--green,var(--ds-success,#159b75));}
+.billing-dashboard .billing-account-status>.material-symbols-rounded:last-child{color:var(--muted);}
+.billing-dashboard .billing-summary-card h2,
+.billing-dashboard .billing-summary-card>small,
+.billing-dashboard .billing-summary-card>p,
+.billing-dashboard .billing-summary-value small,
+.billing-dashboard .billing-section-heading p:not(.eyebrow),
+.billing-dashboard .billing-plan-card .billing-plan-price small,
+.billing-dashboard .billing-plan-card>p:not(.eyebrow),
+.billing-dashboard .billing-plan-card .billing-plan-detail,
+.billing-dashboard .billing-meter-note,
+.billing-dashboard .usage-card>small,
+.billing-dashboard .billing-payment-head,
+.billing-dashboard .billing-row>span:last-child,
+.billing-dashboard .billing-side-heading p,
+.billing-dashboard .billing-side-card>p,
+.billing-dashboard .billing-security-list li,
+.billing-dashboard .billing-intasend-security .provider-label,
+.billing-dashboard .billing-settings-note{color:var(--muted);}
+.billing-dashboard .billing-side-heading h2,
+.billing-dashboard .billing-side-card h2,
+.billing-dashboard .usage-card>strong,
+.billing-dashboard .billing-row,
+.billing-dashboard .billing-plan-features strong{color:var(--text);}
+.billing-dashboard .usage-card,
+.billing-dashboard .billing-intasend-security,
+.billing-dashboard .billing-payment-table,
+.billing-dashboard .billing-alert{
+  background:var(--panel);
+  background-image:none;
+  border-color:var(--line);
+  color:var(--text);
+}
+.billing-dashboard .usage-card .usage-source{border-color:var(--line);color:var(--muted);}
+.billing-dashboard .billing-plan-features .plan-feature-state{color:var(--green,var(--ds-success,#159b75));}
+.billing-dashboard .billing-plan-features .is-excluded .plan-feature-state,
+.billing-dashboard .billing-plan-features .is-excluded strong{color:var(--red,var(--ds-danger,#c23a55));}
+.billing-dashboard .billing-status-completed{background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);}
+.billing-dashboard .billing-status-pending{background:color-mix(in srgb,var(--gold) 13%,var(--panel));color:var(--gold);}
+.billing-dashboard .billing-status-failed{background:color-mix(in srgb,var(--red) 13%,var(--panel));color:var(--red);}
+.billing-dashboard .billing-status-icon{background:color-mix(in srgb,var(--green) 13%,var(--panel2));}
+.billing-dashboard .billing-summary-value{color:var(--accent);}
+.billing-dashboard .billing-intasend-security .intasend-trust-badge{max-width:100%;}
+.billing-dashboard .billing-intasend-security .intasend-trust-badge img{display:block;max-width:100%;height:auto;}
+
 </style>{% endblock %}
 {% block extra_js %}<script>
 (()=> {
