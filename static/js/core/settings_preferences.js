@@ -60,8 +60,8 @@ const initializePreferences = () => {
     // Preserve the browser's explicit selection while account preferences load.
     // Use the server value only when this browser has no saved preference.
     const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme
-      : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference
-      : (['light','dark','system'].includes(prefs.theme) ? prefs.theme : 'dark'));
+      : (['light','dark','system'].includes(prefs.theme) ? prefs.theme
+      : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference : 'dark'));
     setRadio('theme', effectiveTheme);
     setRadio('density', prefs.density || 'default');
     setRadio('accent', prefs.accent || 'cyan');
