@@ -176,7 +176,10 @@ class BrokerConnectionService:
         if account_type is not None: credentials['account_type'] = 'demo' if account_type else 'real'
         credentials['connection_health'] = 'verified'
         if avatar_url: credentials['avatar_url'] = str(avatar_url)
-        account.credentials = credentials; account.status = 'active'; account.last_synced_at = timezone.now()
+        # Connection verification is not a complete financial snapshot.
+        # Clear any previous freshness marker until sync_account obtains the
+        # provider's authoritative balance, equity and margin fields.
+        account.credentials = credentials; account.status = 'active'; account.last_synced_at = None
         await sync_to_async(account.save)(update_fields=['balance', 'currency', 'credentials', 'status', 'last_synced_at'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'connected', 'latency': latency, 'last_ping': timezone.now(), 'connected_at': timezone.now()})
         await sync_to_async(_queue_automation_event, thread_sensitive=False)(
