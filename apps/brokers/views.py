@@ -19,6 +19,7 @@ logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
 BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
+BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=30.0
 
 def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
