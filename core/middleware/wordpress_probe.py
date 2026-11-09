@@ -75,7 +75,7 @@ class WordPressProbeMiddleware:
         if not self.is_probe(request):
             return self.get_response(request)
 
-        response = HttpResponseNotFound()
+        response = HttpResponseNotFound("Not found")
         response["Cache-Control"] = "no-store"
         response["X-Content-Type-Options"] = "nosniff"
         return response
