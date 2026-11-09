@@ -194,7 +194,7 @@
       let stored='';
       try{stored=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||'';}catch(_){}
       const current=document.documentElement.dataset.themePreference;
-      const preference=validThemes.has(stored)?stored:(validThemes.has(current)?current:(validThemes.has(prefs.theme)?prefs.theme:'dark'));
+      const preference=validThemes.has(stored)?stored:(validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:'dark'));
       persistLocal(preference);
       apply(preference);
       if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;
@@ -238,13 +238,18 @@
       client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
           const prefs=data?.profile?.account_preferences||{};
           let effectivePrefs=prefs;
+          if(themeInteractionVersion===preferenceLoadVersion){
+            // With no explicit browser choice, the saved account preference is
+            // authoritative (including light and system), not the dark first-paint default.
+            applyPreferences(prefs);
+          }
           if(themeInteractionVersion!==preferenceLoadVersion){
+            // A user toggle made while the account request was in flight wins.
             let latest=document.documentElement.dataset.themePreference;
             try{latest=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||latest;}catch(_){}
             effectivePrefs={...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme};
+            applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});
           }
-          // Keep an explicit browser selection stable across full-page navigation.
-          applyPreferences(effectivePrefs);
           effectivePrefs={...effectivePrefs,theme:document.documentElement.dataset.themePreference};
           document.documentElement.dataset.accountPreferencesLoaded='true';
           const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};
