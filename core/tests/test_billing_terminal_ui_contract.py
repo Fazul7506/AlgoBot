@@ -94,6 +94,10 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("grid-template-columns:minmax(0,1fr)!important", template)
         self.assertIn("word-break:normal", template)
         self.assertIn("overflow-wrap:break-word", template)
+        self.assertIn(".billing-side-heading h2", template)
+        self.assertIn(".usage-card", template)
+        self.assertIn(".billing-status-completed", template)
+        self.assertIn(".billing-intasend-security .intasend-trust-badge img", template)
 
     def test_theme_account_preference_load_does_not_overwrite_a_newer_user_toggle(self):
         from pathlib import Path
