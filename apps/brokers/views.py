@@ -88,18 +88,46 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:return response.Response({'detail':'Broker account switching is disabled by platform configuration.'},status=status.HTTP_403_FORBIDDEN)
         account=self.get_object()
         if str(account.status).lower()!='active':return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
-        if not account.is_connection_eligible:return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
         actual = account.account_type
         requested=str(request.data.get('account_type') or '').lower().strip()
         if requested not in {'demo','real'}:requested=''
-        if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
+        if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Reconnect or synchronize this account before switching.'},status=status.HTTP_409_CONFLICT)
         if requested and requested!=actual:return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
         # A browser JWT can authenticate a different principal than the Django session cookie.
         # Never write one user's account selection into another user's session.
         session_user_id = request.session.get('_auth_user_id')
         if session_user_id and str(session_user_id) != str(request.user.pk):
             return response.Response({'detail':'The browser session and API credentials belong to different users.'},status=status.HTTP_403_FORBIDDEN)
-        previous_id=request.session.get('active_broker_account_id');select_account(request,account);serialized=BrokerAccountSerializer(account,context={'request':request}).data
+        # Account lists may include OAuth-authorized DEMO/REAL accounts before a
+        # per-account BrokerConnection row exists. Establish and verify that
+        # account-scoped connection here; never select an unverified account.
+        if account.credential_status != 'ready':
+            return response.Response({'detail':'The selected broker account credentials are unavailable or expired. Reconnect the broker account.'},status=status.HTTP_401_UNAUTHORIZED)
+        if not account.is_connected:
+            try:
+                _run_bounded(BrokerConnectionService().connect(account.broker,account),timeout=BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS)
+                account.refresh_from_db()
+            except asyncio.TimeoutError:
+                return response.Response({'detail':'The broker did not verify the selected account before the switching deadline. Your previous account remains selected. Retry after checking the broker connection.','broker_status':'switch_connection_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+            except BrokerAuthenticationError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
+            except BrokerConnectionError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except BrokerRoutingError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
+            except Exception as exc:
+                logger.exception('broker_account_switch_connection_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+                return response.Response({'detail':'The selected broker account could not be verified. Your previous account remains selected.','broker_status':'verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
+        if not account.is_connection_eligible:
+            return response.Response({'detail':'The selected broker account connection is not ready. Your previous account remains selected.'},status=status.HTTP_409_CONFLICT)
+        # Do not mutate the session until the provider has verified this exact
+        # account, its environment and its connection state.
+        previous_id=request.session.get('active_broker_account_id')
+        try:
+            select_account(request,account)
+        except ValueError as exc:
+            return response.Response({'detail':str(exc)},status=status.HTTP_409_CONFLICT)
+        serialized=BrokerAccountSerializer(account,context={'request':request}).data
         return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':previous_id,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])
     def active(self,request):
