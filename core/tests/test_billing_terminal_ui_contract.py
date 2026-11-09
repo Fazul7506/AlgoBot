@@ -739,3 +739,32 @@ class WorkspaceTabsContractTests(SimpleTestCase):
             for panel_id in ids:
                 self.assertIn(f'href="#{panel_id}"', template)
                 self.assertIn(f'id="{panel_id}"', template)
+
+class GlobalThemeShellContractTests(SimpleTestCase):
+    def test_shared_theme_contract_is_loaded_after_all_global_and_page_shell_styles(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        base = (root / "templates/base.html").read_text(encoding="utf-8")
+        css = (root / "static/css/theme_shell_contract.css").read_text(encoding="utf-8")
+        self.assertIn("theme_shell_contract.css", base)
+        self.assertGreater(base.index("theme_shell_contract.css"), base.index("workspace_theme_contract.css"))
+        self.assertIn(".mobile-menu-button", css)
+        self.assertIn(".sidebar-toggle", css)
+        self.assertIn(".app-sidebar", css)
+        self.assertIn(".sidebar-backdrop", css)
+        self.assertIn(".topbar-account-menu", css)
+        self.assertIn(".topbar-notification-menu", css)
+        self.assertIn(".topbar-profile-menu", css)
+        for token in ("var(--bg)", "var(--panel)", "var(--panel2)", "var(--text)", "var(--muted)", "var(--line)", "var(--accent)"):
+            self.assertIn(token, css)
+
+    def test_shared_navigation_menu_has_theme_aware_icon_and_open_states(self):
+        from pathlib import Path
+        css = (Path(__file__).resolve().parents[2] / "static/css/theme_shell_contract.css").read_text(encoding="utf-8")
+        self.assertIn(".mobile-menu-button .material-symbols-rounded", css)
+        self.assertIn('.app-sidebar nav a[aria-current="page"]', css)
+        self.assertIn(".topbar-profile-menu form button", css)
+        self.assertIn(".sidebar-backdrop", css)
+        self.assertIn("background:var(--panel2)!important", css)
+        self.assertIn("color:var(--text)!important", css)
+
