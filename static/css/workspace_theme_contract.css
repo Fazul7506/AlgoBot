@@ -341,3 +341,75 @@ html[data-theme="light"] #app-content .profile-onboarding :where(.profile-onboar
 html[data-theme="light"] .public-footer,
 html[data-theme="light"] .legal-page { color: var(--text); }
 html[data-theme="light"] .public-footer { background: #ffffff; border-color: var(--line); }
+
+
+/* Additional legacy page palettes discovered by the 67-template audit. */
+html[data-theme="light"] #app-content :where(
+  .portfolio-app,.portfolio-hero,.portfolio-panel,.portfolio-kpi,
+  .portfolio-metric,.portfolio-table-wrap,.portfolio-chart-wrap,
+  .bt-panel,.bt-kpi,.bt-period,.bt-chart-wrap,
+  .notice-panel,.notice-item,.notice-system,.notice-feed-head,
+  .profile-edit-modal__panel,.avatar-editor,.profile-summary-card,
+  .profile-personal-card,.profile-quick-actions-card,
+  .account-hero,.account-nav,.account-card,.account-content
+) {
+  color: #172438 !important;
+  border-color: #d5deea !important;
+}
+html[data-theme="light"] #app-content :where(
+  .portfolio-app,.portfolio-panel,.portfolio-kpi,.portfolio-metric,
+  .portfolio-table-wrap,.portfolio-chart-wrap,.bt-panel,.bt-kpi,
+  .bt-period,.bt-chart-wrap,.notice-panel,.notice-item,.notice-system,
+  .notice-feed-head,.profile-edit-modal__panel,.avatar-editor,
+  .profile-summary-card,.profile-personal-card,.profile-quick-actions-card,
+  .account-hero,.account-nav,.account-card,.account-content
+) {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  box-shadow: 0 8px 24px rgba(24,44,72,.06) !important;
+}
+html[data-theme="light"] #app-content .portfolio-app {
+  --p-bg: #f3f6fb !important;
+  --p-panel: #ffffff !important;
+  --p-line: #d5deea !important;
+  --p-muted: #607087 !important;
+  color: #172438 !important;
+}
+html[data-theme="light"] #app-content .portfolio-app :where(
+  .portfolio-hero,.portfolio-panel,.portfolio-kpi,.portfolio-metric,
+  .portfolio-table-wrap,.portfolio-chart-wrap
+) {
+  background: #ffffff !important;
+  color: #172438 !important;
+  border-color: #d5deea !important;
+}
+html[data-theme="light"] #app-content .portfolio-app :where(
+  .portfolio-muted,.portfolio-contract-label,.portfolio-kpi small,
+  .portfolio-panel small,.portfolio-chart-note
+) { color: #607087 !important; }
+html[data-theme="light"] #app-content .profile-edit-modal {
+  background: rgba(23,36,56,.32) !important;
+}
+html[data-theme="light"] #app-content .profile-edit-modal__panel,
+html[data-theme="light"] #app-content .avatar-editor {
+  background: #ffffff !important;
+  color: #172438 !important;
+  border-color: #d5deea !important;
+}
+html[data-theme="light"] #app-content .bt-dashboard :where(.bt-panel,.bt-kpi,.bt-period,.bt-chart-wrap) {
+  background: #ffffff !important;
+  color: #172438 !important;
+  border-color: #d5deea !important;
+}
+html[data-theme="light"] #app-content .notifications-page :where(
+  .notice-hero,.notice-panel,.notice-system,.notice-item,.notice-feed-head,
+  .notice-filterbar,.notice-control
+) {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #172438 !important;
+  border-color: #d5deea !important;
+}
+html[data-theme="light"] #app-content .notifications-page :where(
+  .notice-item-copy,.notice-item-time,.notice-tabs,.notice-tab
+) { color: #33445d !important; }
