@@ -74,7 +74,7 @@
     try{
       const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
       const payload=['demo','real'].includes(requestedType)?{account_type:requestedType}:{};
-      const confirmedResponse=await request('/api/brokers/accounts/'+encodeURIComponent(target.id)+'/select/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},8000);
+      const confirmedResponse=await request('/api/brokers/accounts/'+encodeURIComponent(target.id)+'/select/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},15000);
       const confirmed=confirmedResponse?.active_account||confirmedResponse?.account;
       if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
       accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_active:false});
