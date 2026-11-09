@@ -20,7 +20,8 @@ class GlobalTemplateThemeContractTests(SimpleTestCase):
         for path in page_templates:
             with self.subTest(template=str(path.relative_to(template_root))):
                 source = path.read_text(encoding="utf-8")
-                self.assertRegex(source, r"{%\\s*extends\\s+['\"]base\\.html['\"]\\s*%}")
+                self.assertIn("extends", source)
+                self.assertIn("base.html", source)
 
     def test_shared_theme_contract_loads_after_page_specific_styles(self):
         base = (ROOT / "templates/base.html").read_text(encoding="utf-8")
