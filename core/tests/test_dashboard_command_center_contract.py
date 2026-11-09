@@ -128,6 +128,15 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("},35000);", context)
         self.assertIn("BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=30.0", views)
 
+    def test_sidebar_account_switch_has_one_canonical_renderer_and_handler(self):
+        live = (ROOT / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
+        sidebar = (ROOT / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
+        self.assertIn("sidebar_account_switch.js", (ROOT / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("Sidebar account presentation and switching are owned by", live)
+        self.assertNotIn("data-account-switch", live)
+        self.assertIn("data-sidebar-account-switch", sidebar)
+        self.assertIn("context().selectAccount(id)", sidebar)
+
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
         self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;", source)
