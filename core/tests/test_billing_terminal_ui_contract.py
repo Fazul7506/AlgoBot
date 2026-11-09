@@ -18,6 +18,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "billing-security-list", "billing-tabs",
             "@media(max-width:1200px)", "@media(max-width:850px)",
             "@media(max-width:580px)", "@media(max-width:360px)",
+            "@media(max-width:680px)", "grid-template-columns:18px minmax(0,1fr) minmax(0,40%)",
             "Usage is measured from persisted platform activity/database records",
             "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
         ):
@@ -28,6 +29,16 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("billing-tabs a", template)
         self.assertNotIn("Visa •••• 4242", template)
         self.assertNotIn("$49.00", template)
+
+
+    def test_theme_preference_boots_and_loads_on_pages_without_a_theme_toggle(self):
+        from pathlib import Path
+        shell = Path("static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("if(button?.dataset.themeBound==='true')return;", shell)
+        self.assertIn("if(button)button.addEventListener('click',async()=>", shell)
+        self.assertIn("Load account preferences on every authenticated page", shell)
+        self.assertIn("document.body.dataset.authenticated==='true'&&!document.documentElement.dataset.accountPreferencesLoaded", shell)
+        self.assertNotIn("if(!button||button.dataset.themeBound==='true')return;", shell)
 
     def test_billing_template_keeps_enterprise_visible_and_quota_source_transparent(self):
         from pathlib import Path
