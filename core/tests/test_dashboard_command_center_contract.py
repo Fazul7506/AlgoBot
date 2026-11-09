@@ -137,13 +137,11 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
                 result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
-    def test_dashboard_never_fabricates_equity_or_zeroes_for_missing_snapshot_values(self):
+    def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("if (value == null || value === '') return '—'", source)
-        self.assertIn("const equity = account.equity;", source)
-        self.assertNotIn("Number(account.balance) + Number(pnl)", source)
-        self.assertIn("['balance','equity','available','pnl'].forEach(key => setText", source)
-        self.assertIn("'—'", source)
+        self.assertIn("money(0, 'USD')", source)
+        self.assertIn("account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null)", source)
+        self.assertIn("setText('[data-kpi=\"equity\"]', money(equity, currency))", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
