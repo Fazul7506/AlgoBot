@@ -194,7 +194,7 @@
       let stored='';
       try{stored=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||'';}catch(_){}
       const current=document.documentElement.dataset.themePreference;
-      const preference=validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(stored)?stored:(validThemes.has(current)?current:'dark'));
+      const preference=validThemes.has(stored)?stored:(validThemes.has(current)?current:(validThemes.has(prefs.theme)?prefs.theme:'dark'));
       persistLocal(preference);
       apply(preference);
       if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;
@@ -237,17 +237,20 @@
         const preferenceLoadVersion=themeInteractionVersion;
       client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
           const prefs=data?.profile?.account_preferences||{};
-          if(themeInteractionVersion===preferenceLoadVersion){
-            applyPreferences(prefs);
-          }else{
+          let effectivePrefs=prefs;
+          if(themeInteractionVersion!==preferenceLoadVersion){
             let latest=document.documentElement.dataset.themePreference;
             try{latest=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||latest;}catch(_){}
-            applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});
+            effectivePrefs={...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme};
           }
+          // Keep an explicit browser selection stable across full-page navigation.
+          applyPreferences(effectivePrefs);
+          effectivePrefs={...effectivePrefs,theme:document.documentElement.dataset.themePreference};
           document.documentElement.dataset.accountPreferencesLoaded='true';
           const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};
           if(window.location.pathname==='/dashboard/'&&targets[prefs.default_page]&&targets[prefs.default_page]!=='/dashboard/'){window.location.replace(targets[prefs.default_page]);return;}
-          document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:prefs}));
+          // Broadcast the effective theme, never the stale server value.
+          document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:effectivePrefs}));
         }).catch(error=>{
           delete document.documentElement.dataset.accountPreferencesLoaded;
           window.dispatchEvent(new CustomEvent('algobot:preferences-load-failed',{detail:{message:String(error?.message||'Preferences could not be loaded.')}}));
