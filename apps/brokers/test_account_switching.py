@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, patch
 from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
@@ -21,7 +21,7 @@ User = get_user_model()
 @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
 @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
 @patch("core.permissions.has_verified_account_email", new=lambda user: True)
-class AccountSwitchingTests(TestCase):
+class AccountSwitchingTests(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='account-switch-user', password='test-password')
         self.client = APIClient()
