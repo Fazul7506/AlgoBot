@@ -225,6 +225,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("{% block extra_js %}", settings_template)
         self.assertLess(settings_template.index("{% block extra_js %}"), settings_template.index("settings_preferences.js"))
         self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertIn("persisted:true", preferences_script)
         self.assertNotIn("fetch('/api/settings/'", preferences_script)
         self.assertIn("path==='/api/settings/'", api_contract)
 
@@ -361,6 +362,18 @@ class AccountSettingsPagesTests(TestCase):
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(profile.account_preferences["theme"], "system")
         self.assertEqual(profile.account_preferences["density"], "comfortable")
+
+    def test_theme_only_preference_save_does_not_load_trading_settings(self):
+        from core.models import BotSettings
+        with patch.object(BotSettings.objects, "get_or_create") as get_trading_settings:
+            response = self.client.patch(
+                reverse("account_settings_api"),
+                data=json.dumps({"preferences": {"theme": "light"}}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(UserProfile.objects.get(user=self.user).account_preferences["theme"], "light")
+        get_trading_settings.assert_not_called()
 
     def test_settings_api_rejects_non_object_payload(self):
         response = self.client.patch(

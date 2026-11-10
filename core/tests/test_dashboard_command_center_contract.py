@@ -83,7 +83,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261017-progressive1", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261109-zero-placeholder-preserved2", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -115,6 +115,29 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertIn("isSwitching:()=>switching", source)
         self.assertIn("if(switching)return;if(selected&&accounts.some", source)
 
+    def test_switch_reconciliation_is_retried_after_an_inflight_sync_finishes(self):
+        bridge = (ROOT / "static" / "js" / "core" / "broker_state_bridge.js").read_text(encoding="utf-8")
+        self.assertIn("syncGeneration=0,syncAgain=false", bridge)
+        self.assertIn("if(syncPromise){syncAgain=true;return syncPromise;}", bridge)
+        self.assertIn("if(syncAgain){syncAgain=false;Promise.resolve().then(syncFromBackend);}", bridge)
+        self.assertIn("if(generation!==syncGeneration)return window.AlgoBotAccountContext?.getSelected?.()||null;", bridge)
+
+    def test_browser_and_server_account_switch_deadlines_are_aligned(self):
+        context = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
+        views = (ROOT / "apps" / "brokers" / "views.py").read_text(encoding="utf-8")
+        self.assertIn("},25000);", context)
+        self.assertIn("BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=12.0", views)
+        self.assertIn("BROKER_SWITCH_SYNC_TIMEOUT_SECONDS=10.0", views)
+
+    def test_sidebar_account_switch_has_one_canonical_renderer_and_handler(self):
+        live = (ROOT / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
+        sidebar = (ROOT / "static" / "js" / "sidebar_account_switch.js").read_text(encoding="utf-8")
+        self.assertIn("sidebar_account_switch.js", (ROOT / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn("Sidebar account presentation and switching are owned by", live)
+        self.assertNotIn("data-account-switch", live)
+        self.assertIn("data-sidebar-account-switch", sidebar)
+        self.assertIn("context().selectAccount(id)", sidebar)
+
     def test_account_switch_does_not_wait_for_slow_startup_hydration_when_account_is_known(self):
         source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
         self.assertIn("let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;", source)
@@ -130,12 +153,22 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         scripts = [
             ROOT / "static" / "js" / "dashboard_command_center.js",
             ROOT / "static" / "js" / "core" / "account_context.js",
+            ROOT / "static" / "js" / "core" / "broker_state_bridge.js",
+            ROOT / "static" / "js" / "live_broker_ui.js",
+            ROOT / "static" / "js" / "sidebar_account_switch.js",
+            ROOT / "static" / "js" / "core" / "settings_preferences.js",
             ROOT / "static" / "js" / "base_shell.js",
         ]
         for script in scripts:
             with self.subTest(script=script.name):
                 result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+    def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("money(0, 'USD')", source)
+        self.assertIn("account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null)", source)
+        self.assertIn("setText('[data-kpi=\"equity\"]', money(equity, currency))", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")

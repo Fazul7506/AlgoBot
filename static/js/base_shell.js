@@ -165,8 +165,34 @@
     if(button)button.dataset.themeBound='true';
     const storageKey='algobot-theme';
     const preferenceKey='algobot-theme-preference';
+    const pendingThemeKey='algobot-theme-pending-sync';
     const validThemes=new Set(['light','dark','system']);
     let themeInteractionVersion=0;
+    let pendingThemeSync=null;
+    const readPendingTheme=()=>{try{return localStorage.getItem(pendingThemeKey)||'';}catch(_){return '';}};
+    const queueThemeSync=preference=>{try{localStorage.setItem(pendingThemeKey,preference);}catch(_){}};
+    const clearPendingTheme=preference=>{try{if(localStorage.getItem(pendingThemeKey)===preference)localStorage.removeItem(pendingThemeKey);}catch(_){}};
+    const syncPendingTheme=async()=>{
+      const client=window.AlgoBotFrontendData;
+      if(typeof client?.request!=='function')throw new Error('Shared authenticated API transport is unavailable.');
+      while(true){
+        if(pendingThemeSync){
+          const active=pendingThemeSync;
+          await active.promise;
+          if(readPendingTheme()===active.preference)clearPendingTheme(active.preference);
+          if(!readPendingTheme())return true;
+          if(readPendingTheme()===active.preference)return true;
+          continue;
+        }
+        const preference=readPendingTheme();
+        if(!validThemes.has(preference))return true;
+        const promise=client.request('/api/settings/',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({preferences:{theme:preference}})},25000);
+        pendingThemeSync={preference,promise};
+        try{await promise;}
+        finally{if(pendingThemeSync?.promise===promise)pendingThemeSync=null;}
+        if(readPendingTheme()===preference){clearPendingTheme(preference);return true;}
+      }
+    };
     const resolvedTheme=preference=>preference==='system'
       ? (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark')
       : preference;
@@ -194,7 +220,7 @@
       let stored='';
       try{stored=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||'';}catch(_){}
       const current=document.documentElement.dataset.themePreference;
-      const preference=validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(stored)?stored:(validThemes.has(current)?current:'dark'));
+      const preference=validThemes.has(stored)?stored:(validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:'dark'));
       persistLocal(preference);
       apply(preference);
       if(['compact','default','comfortable'].includes(prefs.density))document.documentElement.dataset.density=prefs.density;
@@ -204,27 +230,29 @@
       if(['realtime','15s','30s','60s','5m','manual'].includes(prefs.auto_refresh_interval))document.documentElement.dataset.autoRefresh=prefs.auto_refresh_interval;
       if(['15s','30s','1m','5m','15m'].includes(prefs.refresh_frequency))document.documentElement.dataset.refreshFrequency=prefs.refresh_frequency;
     };
-    document.addEventListener('algobot:preferences-loaded',event=>applyPreferences(event.detail||{}));
+    document.addEventListener('algobot:preferences-loaded',event=>{
+      const prefs=event.detail||{};
+      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(prefs.theme);
+      applyPreferences(prefs);
+    });
     let stored='',storedPreference='';
     try{stored=localStorage.getItem(storageKey)||'';storedPreference=localStorage.getItem(preferenceKey)||'';}catch(_){}
     const initial=validThemes.has(storedPreference)?storedPreference:(validThemes.has(stored)?stored:'dark');
     apply(initial);
     if(button)button.addEventListener('click',async()=>{
       themeInteractionVersion+=1;
-      const html=document.documentElement;
-      const previous=validThemes.has(html.dataset.themePreference)?html.dataset.themePreference:(html.dataset.theme||'dark');
-      const next=html.dataset.theme==='dark'?'light':'dark';
+      const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
       persistLocal(next);apply(next);
       if(document.body.dataset.authenticated!=='true')return;
+      queueThemeSync(next);
       button.disabled=true;
       try{
-        const client=window.AlgoBotFrontendData;
-        if(typeof client?.request!=='function')throw new Error('Shared authenticated API transport is unavailable.');
-        await client.request('/api/settings/',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({preferences:{theme:next}})},10000);
-        document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:{theme:next}}));
+        await syncPendingTheme();
+        document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:{theme:next,persisted:true}}));
       }catch(error){
-        persistLocal(previous);apply(previous);
-        showDjangoMessage('Theme could not be saved to your account. The previous theme has been restored. '+String(error?.message||''),'warning');
+        // Appearance is a local, immediate preference. A temporary API timeout
+        // must not roll it back; retain the queued account sync for next load.
+        showDjangoMessage('Theme is saved on this device. Account synchronization is pending and will retry when the service is available. '+String(error?.message||''),'warning');
       }finally{button.disabled=false;}
     });
     // Load account preferences on every authenticated page, not only pages
@@ -237,19 +265,29 @@
         const preferenceLoadVersion=themeInteractionVersion;
       client.request('/api/settings/',{method:'GET',headers:{Accept:'application/json'}},12000).then(data=>{
           const prefs=data?.profile?.account_preferences||{};
+          let effectivePrefs=prefs;
           if(themeInteractionVersion===preferenceLoadVersion){
+            // With no explicit browser choice, the saved account preference is
+            // authoritative (including light and system), not the dark first-paint default.
             applyPreferences(prefs);
-          }else{
+          }
+          if(themeInteractionVersion!==preferenceLoadVersion){
+            // A user toggle made while the account request was in flight wins.
             let latest=document.documentElement.dataset.themePreference;
             try{latest=localStorage.getItem(preferenceKey)||localStorage.getItem(storageKey)||latest;}catch(_){}
+            effectivePrefs={...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme};
             applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});
           }
+          effectivePrefs={...effectivePrefs,theme:document.documentElement.dataset.themePreference};
           document.documentElement.dataset.accountPreferencesLoaded='true';
           const targets={dashboard:'/dashboard/',markets:'/markets/',analysis:'/analysis/',terminal:'/trading/',positions:'/positions/'};
           if(window.location.pathname==='/dashboard/'&&targets[prefs.default_page]&&targets[prefs.default_page]!=='/dashboard/'){window.location.replace(targets[prefs.default_page]);return;}
-          document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:prefs}));
+          // Broadcast the effective theme, never the stale server value.
+          document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:effectivePrefs}));
+          if(readPendingTheme())syncPendingTheme().catch(()=>{});
         }).catch(error=>{
           delete document.documentElement.dataset.accountPreferencesLoaded;
+          if(readPendingTheme())syncPendingTheme().catch(()=>{});
           window.dispatchEvent(new CustomEvent('algobot:preferences-load-failed',{detail:{message:String(error?.message||'Preferences could not be loaded.')}}));
         });
       }else{

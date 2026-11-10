@@ -112,29 +112,18 @@
   function render() {
     mount();
     const a = current();
-    const side = $('[data-sidebar-account]');
-    if (!side) return;
     const t = typeOf(a);
-    const opposite = a ? (accounts.find(x => String(x.broker?.id) === String(a.broker?.id) && typeOf(x) !== t) || accounts.find(x => typeOf(x) !== t)) : null;
-    const enabled = !!a?.switch_enabled && !!opposite;
-    const label = opposite ? `Switch to ${typeOf(opposite).toUpperCase()}` : 'Demo / Real';
-    const switchAvatar = opposite ? avatar(opposite, true) : '';
-    if (a) {
-      side.innerHTML = `<div class="algobot-account-summary">${avatar(a,true)}<div class="algobot-account-copy"><strong>${safe(a.broker?.name || a.broker_name || 'Broker')} · ${safe(a.broker_account_id || a.account_id)}</strong><span>${safe(t.toUpperCase())} · ${safe(a.currency || '')} ${money(a.balance)}</span></div></div><div class="algobot-account-fresh">${safe(a.is_connected ? `Balance ${a.currency || ''} ${money(a.balance)} · ${a.last_synced_at ? 'Synced ' + new Date(a.last_synced_at).toLocaleTimeString() : 'Last known broker data'}` : `Account ${a.status || 'unavailable'}`)}</div><button class="algobot-account-switch" data-account-switch ${enabled ? '' : 'disabled'} title="${safe(enabled ? 'Switch preferred broker account' : 'Demo/real switching is disabled until enabled in Render')}">${switchAvatar}<span>${safe(label)}</span></button>`;
-    } else {
-      side.innerHTML = '<div class="algobot-account-error">No connected broker account</div>';
-    }
+    // Sidebar account presentation and switching are owned by
+    // sidebar_account_switch.js. This module must not replace that DOM or
+    // render a second, differently-targeted account-switch control.
     const global = $('[data-global-connection]');
     if (global) {
       const ok = !!a?.is_connected;
       global.classList.toggle('connected', ok); global.classList.toggle('error', !ok);
       global.innerHTML = `<i></i><span>${safe(a ? `${a.broker?.name || a.broker_name || 'Broker'} · ${a.broker_account_id || a.account_id} · ${t.toUpperCase()}` : 'No connected broker account')}</span>`;
     }
-    // Account selection is owned exclusively by core/account_context.js.
-    // This module is render-only; attaching another click handler here creates
-    // duplicate POST /select requests and races the canonical account state.
-    const switchButton = $('[data-account-switch]');
-    if (switchButton) switchButton.removeAttribute('data-live-broker-selection-handler');
+    // Account selection is owned exclusively by core/account_context.js
+    // and rendered by sidebar_account_switch.js.
     placeLogout();
   }
 

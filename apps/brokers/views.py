@@ -19,6 +19,8 @@ logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
 BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
+BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=12.0
+BROKER_SWITCH_SYNC_TIMEOUT_SECONDS=10.0
 
 def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
@@ -88,18 +90,74 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:return response.Response({'detail':'Broker account switching is disabled by platform configuration.'},status=status.HTTP_403_FORBIDDEN)
         account=self.get_object()
         if str(account.status).lower()!='active':return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
-        if not account.is_connection_eligible:return response.Response({'detail':'The selected broker account is not connected and ready.'},status=status.HTTP_409_CONFLICT)
         actual = account.account_type
         requested=str(request.data.get('account_type') or '').lower().strip()
         if requested not in {'demo','real'}:requested=''
-        if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Synchronize the account first.'},status=status.HTTP_409_CONFLICT)
+        if actual not in {'demo','real'}:return response.Response({'detail':'The broker has not confirmed this account type yet. Reconnect or synchronize this account before switching.'},status=status.HTTP_409_CONFLICT)
         if requested and requested!=actual:return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
         # A browser JWT can authenticate a different principal than the Django session cookie.
         # Never write one user's account selection into another user's session.
         session_user_id = request.session.get('_auth_user_id')
         if session_user_id and str(session_user_id) != str(request.user.pk):
             return response.Response({'detail':'The browser session and API credentials belong to different users.'},status=status.HTTP_403_FORBIDDEN)
-        previous_id=request.session.get('active_broker_account_id');select_account(request,account);serialized=BrokerAccountSerializer(account,context={'request':request}).data
+        # Account lists may include OAuth-authorized DEMO/REAL accounts before a
+        # per-account BrokerConnection row exists. Establish and verify that
+        # account-scoped connection here; never select an unverified account.
+        if account.credential_status != 'ready':
+            return response.Response({'detail':'The selected broker account credentials are unavailable or expired. Reconnect the broker account.'},status=status.HTTP_401_UNAUTHORIZED)
+        previous_id=request.session.get('active_broker_account_id')
+        if not account.is_connected:
+            try:
+                _run_bounded(BrokerConnectionService().connect(account.broker,account),timeout=BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS)
+                account.refresh_from_db()
+            except asyncio.TimeoutError:
+                return response.Response({'detail':'The broker did not verify the selected account before the 12-second connection deadline. Your previous account remains selected. Retry after checking the broker connection.','broker_status':'switch_connection_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+            except BrokerAuthenticationError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
+            except BrokerConnectionError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except BrokerRoutingError as exc:
+                return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
+            except Exception as exc:
+                logger.exception('broker_account_switch_connection_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+                return response.Response({'detail':'The selected broker account could not be verified. Your previous account remains selected.','broker_status':'verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
+        # Verify a fresh provider snapshot before committing the server-side
+        # session selection. A successful handshake alone is not account-ready.
+        try:
+            _run_bounded(SynchronizationService().sync_account(account),timeout=BROKER_SWITCH_SYNC_TIMEOUT_SECONDS)
+            account.refresh_from_db()
+        except asyncio.TimeoutError:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':'The broker connection was verified, but the authoritative account snapshot did not arrive within 10 seconds. Your previous account remains selected. Retry synchronization.','broker_status':'snapshot_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+        except BrokerAuthenticationError as exc:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
+        except BrokerConnectionError as exc:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerRoutingError as exc:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
+        except Exception as exc:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            logger.exception('broker_account_switch_snapshot_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+            return response.Response({'detail':'The selected account snapshot could not be verified. Your previous account remains selected.','broker_status':'snapshot_verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
+        if account.account_type != actual or not account.is_connection_eligible or not account.last_synced_at:
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':'The broker snapshot did not confirm the selected account environment and connection state. Your previous account remains selected.','broker_status':'snapshot_not_authoritative'},status=status.HTTP_409_CONFLICT)
+        # Do not mutate the session until this exact account and its snapshot
+        # have been verified.
+        try:
+            select_account(request,account)
+        except ValueError as exc:
+            return response.Response({'detail':str(exc)},status=status.HTTP_409_CONFLICT)
+        serialized=BrokerAccountSerializer(account,context={'request':request}).data
         return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':previous_id,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])
     def active(self,request):

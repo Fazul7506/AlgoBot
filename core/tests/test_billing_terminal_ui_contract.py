@@ -20,7 +20,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
             "@media(max-width:580px)", "@media(max-width:360px)",
             "@media(max-width:680px)", "grid-template-columns:18px minmax(0,1fr) minmax(0,40%)",
             "Usage is measured from persisted platform activity/database records",
-            "renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})",
+            "renderPlans(catalog,activePlan,String(plansSnapshot?.provider||'intasend').toLowerCase(),plansSnapshot?.providers||{})",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, template)
@@ -56,7 +56,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("billing-plan-features", template)
         self.assertIn('data-provider="pesapal"', template)
         self.assertIn('data-provider="intasend"', template)
-        self.assertIn("renderPlans(plansData.plans||status.plans||[],plan,String(plansData.provider||'intasend').toLowerCase(),plansData.providers||{})", template)
+        self.assertIn("renderPlans(catalog,activePlan,String(plansSnapshot?.provider||'intasend').toLowerCase(),plansSnapshot?.providers||{})", template)
         self.assertIn('data-provider=\"pesapal\"', template)
         self.assertIn("billing-provider-logo pesapal-logo", template)
         self.assertIn('data-provider=\"intasend\"', template)
@@ -106,7 +106,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("themeInteractionVersion+=1;", shell)
         self.assertIn("const preferenceLoadVersion=themeInteractionVersion;", shell)
         self.assertIn("if(themeInteractionVersion===preferenceLoadVersion)", shell)
+        self.assertIn("applyPreferences(prefs);", shell)
         self.assertIn("applyPreferences({...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme});", shell)
+        self.assertIn("validThemes.has(prefs.theme)?prefs.theme", shell)
 
     def test_global_error_bus_does_not_toast_background_read_failures(self):
         from pathlib import Path
@@ -213,7 +215,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
     def test_live_broker_ui_does_not_register_a_second_account_selection_handler(self):
         from pathlib import Path
         live_ui = Path("static/js/live_broker_ui.js").read_text(encoding="utf-8")
-        self.assertIn("Account selection is owned exclusively by core/account_context.js.", live_ui)
+        self.assertIn("Sidebar account presentation and switching are owned by", live_ui)
         self.assertNotIn("switchButton.onclick = () => selectAccount", live_ui)
         self.assertNotIn("request(`/api/brokers/accounts/${target.id}/select/", live_ui)
         self.assertIn("context.selectAccount(id)", live_ui)
@@ -456,7 +458,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261108-account-brand-mode1", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261109-canonical-sidebar-account1", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
@@ -698,6 +700,22 @@ class ProductionReliabilityFrontendContractTests(SimpleTestCase):
         )
 
 
+class BillingIndependentLoadingContractTests(SimpleTestCase):
+    def test_plan_catalogue_does_not_wait_for_subscription_and_entitlement_reads(self):
+        from pathlib import Path
+        template = Path("templates/core/billing.html").read_text(encoding="utf-8")
+        self.assertIn("Promise.allSettled", template)
+        self.assertIn("api('/billing/status/')", template)
+        self.assertIn("api('/billing/entitlements/')", template)
+        self.assertIn("api('/billing/plans/')", template)
+        self.assertIn("renderPlans(catalog,activePlan", template)
+        self.assertIn("const renderAvailablePlans=()=>", template)
+        self.assertIn("plansSnapshot=data;renderAvailablePlans();", template)
+        self.assertIn("Promise.allSettled([statusPromise,entitlementsPromise])", template)
+        self.assertIn("live plan catalogue is temporarily unavailable", template)
+        self.assertNotIn("const [status,ent,plansData]=await Promise.all", template)
+
+
 class WorkspaceTabsContractTests(SimpleTestCase):
     def test_backtesting_job_status_separates_queued_from_running(self):
         from pathlib import Path
@@ -778,3 +796,36 @@ class GlobalThemeShellContractTests(SimpleTestCase):
         self.assertIn("background:var(--panel2)!important", css)
         self.assertIn("color:var(--text)!important", css)
 
+
+
+class GlobalThemeNavigationPersistenceRegressionTests(SimpleTestCase):
+    def test_local_explicit_theme_preference_wins_over_stale_account_response(self):
+        from pathlib import Path
+        shell = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn(
+            "const preference=validThemes.has(stored)?stored:(validThemes.has(prefs.theme)?prefs.theme:(validThemes.has(current)?current:'dark'));",
+            shell,
+        )
+
+    def test_inflight_preferences_response_never_broadcasts_stale_theme(self):
+        from pathlib import Path
+        shell = (Path(__file__).resolve().parents[2] / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("let effectivePrefs=prefs;", shell)
+        self.assertIn("effectivePrefs={...prefs,theme:validThemes.has(latest)?latest:document.documentElement.dataset.theme};", shell)
+        self.assertIn("detail:effectivePrefs", shell)
+        self.assertNotIn("detail:prefs", shell)
+        self.assertIn("if(themeInteractionVersion!==preferenceLoadVersion)", shell)
+
+    def test_settings_page_uses_local_theme_before_server_default(self):
+        from pathlib import Path
+        script = (Path(__file__).resolve().parents[2] / "static/js/core/settings_preferences.js").read_text(encoding="utf-8")
+        self.assertIn("const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme", script)
+        self.assertIn("(['light','dark','system'].includes(prefs.theme) ? prefs.theme", script)
+
+    def test_navigation_and_settings_scripts_have_fresh_cache_contracts(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        base = (root / "templates/base.html").read_text(encoding="utf-8")
+        settings = (root / "templates/core/settings.html").read_text(encoding="utf-8")
+        self.assertIn("theme-navigation-stability3", base)
+        self.assertIn("theme-preference-stability2", settings)

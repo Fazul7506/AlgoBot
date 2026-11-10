@@ -57,9 +57,11 @@ const initializePreferences = () => {
     const profile = data.profile || {};
     const prefs = profile.account_preferences || {};
     const storedTheme = (() => { try { return localStorage.getItem('algobot-theme-preference') || localStorage.getItem('algobot-theme'); } catch (_) { return ''; } })();
-    const effectiveTheme = ['light','dark','system'].includes(prefs.theme) ? prefs.theme
-      : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference
-      : (['light','dark','system'].includes(storedTheme) ? storedTheme : 'dark'));
+    // Preserve the browser's explicit selection while account preferences load.
+    // Use the server value only when this browser has no saved preference.
+    const effectiveTheme = ['light','dark','system'].includes(storedTheme) ? storedTheme
+      : (['light','dark','system'].includes(prefs.theme) ? prefs.theme
+      : (['light','dark','system'].includes(document.documentElement.dataset.themePreference) ? document.documentElement.dataset.themePreference : 'dark'));
     setRadio('theme', effectiveTheme);
     setRadio('density', prefs.density || 'default');
     setRadio('accent', prefs.accent || 'cyan');
@@ -129,7 +131,7 @@ const initializePreferences = () => {
     try {
       const data = await request('PATCH', {profile, preferences});
       applyAppearance(preferences);
-      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: preferences}));
+      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: {...preferences,persisted:true}}));
       lastSavedFormState = submittedFormState;
       message.textContent = data.message || 'Preferences saved.';
       status.textContent = 'Preferences saved';

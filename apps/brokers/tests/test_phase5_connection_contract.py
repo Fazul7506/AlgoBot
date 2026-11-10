@@ -43,4 +43,4 @@ class BrokerConnectionContractTests(APITestCase):
     def test_switch_rejects_unconnected_unconfirmed_account(self):
         response = self.client.post(reverse("broker-accounts-select", args=[self.account.pk]), {"account_type": "demo"}, format="json")
         self.assertEqual(response.status_code, 409)
-        self.assertIn("not connected", response.data["detail"])
+        self.assertIn("has not confirmed this account type", response.data["detail"])
