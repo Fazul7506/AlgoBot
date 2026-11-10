@@ -121,6 +121,18 @@ class AccountSwitchingTests(TestCase):
         self.assertEqual(candidate.connections.get().status, 'degraded')
 
     @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
+    def test_snapshot_timeout_on_current_account_keeps_it_selected_and_connected(self):
+        import asyncio
+        current = self.make_account('DEMO-CURRENT', connected=True)
+        first = self.client.post(f'/api/brokers/accounts/{current.pk}/select/', {}, format='json')
+        self.assertEqual(first.status_code, 200)
+        with patch('apps.brokers.views.SynchronizationService.sync_account', new=AsyncMock(side_effect=asyncio.TimeoutError)):
+            result = self.client.post(f'/api/brokers/accounts/{current.pk}/select/', {}, format='json')
+        self.assertEqual(result.status_code, 504)
+        self.assertEqual(self.client.get('/api/brokers/accounts/active/').data['active_account_id'], current.pk)
+        self.assertEqual(current.connections.get().status, 'connected')
+
+    @override_settings(ENABLE_BROKER_ACCOUNT_SWITCH=True)
     def test_inactive_account_cannot_become_active(self):
         candidate = self.make_account('DEMO-2', status='disabled')
         result = self.client.post(f'/api/brokers/accounts/{candidate.pk}/select/', {}, format='json')

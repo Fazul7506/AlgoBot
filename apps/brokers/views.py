@@ -105,6 +105,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         # account-scoped connection here; never select an unverified account.
         if account.credential_status != 'ready':
             return response.Response({'detail':'The selected broker account credentials are unavailable or expired. Reconnect the broker account.'},status=status.HTTP_401_UNAUTHORIZED)
+        previous_id=request.session.get('active_broker_account_id')
         if not account.is_connected:
             try:
                 _run_bounded(BrokerConnectionService().connect(account.broker,account),timeout=BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS)
@@ -126,27 +127,32 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
             _run_bounded(SynchronizationService().sync_account(account),timeout=BROKER_SWITCH_SYNC_TIMEOUT_SECONDS)
             account.refresh_from_db()
         except asyncio.TimeoutError:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             return response.Response({'detail':'The broker connection was verified, but the authoritative account snapshot did not arrive within 10 seconds. Your previous account remains selected. Retry synchronization.','broker_status':'snapshot_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
         except BrokerAuthenticationError as exc:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
         except BrokerConnectionError as exc:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except BrokerRoutingError as exc:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
         except Exception as exc:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             logger.exception('broker_account_switch_snapshot_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
             return response.Response({'detail':'The selected account snapshot could not be verified. Your previous account remains selected.','broker_status':'snapshot_verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
         if account.account_type != actual or not account.is_connection_eligible or not account.last_synced_at:
-            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            if str(previous_id or '') != str(account.pk):
+                BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
             return response.Response({'detail':'The broker snapshot did not confirm the selected account environment and connection state. Your previous account remains selected.','broker_status':'snapshot_not_authoritative'},status=status.HTTP_409_CONFLICT)
         # Do not mutate the session until this exact account and its snapshot
         # have been verified.
-        previous_id=request.session.get('active_broker_account_id')
         try:
             select_account(request,account)
         except ValueError as exc:
