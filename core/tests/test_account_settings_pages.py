@@ -225,6 +225,7 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("{% block extra_js %}", settings_template)
         self.assertLess(settings_template.index("{% block extra_js %}"), settings_template.index("settings_preferences.js"))
         self.assertIn("window.AlgoBotFrontendData", preferences_script)
+        self.assertIn("persisted:true", preferences_script)
         self.assertNotIn("fetch('/api/settings/'", preferences_script)
         self.assertIn("path==='/api/settings/'", api_contract)
 
