@@ -131,7 +131,7 @@ const initializePreferences = () => {
     try {
       const data = await request('PATCH', {profile, preferences});
       applyAppearance(preferences);
-      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: preferences}));
+      document.dispatchEvent(new CustomEvent('algobot:preferences-loaded', {detail: {...preferences,persisted:true}}));
       lastSavedFormState = submittedFormState;
       message.textContent = data.message || 'Preferences saved.';
       status.textContent = 'Preferences saved';
