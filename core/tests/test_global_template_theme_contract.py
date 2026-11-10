@@ -58,7 +58,7 @@ class GlobalTemplateThemeContractTests(SimpleTestCase):
         shell = (ROOT / "static/js/base_shell.js").read_text(encoding="utf-8")
         self.assertIn("algobot-theme-pending-sync", shell)
         self.assertIn("const syncPendingTheme=async()=>", shell)
-        self.assertIn("prefs.persisted===true&&validThemes.has(prefs.theme)", shell)
+        self.assertIn("prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(readPendingTheme())", shell)
         self.assertIn("persisted:true", shell)
         self.assertIn(")},25000)", shell)
         self.assertIn("Theme is saved on this device. Account synchronization is pending", shell)
