@@ -231,7 +231,7 @@
     };
     document.addEventListener('algobot:preferences-loaded',event=>{
       const prefs=event.detail||{};
-      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(prefs.theme);
+      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(readPendingTheme());
       applyPreferences(prefs);
     });
     let stored='',storedPreference='';
