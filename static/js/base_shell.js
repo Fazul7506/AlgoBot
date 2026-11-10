@@ -231,7 +231,7 @@
     };
     document.addEventListener('algobot:preferences-loaded',event=>{
       const prefs=event.detail||{};
-      if(validThemes.has(prefs.theme))clearPendingTheme(prefs.theme);
+      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(prefs.theme);
       applyPreferences(prefs);
     });
     let stored='',storedPreference='';
@@ -247,7 +247,7 @@
       button.disabled=true;
       try{
         await syncPendingTheme();
-        document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:{theme:next}}));
+        document.dispatchEvent(new CustomEvent('algobot:preferences-loaded',{detail:{theme:next,persisted:true}}));
       }catch(error){
         // Appearance is a local, immediate preference. A temporary API timeout
         // must not roll it back; retain the queued account sync for next load.
