@@ -108,7 +108,9 @@
   window.addEventListener('algobot:account-changed',event=>{
     if(event.detail?.id==null)return;
     syncGeneration+=1;
-    forceSnapshotSyncForId=String(event.detail.id);
+    const syncedAt=Date.parse(event.detail.last_synced_at||'');
+    const recentlySynced=event.detail.is_connected===true&&Number.isFinite(syncedAt)&&(Date.now()-syncedAt)<60000;
+    forceSnapshotSyncForId=recentlySynced?null:String(event.detail.id);
     window.AlgoBotBrokerState?.setAccount(event.detail,'account-changed');
     syncFromBackend().catch(()=>{});
   });

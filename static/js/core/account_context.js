@@ -75,7 +75,7 @@
     try{
       const requestedType=String(target.account_type||target.credentials?.account_type||'').toLowerCase();
       const payload=['demo','real'].includes(requestedType)?{account_type:requestedType}:{};
-      const confirmedResponse=await request('/api/brokers/accounts/'+encodeURIComponent(target.id)+'/select/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},35000);
+      const confirmedResponse=await request('/api/brokers/accounts/'+encodeURIComponent(target.id)+'/select/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),notifyOnError:false},25000);
       const confirmed=confirmedResponse?.active_account||confirmedResponse?.account;
       if(!confirmed?.id||accountId(confirmed)!==accountId(target))throw new Error('Broker did not confirm the selected account.');
       accounts=accounts.map(a=>accountId(a)===accountId(confirmed)?confirmed:{...a,is_active:false});
@@ -84,9 +84,14 @@
       return setSelected(confirmed,'account-switch',true);
     }catch(error){
       switching=false;
-      selected=null;
-      try{await load(true);}catch(_){window.AlgoBotBrokerState?.reset('account-switch-failed');}
-      if(previous&&!selected)window.AlgoBotBrokerState?.reset('account-switch-failed');
+      // The server changes its session only after verifying the target. Keep
+      // the last confirmed account visible while reconciling a failed switch.
+      if(previous)setSelected(previous,'account-switch-failed-previous-retained',true);
+      else{selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('account-switch-failed');}
+      try{await load(true);}catch(_){
+        if(previous)setSelected(previous,'account-switch-failed-previous-retained',true);
+        else window.AlgoBotBrokerState?.reset('account-switch-failed');
+      }
       throw error;
     }
   }

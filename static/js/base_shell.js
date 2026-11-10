@@ -167,7 +167,8 @@
     const preferenceKey='algobot-theme-preference';
     const pendingThemeKey='algobot-theme-pending-sync';
     const validThemes=new Set(['light','dark','system']);
-    let themeInteractionVersion=0,pendingThemeSync=null;
+    let themeInteractionVersion=0;
+    let pendingThemeSync=null;
     const readPendingTheme=()=>{try{return localStorage.getItem(pendingThemeKey)||'';}catch(_){return '';}};
     const queueThemeSync=preference=>{try{localStorage.setItem(pendingThemeKey,preference);}catch(_){}};
     const clearPendingTheme=preference=>{try{if(localStorage.getItem(pendingThemeKey)===preference)localStorage.removeItem(pendingThemeKey);}catch(_){}};
@@ -231,7 +232,7 @@
     };
     document.addEventListener('algobot:preferences-loaded',event=>{
       const prefs=event.detail||{};
-      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(readPendingTheme());
+      if(prefs.persisted===true&&validThemes.has(prefs.theme))clearPendingTheme(prefs.theme);
       applyPreferences(prefs);
     });
     let stored='',storedPreference='';

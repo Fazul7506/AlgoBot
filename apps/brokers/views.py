@@ -19,7 +19,8 @@ logger=logging.getLogger(__name__)
 BROKER_CONNECT_TIMEOUT_SECONDS=30.0
 BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
-BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=30.0
+BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=12.0
+BROKER_SWITCH_SYNC_TIMEOUT_SECONDS=10.0
 
 def _run_bounded(coro,timeout=8.0):
     async def runner(): return await asyncio.wait_for(coro,timeout=timeout)
@@ -109,7 +110,7 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
                 _run_bounded(BrokerConnectionService().connect(account.broker,account),timeout=BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS)
                 account.refresh_from_db()
             except asyncio.TimeoutError:
-                return response.Response({'detail':'The broker did not verify the selected account before the switching deadline. Your previous account remains selected. Retry after checking the broker connection.','broker_status':'switch_connection_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+                return response.Response({'detail':'The broker did not verify the selected account before the 12-second connection deadline. Your previous account remains selected. Retry after checking the broker connection.','broker_status':'switch_connection_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
             except BrokerAuthenticationError as exc:
                 return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
             except BrokerConnectionError as exc:
@@ -119,10 +120,32 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
             except Exception as exc:
                 logger.exception('broker_account_switch_connection_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
                 return response.Response({'detail':'The selected broker account could not be verified. Your previous account remains selected.','broker_status':'verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
-        if not account.is_connection_eligible:
-            return response.Response({'detail':'The selected broker account connection is not ready. Your previous account remains selected.'},status=status.HTTP_409_CONFLICT)
-        # Do not mutate the session until the provider has verified this exact
-        # account, its environment and its connection state.
+        # Verify a fresh provider snapshot before committing the server-side
+        # session selection. A successful handshake alone is not account-ready.
+        try:
+            _run_bounded(SynchronizationService().sync_account(account),timeout=BROKER_SWITCH_SYNC_TIMEOUT_SECONDS)
+            account.refresh_from_db()
+        except asyncio.TimeoutError:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':'The broker connection was verified, but the authoritative account snapshot did not arrive within 10 seconds. Your previous account remains selected. Retry synchronization.','broker_status':'snapshot_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
+        except BrokerAuthenticationError as exc:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
+        except BrokerConnectionError as exc:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except BrokerRoutingError as exc:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
+        except Exception as exc:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            logger.exception('broker_account_switch_snapshot_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+            return response.Response({'detail':'The selected account snapshot could not be verified. Your previous account remains selected.','broker_status':'snapshot_verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
+        if account.account_type != actual or not account.is_connection_eligible or not account.last_synced_at:
+            BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            return response.Response({'detail':'The broker snapshot did not confirm the selected account environment and connection state. Your previous account remains selected.','broker_status':'snapshot_not_authoritative'},status=status.HTTP_409_CONFLICT)
+        # Do not mutate the session until this exact account and its snapshot
+        # have been verified.
         previous_id=request.session.get('active_broker_account_id')
         try:
             select_account(request,account)

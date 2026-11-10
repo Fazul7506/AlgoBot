@@ -827,5 +827,5 @@ class GlobalThemeNavigationPersistenceRegressionTests(SimpleTestCase):
         root = Path(__file__).resolve().parents[2]
         base = (root / "templates/base.html").read_text(encoding="utf-8")
         settings = (root / "templates/core/settings.html").read_text(encoding="utf-8")
-        self.assertIn("theme-navigation-stability2", base)
-        self.assertIn("theme-preference-stability1", settings)
+        self.assertIn("theme-navigation-stability3", base)
+        self.assertIn("theme-preference-stability2", settings)

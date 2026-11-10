@@ -442,7 +442,16 @@ class SynchronizationService:
     async def sync_account(self, account):
         if account.status in {'disabled', 'suspended'}: raise BrokerRoutingError('This broker account is not connected')
         adapter = BrokerRegistry().adapter(account.broker, account); data = await adapter.get_balance(); fields = []; broker_account_id = data.get('account_id') or account.account_id
-        if broker_account_id and broker_account_id != account.account_id: account.account_id = broker_account_id; fields.append('account_id')
+        if account.broker.broker_type == 'deriv':
+            if broker_account_id and str(broker_account_id) != str(account.account_id):
+                raise BrokerAuthenticationError('Deriv returned a different account during snapshot synchronization. The selected account was not changed.')
+            provider_type = str(data.get('account_type') or '').lower().strip()
+            if provider_type in {'demo', 'real'} and provider_type != account.account_type:
+                raise BrokerAuthenticationError('Deriv account type changed during snapshot synchronization. The selected DEMO/REAL environment was not changed.')
+        elif broker_account_id and broker_account_id != account.account_id:
+            account.account_id = broker_account_id; fields.append('account_id')
+        if not any(data.get(field) is not None for field in ('balance', 'equity', 'margin', 'free_margin')):
+            raise BrokerConnectionError('The broker did not return an authoritative financial snapshot for this account.')
         for f in ['balance', 'equity', 'margin', 'free_margin', 'currency']:
             if data.get(f) is not None: setattr(account, f, data[f]); fields.append(f)
         credentials = dict(account.credentials or {})
