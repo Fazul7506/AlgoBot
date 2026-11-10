@@ -125,8 +125,9 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_browser_and_server_account_switch_deadlines_are_aligned(self):
         context = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
         views = (ROOT / "apps" / "brokers" / "views.py").read_text(encoding="utf-8")
-        self.assertIn("},35000);", context)
-        self.assertIn("BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=30.0", views)
+        self.assertIn("},25000);", context)
+        self.assertIn("BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=12.0", views)
+        self.assertIn("BROKER_SWITCH_SYNC_TIMEOUT_SECONDS=10.0", views)
 
     def test_sidebar_account_switch_has_one_canonical_renderer_and_handler(self):
         live = (ROOT / "static" / "js" / "live_broker_ui.js").read_text(encoding="utf-8")
