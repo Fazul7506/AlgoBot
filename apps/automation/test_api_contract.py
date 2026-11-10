@@ -7,18 +7,18 @@ from .api import _safe_payload, approve
 from .models import ApprovalRequest, Workflow
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class AutomationApprovalApiContractTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

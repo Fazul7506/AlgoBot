@@ -12,16 +12,12 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from apps.brokers.models import Broker,BrokerAccount,BrokerIntegrationRequest
 from core.services.oauth_service import DerivOAuthService
+from core.account_context import get_active_account
 logger=logging.getLogger(__name__)
-def _preferred_deriv_account(user):
-    accounts = list(BrokerAccount.objects.filter(user=user, broker__broker_type='deriv').select_related('broker').prefetch_related('connections').order_by('-last_synced_at', '-id'))
-    # Only show accounts whose broker connection has been accepted and verified.
-    return next((account for account in accounts if _deriv_connected(account)), None)
-def _deriv_connected(account): return bool(account and account.status == "active" and account.broker.status == "active" and account.token_status == "active" and not account.is_token_expired and account.is_connection_eligible)
 def home(request):
     if request.method=='HEAD': return HttpResponse(status=200)
     from core.broker_onboarding import has_authorized_broker_connection
-    broker_connected = bool(request.user.is_authenticated and has_authorized_broker_connection(request.user))
+    broker_connected = bool(request.user.is_authenticated and has_authorized_broker_connection(request.user, request=request))
     if broker_connected: return redirect('/dashboard/')
     return render(request,'core/home.html',{'hero_title':'AlgoBot AI trading platform','hero_copy':'Institutional-grade AI trading infrastructure for market intelligence, strategies, risk controls and broker execution.','broker_connected':broker_connected})
 def login_page(request):
@@ -38,7 +34,7 @@ def dashboard_page(request):
         messages.info(request, 'Verify your AlgoBot email before opening the dashboard.')
         return redirect('verify_email_page')
     # Broker onboarding is persisted account state; no session flag may bypass it.
-    if not has_authorized_broker_connection(request.user):
+    if not has_authorized_broker_connection(request.user, request=request):
         from django.contrib import messages
         messages.info(request, 'Connect and verify your Deriv account before opening trading features.')
         return redirect('broker_marketplace_page')
@@ -298,7 +294,9 @@ def deriv_login(request):
         return redirect('verify_email_page')
     is_valid,error_message=DerivOAuthService.validate_configuration()
     if not is_valid: logger.error('deriv_oauth_misconfigured',extra={'error':error_message}); return HttpResponse('Deriv OAuth is unavailable. Please try again later.',status=503)
-    if request.user.is_authenticated and _deriv_connected(_preferred_deriv_account(request.user)): return redirect('dashboard_page')
+    if request.user.is_authenticated:
+        if get_active_account(request.user, request=request, broker_type='deriv'): return redirect('dashboard_page')
+        if BrokerAccount.objects.filter(user=request.user, broker__broker_type='deriv').exists(): return redirect('broker_marketplace_page')
     redirect_uri=settings.DERIV_REDIRECT_URI; configured_uri=urlparse(redirect_uri)
     if configured_uri.scheme and configured_uri.netloc and not settings.DEBUG and (request.scheme!=configured_uri.scheme or request.get_host()!=configured_uri.netloc):
         canonical_url=f'{configured_uri.scheme}://{configured_uri.netloc}{request.path}'; canonical_url=f'{canonical_url}?{request.GET.urlencode()}' if request.GET else canonical_url; return redirect(canonical_url)
@@ -309,17 +307,16 @@ def deriv_login(request):
 def broker_connect_page(request): return deriv_login(request)
 @login_required
 def broker_marketplace_page(request):
-    from apps.brokers.models import BrokerConnection
     # Populate the built-in directory independently of OAuth/account linking.
     # get_or_create is repeatable and does not overwrite admin-managed records.
     from apps.brokers.services import BrokerManager
     BrokerManager().ensure_defaults()
     brokers = list(Broker.objects.all().order_by('name'))
-    active_accounts = BrokerAccount.objects.filter(user=request.user, status='active', token_status='active').select_related('broker').prefetch_related('connections')
+    active_accounts = BrokerAccount.objects.filter(user=request.user, status='active').select_related('broker').prefetch_related('connections')
     connected_types = set()
     connected_accounts = {}
     for account in active_accounts:
-        connection_ok = account.connections.filter(status__in=('connected', 'ready', 'syncing', 'degraded')).exists()
+        connection_ok = bool(account.is_connection_eligible and account.last_synced_at)
         if connection_ok:
             connected_types.add(account.broker.broker_type)
             connected_accounts.setdefault(account.broker.broker_type, []).append(account)

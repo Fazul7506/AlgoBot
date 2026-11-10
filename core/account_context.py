@@ -1,8 +1,9 @@
 """"Authoritative authenticated-user broker account context.
 
 The server-side session is the only active-account authority for browser/API
-requests. Client-supplied account IDs are never interpreted as active context.
-Account selection happens only through the authenticated account-select action.
+requests. Client storage, account-list order, and connected-account fallbacks are
+never interpreted as an active selection. Selection happens only through the
+authenticated account-select action after a verified provider snapshot.
 """
 from apps.brokers.models import BrokerAccount
 
@@ -37,19 +38,19 @@ def _resolve_active_account(user, session=None, broker_type=None):
         qs = qs.filter(broker__broker_type=broker_type)
 
     selected_id = session.get(SESSION_KEY) if session is not None else None
-    if selected_id:
-        selected = qs.filter(pk=selected_id).first()
-        if selected and _has_known_environment(selected):
-            return selected
-        # A stale explicit selection must fail closed across DEMO/REAL boundaries.
-        session.pop(SESSION_KEY, None)
-        if hasattr(session, "modified"):
-            session.modified = True
+    if not selected_id:
         return None
 
-    # Read-only consumers may use the user's default account when no explicit
-    # browser selection exists. This fallback is never permission to execute trades.
-    return qs.order_by("-last_synced_at", "-id").first()
+    selected = qs.filter(pk=selected_id).first()
+    if selected and selected.is_connection_eligible and selected.last_synced_at and _has_known_environment(selected):
+        return selected
+
+    # A stale, disconnected, credential-invalid, or unsynchronized explicit
+    # selection must fail closed. Never silently fall back to another account.
+    session.pop(SESSION_KEY, None)
+    if hasattr(session, "modified"):
+        session.modified = True
+    return None
 
 
 def get_active_account(user, request=None, broker_type=None):
@@ -70,6 +71,8 @@ def require_active_account(user, request):
     account = get_active_account(user, request=request)
     if not account:
         raise ValueError("No connected broker account is available for this request.")
+    if not account.is_connection_eligible or not account.last_synced_at:
+        raise ValueError("The broker account connection or authoritative snapshot is not ready.")
     if not _has_known_environment(account):
         raise ValueError("The broker account environment is unknown; trading is blocked until DEMO/REAL is verified.")
     return account
@@ -78,8 +81,8 @@ def require_active_account(user, request):
 def select_account(request, account):
     if not account or account.user_id != request.user.id:
         raise ValueError("Account does not belong to the authenticated user.")
-    if not account.is_connection_eligible or not _has_known_environment(account):
-        raise ValueError("The selected broker account is not connected, ready, or has an unknown environment.")
+    if not account.is_connection_eligible or not account.last_synced_at or not _has_known_environment(account):
+        raise ValueError("The selected broker account is not connected, synchronized, ready, or has an unknown environment.")
     session = _session(request)
     if session is None:
         raise ValueError("Account selection requires an authenticated browser session.")

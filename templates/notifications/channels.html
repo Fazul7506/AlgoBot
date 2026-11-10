@@ -58,7 +58,7 @@
           {% if page_obj.has_next %}<a class="notice-page" href="?category={{ selected_category }}&range={{ selected_range }}&priority={{ selected_priority }}&q={{ search_query|urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Next page">›</a>{% else %}<span class="notice-page disabled" aria-hidden="true">›</span>{% endif %}
         </nav></footer>
       </section>
-      <p class="intro" style="color:#789ac4;font-size:11px;margin:10px 3px">Notification records are loaded from your authenticated account. No fabricated client-side events are shown; delivery state comes from persisted backend records.</p>
+      <p class="intro" style="color:var(--muted);font-size:11px;margin:10px 3px">Notification records are loaded from your authenticated account. No fabricated client-side events are shown; delivery state comes from persisted backend records.</p>
     </main>
 
     <aside class="notice-side" aria-label="Notification summary and settings">

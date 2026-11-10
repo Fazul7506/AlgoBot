@@ -34,7 +34,7 @@
   let reconnectTimer = null;
   let staleTimer = null;
   let loadSeq = 0;
-  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+  let activeAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
 
   const persist = () => {
     try {
@@ -139,7 +139,7 @@
       const state = quote?.state || 'unavailable';
       const favourite = favourites.has(row.symbol);
       const href = '/trading/?symbol=' + encodeURIComponent(row.symbol);
-      const quoteText = quote && state !== 'unavailable' ? money(quote.price) : money(0, quote?.currency || 'USD');
+      const quoteText = quote && state !== 'unavailable' ? money(quote.price) : 'Unavailable';
       const bidAsk = quote && state !== 'unavailable'
         ? 'Bid ' + money(quote.bid) + ' · Ask ' + money(quote.ask) + ' · ' + statusText(state)
         : 'Waiting for broker market feed';
@@ -273,9 +273,9 @@
     const catalogue = window.AlgoBotServices?.instruments?.list;
     if (typeof catalogue !== 'function') throw new Error('AlgoBot shared instrument service is not ready.');
     const seq = ++loadSeq;
-    const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+    const requestedAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
     const data = await catalogue({ timeout: 7000 });
-    const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+    const currentAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
     if (seq !== loadSeq || requestedAccountId !== currentAccountId) return;
     rows = list(data?.symbols).filter(
       row => row?.is_active !== false && row?.is_tradable !== false
@@ -323,7 +323,7 @@
       }
     });
     window.AlgoBotBrokerState?.subscribe?.(() => {
-      const account = window.AlgoBotBrokerState?.get?.()?.account;
+      const account = window.AlgoBotAccountContext?.getSelected?.()||null;
       const nextId = account?.id == null ? null : String(account.id);
       if (nextId === activeAccountId) return;
       activeAccountId = nextId;

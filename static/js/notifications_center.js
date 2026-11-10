@@ -39,9 +39,11 @@
 
   async function loadBrokerState() {
     try {
-      const data = await request('/api/brokers/accounts/');
-      const accounts = Array.isArray(data) ? data : (data.results || data.accounts || []);
-      state.connected = accounts.some((account) => account.is_connected === true || account.connected === true || account.status === 'connected');
+      const context = window.AlgoBotAccountContext;
+      if (!context) { state.connected = false; return; }
+      if (!context.getSelected()) await context.refresh();
+      const account = context.getSelected();
+      state.connected = account?.connection_eligible === true;
     } catch (_) {
       state.connected = false;
     }

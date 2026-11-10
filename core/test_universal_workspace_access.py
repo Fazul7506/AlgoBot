@@ -8,11 +8,11 @@ from unittest.mock import patch
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 
 
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class UniversalWorkspaceAccessTests(TestCase):
     """Regression coverage for authenticated workspace access and shell geometry."""
 

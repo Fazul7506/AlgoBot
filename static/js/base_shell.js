@@ -214,6 +214,9 @@
       if(meta)meta.content=theme==='light'?'#f3f7fc':'#07111f';
       const selected=document.querySelector('input[name="theme"][value="'+preference+'"]');
       if(selected)selected.checked=true;
+      // Notify canvas/SVG/chart components after every effective theme change,
+      // including account preference hydration and OS-level system changes.
+      window.dispatchEvent(new CustomEvent('algobot:theme-changed',{detail:{theme,preference}}));
     };
     const applyPreferences=prefs=>{
       if(!prefs||typeof prefs!=='object')return;

@@ -4,7 +4,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : [])));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (v, currency = 'USD') => { if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(v, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (v, currency = 'USD') => { if (v == null || v === '' || !Number.isFinite(Number(v))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(v, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
@@ -118,7 +118,7 @@
     // render a second, differently-targeted account-switch control.
     const global = $('[data-global-connection]');
     if (global) {
-      const ok = !!a?.is_connected;
+      const ok = a?.connection_eligible === true;
       global.classList.toggle('connected', ok); global.classList.toggle('error', !ok);
       global.innerHTML = `<i></i><span>${safe(a ? `${a.broker?.name || a.broker_name || 'Broker'} · ${a.broker_account_id || a.account_id} · ${t.toUpperCase()}` : 'No connected broker account')}</span>`;
     }
@@ -129,7 +129,7 @@
 
   async function syncAccounts() {
     const canonical = window.AlgoBotBrokerAccounts;
-    const selected = window.AlgoBotBrokerState?.get?.().account;
+    const selected = window.AlgoBotAccountContext?.getSelected?.()||null;
     accounts = (Array.isArray(canonical) ? canonical : (selected ? [selected] : accounts))
       .filter(a => a?.id && a?.broker_account_id);
     render();
@@ -139,7 +139,7 @@
   async function syncSelectedAccount() {
     if (terminalSyncBusy) return;
     const select = $('#account');
-    const a = accounts.find(x => String(x.id) === String(select?.value)) || current();
+    const a = current();
     if (!a) return;
     terminalSyncBusy = true;
     try {
@@ -160,7 +160,7 @@
     const s = $('#terminal-status');
     if (s) s.innerHTML = `<span class="status-dot"></span>${safe(a.broker?.name || a.broker_name || 'Broker')} · ${safe(a.broker_account_id || a.account_id)} · ${safe(t)}`;
     $('#balance')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
-    $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity ?? a.balance)}`.trim()));
+    $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity)}`.trim()));
     $('#margin')?.replaceChildren(document.createTextNode(`${c} ${money(a.margin)}`.trim()));
     $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
     $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id || a.account_id}`));
@@ -186,7 +186,7 @@
     ensureMaterialSymbols(); mount(); await syncAccounts();
     const chart = $('#chart'); if (!chart) return;
     const select = $('#account');
-    if (select && !document.querySelector('.terminal-page')) select.addEventListener('change', () => { const a = accounts.find(x => String(x.id) === String(select.value)); updateTerminalAccount(a); syncSelectedAccount(); });
+    if (select && !document.querySelector('.terminal-page')) select.addEventListener('change', () => { const a = accounts.find(x => String(x.id) === String(select.value)); if (a) selectAccount(a.id).catch(error => window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error}))); });
     if (window.AlgoBotBrokerUI) return;
     window.AlgoBotBrokerUI = {getAccounts:() => accounts, getCurrentAccount:current, syncAccounts, syncSelectedAccount, updateTerminalAccount, selectAccount};
     const symbol = await discoverSymbol();

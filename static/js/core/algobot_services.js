@@ -13,8 +13,8 @@
   const context = () => window.AlgoBotAccountContext;
   const data = () => window.AlgoBotFrontendData;
 
-  const accountId = () => context()?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id || null;
-  const account = () => context()?.getSelected?.() || window.AlgoBotBrokerState?.get?.()?.account || null;
+  const accountId = () => context()?.getSelectedId?.() || null;
+  const account = () => context()?.getSelected?.() || null;
 
   const serviceFor = name => {
     const value = String(name || '').trim().toLowerCase();

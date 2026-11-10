@@ -128,7 +128,7 @@
     const min=Math.min(...all,0),max=Math.max(...all,0),span=max-min||1,w=480,h=170,pad=36,right=8,top=8,bottom=25,pw=w-pad-right,ph=h-top-bottom;
     const xFor=(i,n)=>pad+i*pw/Math.max(1,n-1),yFor=v=>top+(max-v)*ph/span;
     let out='';
-    for(let i=0;i<=4;i++){const y=top+i*ph/4,val=max-i*span/4;out+=`<path d="M${pad} ${y}H${w-right}" stroke="#15385b" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="#9db6d6" font-size="9">${val.toFixed(1)}%</text>`;}
+    for(let i=0;i<=4;i++){const y=top+i*ph/4,val=max-i*span/4;out+=`<path d="M${pad} ${y}H${w-right}" stroke="var(--line, #15385b)" stroke-width="1"/><text x="${pad-6}" y="${y+3}" text-anchor="end" fill="var(--muted, #9db6d6)" font-size="9">${val.toFixed(1)}%</text>`;}
     const makePath=arr=>arr.map((v,i)=>(i?'L':'M')+xFor(i,arr.length).toFixed(1)+' '+yFor(v).toFixed(1)).join(' ');
     const strategyPath=makePath(values);
     const baseline=yFor(Math.max(min,Math.min(max,0)));
@@ -138,7 +138,7 @@
     if(benchmark.length>1)out+=`<path d="${makePath(benchmark)}" fill="none" stroke="#1685ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
     out+=`<path d="${strategyPath}" fill="none" stroke="#08d4a4" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
     const labels=Array.isArray(series)&&typeof series[0]==='object'?series.map(x=>x.date??x.timestamp??x.label??''):[],last=labels.length?labels[labels.length-1]:'';
-    if(last)out+=`<text x="${w-right}" y="${h-5}" text-anchor="end" fill="#9db6d6" font-size="9">${String(last).slice(0,16)}</text>`;
+    if(last)out+=`<text x="${w-right}" y="${h-5}" text-anchor="end" fill="var(--muted, #9db6d6)" font-size="9">${String(last).slice(0,16)}</text>`;
     svg.innerHTML=out;svg.hidden=false;empty.hidden=true;
     const legend=svg.closest('.strategy-overview-panel')?.querySelector('.strategy-chart-legend');
     if(legend)legend.innerHTML='<span><i class="legend-dot strategy-dot"></i>Selected strategy</span>'+(benchmark.length>1?'<span><i class="legend-dot benchmark-dot"></i>Benchmark</span>':'');

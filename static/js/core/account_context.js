@@ -33,15 +33,13 @@
       }
       if(revisionAtStart!==selectionRevision)return selected;
       const serverId=accountId(serverSelected);
-      // The original connected-account fallback remains intact for compatibility.
-      let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||((rows.length===1&&rows[0]?.is_connected===true)?rows[0]:null);
-      // If OAuth created an active account but no BrokerConnection exists yet,
-      // select that credential-ready account so broker_state_bridge.js can make
-      // the actual account-scoped connection. Without this fallback the two
-      // modules deadlock: the bridge needs a selected account to connect, while
-      // the selector previously required the account to already be connected.
-      if(!target)target=rows.find(a=>a.is_connected===true&&a.status==='active')||rows.find(a=>a.status==='active'&&a.credential_status==='ready')||null;
-      if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-connected-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
+      // The browser never promotes a credential-ready or merely connected row
+      // into the active selection. The server's account serializer derives
+      // is_active from the canonical account context; if no account is marked
+      // active, there is no confirmed selection. Broker connection and account
+      // selection are separate lifecycle operations.
+      const target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||rows.find(a=>a.is_active===true)||null;
+      if(!target){selected=null;storageSet(null);window.AlgoBotBrokerState?.reset('no-confirmed-broker-account');window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));return null}
       const hydrated=serverSelected&&accountId(serverSelected)===accountId(target)?serverSelected:target;
       accounts=accounts.map(a=>accountId(a)===accountId(hydrated)?{...a,...hydrated,is_active:true}:{...a,is_active:false});
       if(!accounts.some(a=>accountId(a)===accountId(hydrated)))accounts=[hydrated,...accounts];window.AlgoBotBrokerAccounts=accounts.slice();return setSelected(hydrated,'account-context-hydrated',true);
@@ -95,7 +93,7 @@
       throw error;
     }
   }
-  function getSelected(){return switching?null:(selected||window.AlgoBotBrokerState?.get?.().account||null)}
+  function getSelected(){return switching?null:selected}
   function getSelectedId(){return accountId(getSelected())||null}
   function getAccounts(){return accounts.slice()}
   window.AlgoBotAccountContext=Object.freeze({load,refresh:()=>load(true),selectAccount,getSelected,getSelectedId,getAccounts,isSwitching:()=>switching});
@@ -103,5 +101,6 @@
   window.addEventListener('algobot:backend-accounts-loaded',event=>{const rows=list(event.detail).filter(a=>a?.id);if(rows.length)accounts=rows;if(switching)return;if(selected&&accounts.some(a=>accountId(a)===accountId(selected)))return;if(!selected){const target=accounts.find(a=>a.is_active===true);if(target)setSelected(target,'backend-accounts-rehydrated',false)}});
   window.addEventListener('algobot:account-synced',event=>{if(!event.detail?.id)return;const id=accountId(event.detail);accounts=accounts.map(a=>accountId(a)===id?event.detail:a);if(getSelectedId()===id)setSelected(event.detail,'account-synced',true)});
   window.addEventListener('algobot:account-context-error',event=>{const message=event.detail?.message||'Broker account selection is temporarily unavailable.';window.dispatchEvent(new CustomEvent('algobot:account-state-unavailable',{detail:{message,retryable:true}}));});
+  window.addEventListener('storage',event=>{if(event.key===STORAGE_KEY)load(true).catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})));});
   const boot=()=>{if(document.body.dataset.authenticated==='true')load().catch(error=>window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error})))};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

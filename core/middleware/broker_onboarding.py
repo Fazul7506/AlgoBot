@@ -67,7 +67,7 @@ class BrokerOnboardingMiddleware:
                 return redirect("profile_completion_page")
         if not protected_workspace:
             return self.get_response(request)
-        if has_authorized_broker_connection(user):
+        if has_authorized_broker_connection(user, request=request):
             return self.get_response(request)
 
         requested = request.get_full_path()

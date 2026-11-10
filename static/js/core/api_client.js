@@ -15,7 +15,7 @@
     if (!raw.startsWith('/api/')) return null;
     return new URL(raw, window.location.origin).toString();
   };
-  const advisoryFallbackEndpoints = Object.freeze({accounts:'/api/brokers/accounts/',select:'/api/brokers/accounts/{id}/select/',aiPredict:'/api/ai/predict/'});
+  const advisoryFallbackEndpoints = Object.freeze({accounts:'/api/brokers/accounts/',aiPredict:'/api/ai/predict/'});
   function resolveUrl(path) {
     const raw = String(aliases[path] || path || '/');
     if (/^https?:\/\//i.test(raw)) {
@@ -54,7 +54,7 @@
       const routing = payload.routing_context && typeof payload.routing_context === 'object' ? {...payload.routing_context} : {};
       const validation = payload.validation_context && typeof payload.validation_context === 'object' ? payload.validation_context : {};
       Object.assign(routing, validation, window.__algobotAiOrderContext || {});
-      const selectedId = window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id;
+      const selectedId = window.AlgoBotAccountContext?.getSelectedId?.();
       if (selectedId != null && routing.authoritative_account_id == null) routing.authoritative_account_id = selectedId;
       if (payload.broker_account != null && routing.authoritative_account_id == null) routing.authoritative_account_id = payload.broker_account;
       if (payload.symbol && routing.underlying_symbol == null) routing.underlying_symbol = payload.symbol;

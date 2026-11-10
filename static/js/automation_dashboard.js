@@ -12,7 +12,7 @@
       return '<div class="ds-state"><strong>No broker accounts connected yet</strong><p>You can design and validate workflows now. Connect a supported broker account before enabling broker actions.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div>';
     }
     return `<div class="mini-table">${accounts.slice(0, 20).map(account => {
-      const ready = account.is_connected && account.status === 'active' && account.credential_status === 'ready';
+      const ready = account.connection_eligible === true;
       const broker = account.broker_name || account.broker?.name || 'Broker';
       const accountId = account.account_id || account.broker_account_id || account.id;
       const environment = String(account.account_type || 'unknown').toUpperCase();
@@ -34,7 +34,7 @@
       const workflows = responses[0].status === 'fulfilled' ? list(responses[0].value) : [];
       const history = responses[1].status === 'fulfilled' ? list(responses[1].value) : [];
       const accounts = responses[2].status === 'fulfilled' ? list(responses[2].value) : [];
-      const connectedAccounts = accounts.filter(a => a.is_connected && a.status === 'active' && a.credential_status === 'ready');
+      const connectedAccounts = accounts.filter(a => a.connection_eligible === true);
       const failures = responses.map((r, i) => r.status === 'rejected' ? ['workflows', 'history', 'broker accounts'][i] : null).filter(Boolean);
       root.innerHTML = `
         <section class="kpi-grid compact">

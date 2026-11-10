@@ -19,6 +19,7 @@ class PositionSyncPersistenceTests(TransactionTestCase):
             account_id="SYNC-1",
             currency="USD",
             status="active",
+            credentials={"account_type": "demo"},
         )
 
     def _position(self, contract_id, status="open"):

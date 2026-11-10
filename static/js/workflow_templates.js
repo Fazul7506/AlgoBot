@@ -31,7 +31,7 @@
   let accounts = [];
 
   function readyAccounts() {
-    return accounts.filter(a => a.is_connected && a.status === 'active' && a.credential_status === 'ready');
+    return accounts.filter(a => a.connection_eligible === true);
   }
 
   function accountOptions() {
@@ -90,7 +90,7 @@
           <div data-workflow-feedback aria-live="polite"></div>
         </article>
       </section>
-      <section class="panel"><div class="panel-head"><div><p class="eyebrow">Multi-broker</p><h2>Available broker accounts</h2></div><a href="/brokers/marketplace/">Manage brokers</a></div>${accounts.length ? `<div class="mini-table">${accounts.map(a => `<div class="mini-row"><strong>${esc(a.broker_name || a.broker?.name || 'Broker')} · ${esc(a.account_id || a.broker_account_id || a.id)}</strong><span>${a.is_connected && a.credential_status === 'ready' ? 'Connected & ready' : esc(a.is_connected ? a.credential_status || 'Needs verification' : 'Disconnected')}</span><b>${esc(String(a.account_type || 'unknown').toUpperCase())}</b></div>`).join('')}</div>` : '<div class="ds-state"><strong>No broker accounts found</strong><p>You can still design workflows. Connect a supported broker before executing broker actions.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div>'}</section>
+      <section class="panel"><div class="panel-head"><div><p class="eyebrow">Multi-broker</p><h2>Available broker accounts</h2></div><a href="/brokers/marketplace/">Manage brokers</a></div>${accounts.length ? `<div class="mini-table">${accounts.map(a => `<div class="mini-row"><strong>${esc(a.broker_name || a.broker?.name || 'Broker')} · ${esc(a.account_id || a.broker_account_id || a.id)}</strong><span>${a.connection_eligible === true ? 'Connected & ready' : esc(a.selection_eligible === true ? 'Ready to connect' : a.credential_status || 'Needs verification')}</span><b>${esc(String(a.account_type || 'unknown').toUpperCase())}</b></div>`).join('')}</div>` : '<div class="ds-state"><strong>No broker accounts found</strong><p>You can still design workflows. Connect a supported broker before executing broker actions.</p><a class="ds-btn ds-btn--primary" href="/brokers/connect/">Connect broker</a></div>'}</section>
       <section class="panel"><div class="panel-head"><div><p class="eyebrow">Existing</p><h2>Your workflows</h2></div></div>${workflowRows()}</section>`;
     const form = root.querySelector('[data-workflow-form]');
     const tradeFields = root.querySelector('[data-trade-fields]');

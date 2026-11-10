@@ -12,7 +12,7 @@
   const list=v=>window.AlgoBotFrontendData?.list?.(v)||[];
   const api=(url,options={},timeout=12000)=>window.AlgoBotServices?.request?.('market-data',url,options,timeout)||window.AlgoBotFrontendData?.request?.(url,options,timeout);
   let contracts=[],capabilitiesRequest=0,capabilitiesInFlight=null,capabilitiesSymbol='';
-  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v3:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none')+':'+symbol;
+  const capabilitiesCacheKey=symbol=>'algobot:broker-capabilities:v3:'+String(window.AlgoBotAccountContext?.getSelectedId?.()||'none')+':'+symbol;
   const readCapabilitiesCache=symbol=>{try{const item=JSON.parse(sessionStorage.getItem(capabilitiesCacheKey(symbol))||'null');if(!item?.payload||Date.now()-Number(item.at||0)>300000)return null;return item.payload}catch(_){return null}};
   const writeCapabilitiesCache=(symbol,payload)=>{try{sessionStorage.setItem(capabilitiesCacheKey(symbol),JSON.stringify({at:Date.now(),payload}))}catch(_){} };
 

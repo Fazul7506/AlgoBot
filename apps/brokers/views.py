@@ -113,13 +113,16 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
             except asyncio.TimeoutError:
                 return response.Response({'detail':'The broker did not verify the selected account before the 12-second connection deadline. Your previous account remains selected. Retry after checking the broker connection.','broker_status':'switch_connection_timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
             except BrokerAuthenticationError as exc:
+                logger.warning('broker_account_switch_failed', extra={'stage':'connection','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
                 return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
             except BrokerConnectionError as exc:
+                logger.warning('broker_account_switch_failed', extra={'stage':'connection','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
                 return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
             except BrokerRoutingError as exc:
+                logger.warning('broker_account_switch_failed', extra={'stage':'connection','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
                 return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
             except Exception as exc:
-                logger.exception('broker_account_switch_connection_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+                logger.exception('broker_account_switch_connection_failed',extra={'stage':'connection','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'broker_id':account.broker_id,'error_type':type(exc).__name__})
                 return response.Response({'detail':'The selected broker account could not be verified. Your previous account remains selected.','broker_status':'verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
         # Verify a fresh provider snapshot before committing the server-side
         # session selection. A successful handshake alone is not account-ready.
@@ -133,19 +136,22 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         except BrokerAuthenticationError as exc:
             if str(previous_id or '') != str(account.pk):
                 BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            logger.warning('broker_account_switch_failed', extra={'stage':'snapshot','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
             return response.Response({'detail':str(exc),'broker_status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
         except BrokerConnectionError as exc:
             if str(previous_id or '') != str(account.pk):
                 BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            logger.warning('broker_account_switch_failed', extra={'stage':'snapshot','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
             return response.Response({'detail':str(exc),'broker_status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except BrokerRoutingError as exc:
             if str(previous_id or '') != str(account.pk):
                 BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
+            logger.warning('broker_account_switch_failed', extra={'stage':'snapshot','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'error_type':type(exc).__name__})
             return response.Response({'detail':str(exc),'broker_status':'not_connected'},status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             if str(previous_id or '') != str(account.pk):
                 BrokerConnection.objects.filter(broker_account=account,status='connected').update(status='degraded')
-            logger.exception('broker_account_switch_snapshot_failed',extra={'account_id':account.pk,'broker_id':account.broker_id})
+            logger.exception('broker_account_switch_snapshot_failed',extra={'stage':'snapshot','broker_account_pk':account.pk,'provider_account_id':account.account_id,'requested_account_type':actual,'broker_id':account.broker_id,'error_type':type(exc).__name__})
             return response.Response({'detail':'The selected account snapshot could not be verified. Your previous account remains selected.','broker_status':'snapshot_verification_failed','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
         if account.account_type != actual or not account.is_connection_eligible or not account.last_synced_at:
             if str(previous_id or '') != str(account.pk):

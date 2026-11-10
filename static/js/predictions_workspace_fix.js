@@ -335,7 +335,7 @@
       html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-lab-table td,
       html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-detail-row,
       html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-insight { border-color:var(--ds-border)!important; }
-      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-chart { background:#04152b!important; color:#dbeafe!important; }
+      html[data-theme="light"] body:has([data-page="core-predictions"]) .ai-chart { background:var(--ds-surface-1)!important; color:var(--ds-text)!important; border-color:var(--ds-border)!important; }
       body:has([data-page="core-predictions"]) .ai-lab button:focus-visible,
       body:has([data-page="core-predictions"]) .ai-lab input:focus-visible,
       body:has([data-page="core-predictions"]) .ai-lab select:focus-visible { outline:2px solid var(--ds-info)!important; outline-offset:2px!important; }

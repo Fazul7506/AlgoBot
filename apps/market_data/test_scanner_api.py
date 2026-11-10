@@ -1,15 +1,17 @@
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from .models import Candle, MarketSnapshot, MarketSymbol
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class MarketScannerApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -24,7 +26,11 @@ class MarketScannerApiTests(TestCase):
             broker=self.broker,
             account_id="SCANNER-ACCOUNT",
             status="active",
+            credentials={"account_type": "demo"},
         )
+        self.account.set_access_token("scanner-test-token")
+        self.account.last_synced_at = timezone.now()
+        self.account.save(update_fields=["access_token", "last_synced_at"])
         BrokerConnection.objects.create(
             broker=self.broker,
             broker_account=self.account,
@@ -33,6 +39,9 @@ class MarketScannerApiTests(TestCase):
             connected_at=timezone.now(),
         )
         self.client.force_authenticate(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = self.account.pk
+        session.save()
 
         self.gainer = MarketSymbol.objects.create(
             symbol="GAIN", display_name="Gainer", market="Derived Indices",
@@ -77,8 +86,8 @@ class MarketScannerApiTests(TestCase):
             for i in range(1, 21)
         ])
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_scanner_returns_backend_snapshot_and_technical_data(self):
         response = self.client.get("/api/market/scanner/")
         self.assertEqual(response.status_code, 200)
@@ -95,8 +104,8 @@ class MarketScannerApiTests(TestCase):
         loser = next(row for row in payload["results"] if row["symbol"] == "LOSS")
         self.assertEqual(loser["technical_status"], "insufficient_data")
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_gainer_filter_excludes_non_positive_change(self):
         response = self.client.get("/api/market/scanner/?direction=gainers")
         self.assertEqual(response.status_code, 200)
@@ -104,8 +113,8 @@ class MarketScannerApiTests(TestCase):
             [row["symbol"] for row in response.json()["results"]], ["GAIN"]
         )
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_spread_filter_excludes_symbols_without_a_snapshot(self):
         response = self.client.get("/api/market/scanner/?max_spread=0.25")
         self.assertEqual(response.status_code, 200)
@@ -113,8 +122,8 @@ class MarketScannerApiTests(TestCase):
             [row["symbol"] for row in response.json()["results"]], ["GAIN"]
         )
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_invalid_filters_are_rejected(self):
         self.assertEqual(
             self.client.get("/api/market/scanner/?direction=sideways").status_code, 400
@@ -135,8 +144,8 @@ class MarketScannerApiTests(TestCase):
             self.client.get("/api/market/scanner/?min_change=5&max_change=-5").status_code, 400
         )
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_stale_snapshot_is_not_classified_as_current_opportunity(self):
         snapshot = self.gainer.snapshot
         snapshot.timestamp = timezone.now() - timedelta(seconds=61)
@@ -145,8 +154,8 @@ class MarketScannerApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"], [])
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_future_dated_snapshot_is_not_fresh(self):
         snapshot = self.gainer.snapshot
         snapshot.timestamp = timezone.now() + timedelta(seconds=60)

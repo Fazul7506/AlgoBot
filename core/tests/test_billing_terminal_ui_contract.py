@@ -461,12 +461,12 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261109-canonical-sidebar-account1", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()

@@ -77,7 +77,15 @@ class BrokerAccount(models.Model):
     @property
     def is_connected(self): return self.connections.filter(status='connected').exists()
     @property
-    def is_connection_eligible(self): return self.status=='active' and self.broker.status=='active' and self.credential_status=='ready' and self.is_connected
+    def is_selection_eligible(self):
+        """A credential-ready active account may be selected and connected.
+
+        Connection establishment is part of the server-side selection workflow,
+        so an existing BrokerConnection row is not required at this stage.
+        """
+        return (self.status == 'active' and self.broker.status == 'active' and self.credential_status == 'ready' and (self.broker.broker_type != 'deriv' or self.account_type in {'demo', 'real'}))
+    @property
+    def is_connection_eligible(self): return self.is_selection_eligible and self.is_connected
 
 class BrokerConnection(models.Model):
     broker=models.ForeignKey(Broker,on_delete=models.CASCADE,related_name='connections'); broker_account=models.ForeignKey(BrokerAccount,on_delete=models.CASCADE,related_name='connections',null=True,blank=True); status=models.CharField(max_length=24,choices=choices(c.CONNECTION_STATUSES),default='disconnected'); latency=models.FloatField(default=0); last_ping=models.DateTimeField(null=True,blank=True); heartbeat=models.JSONField(default=dict,blank=True); connected_at=models.DateTimeField(null=True,blank=True); updated_at=models.DateTimeField(auto_now=True)

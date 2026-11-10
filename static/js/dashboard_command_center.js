@@ -6,7 +6,7 @@
   const $ = (selector) => document.querySelector(selector);
   const list = (value) => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const esc = (value) => { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; };
-  const money = (value, currency = 'USD') => { if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); const safeValue = !Number.isFinite(Number(value)) ? 0 : Number(value); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); const safeValue = Number(value); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
@@ -57,7 +57,7 @@
 
   function currentAccountId() {
     if (selectedAccountId != null) return String(selectedAccountId);
-    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     return account?.id != null ? String(account.id) : null;
   }
 
@@ -68,34 +68,34 @@
       if (!value || !value.account) return null;
       const requestedId = currentAccountId();
       if (!requestedId || value.account.id == null || String(value.account.id) !== requestedId) return null;
-      if (value.account.is_connected !== true || String(value.account.data_freshness || '').toLowerCase() !== 'fresh') return null;
+      if (value.account.connection_eligible !== true || String(value.account.data_freshness?.state || value.account.data_freshness || '').toLowerCase() !== 'fresh') return null;
       return value;
     } catch (_) { return null; }
   }
   function writeLastAccountSnapshot(account) {
-    if (!account) return;
+    if (!account || account.connection_eligible !== true || String(account.data_freshness?.state || account.data_freshness || '').toLowerCase() !== 'fresh') return;
     try { sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({at: Date.now(), account})); } catch (_) {}
   }
 
   function renderAccount(account, message = '', persistSnapshot = true, staleDisplay = false) {
     if (!account) {
-      ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, money(0, 'USD')));
+      ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, 'Unavailable'));
       setText('[data-kpi-state="balance"]', message || 'No authoritative broker account');
       setText('[data-kpi-state="equity"]', 'No broker equity reported');
       status('account', 'error', message || 'Broker account unavailable');
-      setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(message || 'No connected broker account')}</span>`);
+      setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(message || 'No confirmed broker account selected')}</span>`);
       return;
     }
     selectedAccountId = account.id != null ? String(account.id) : selectedAccountId;
     const currency = account.currency || '';
     const pnl = account.net_profit_loss ?? account.net_pnl ?? account.profit_loss ?? account.pnl;
-    const equity = account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null);
+    const equity = account.equity ?? null;
     setText('[data-kpi="balance"]', money(account.balance, currency));
     setText('[data-kpi="equity"]', money(equity, currency));
     setText('[data-kpi="available"]', money(account.free_margin ?? account.available_margin ?? account.available, currency));
     setText('[data-kpi="pnl"]', money(pnl, currency || 'USD'));
-    const freshness = String(account.data_freshness || 'unknown').toLowerCase();
-    const connected = account.is_connected === true;
+    const freshness = String(account.data_freshness?.state || account.data_freshness || 'unknown').toLowerCase();
+    const connected = account.connection_eligible === true;
     const snapshotLabel = staleDisplay ? 'Last verified broker snapshot' : freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
     setText('[data-kpi-state="balance"]', freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel);
     setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
@@ -136,7 +136,7 @@
     const positionsStale = result.positions.ok && (result.positions.value?.status === 'stale' || result.positions.value?.source === 'broker_cache');
     const ordersStale = result.orders.ok && (result.orders.value?.status === 'stale' || result.orders.value?.source === 'broker_cache');
 
-    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(money(item.profit ?? item.pnl ?? item.profit_loss, item.currency || window.AlgoBotBrokerState?.get?.()?.account?.currency || 'USD'))}</b></div>`, result.positions.pending ? 'Loading positions…' : result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
+    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(money(item.profit ?? item.pnl ?? item.profit_loss, item.currency || window.AlgoBotAccountContext?.getSelected?.()?.currency || 'USD'))}</b></div>`, result.positions.pending ? 'Loading positions…' : result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
     renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.pending ? 'Loading orders…' : result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
     renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.pending ? 'Loading market snapshots…' : result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
     renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))} · ${esc(item.direction || item.signal || 'HOLD')}</strong></span><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.pending ? 'Loading recent signals…' : result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
@@ -159,7 +159,7 @@
 
   async function load() {
     const seq = ++loadSeq;
-    const active = window.AlgoBotBrokerState?.get?.()?.account;
+    const active = window.AlgoBotAccountContext?.getSelected?.()||null;
     const requestedAccountId = active?.id != null ? String(active.id) : null;
     // Clear the previous account identity when no account is selected; otherwise
     // its cached snapshot could survive a disconnect and be shown on a timeout.
@@ -178,9 +178,7 @@
     setText('[data-dashboard-sync]', 'Refreshing authoritative snapshot…');
     document.documentElement.dataset.dashboardLoading = 'true';
     const isCurrent = () => {
-      const currentId = window.AlgoBotAccountContext?.getSelectedId?.()
-        ?? window.AlgoBotBrokerState?.get?.()?.account?.id
-        ?? null;
+      const currentId = window.AlgoBotAccountContext?.getSelectedId?.() ?? null;
       // A dashboard request is valid only for a real, confirmed account.
       // Never let a no-account transition or an old response paint financial data.
       return seq === loadSeq && requestedAccountId != null

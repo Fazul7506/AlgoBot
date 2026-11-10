@@ -6,12 +6,12 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from apps.strategies.views import StrategyViewSet
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class StrategyPerformanceIsolationTests(TestCase):
     def test_strategy_performance_is_available_without_exposing_global_pnl_as_personal(self):
         user = get_user_model().objects.create_user(username="strategy-user", password="test-password")

@@ -2,11 +2,12 @@ from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from core.broker_onboarding import has_authorized_broker_connection
 from core.models import UserProfile
 
@@ -31,7 +32,9 @@ class BrokerOnboardingGateTests(TestCase):
         )
 
     def test_user_without_broker_connection_is_not_onboarded(self):
-        self.assertFalse(has_authorized_broker_connection(self.user))
+        self.client.force_login(self.user)
+        request = self.client.get("/settings/").wsgi_request
+        self.assertFalse(has_authorized_broker_connection(self.user, request=request))
 
     def test_account_and_operational_pages_remain_available_during_onboarding(self):
         self.client.force_login(self.user)
@@ -82,9 +85,11 @@ class BrokerOnboardingGateTests(TestCase):
         account = BrokerAccount.objects.create(
             user=self.user,
             broker=self.broker,
-            account_id="V123456",
+            account_id="VRTC123456",
             status="active",
             token_status="active",
+            credentials={"account_type": "demo"},
+            last_synced_at=timezone.now(),
         )
         BrokerConnection.objects.create(
             broker=self.broker,
@@ -92,13 +97,17 @@ class BrokerOnboardingGateTests(TestCase):
             status="connected",
         )
         self.client.force_login(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = account.pk
+        session.save()
+        request = self.client.get("/settings/").wsgi_request
         with patch.object(
             BrokerAccount,
             "is_connection_eligible",
             new_callable=PropertyMock,
             return_value=True,
         ):
-            self.assertTrue(has_authorized_broker_connection(self.user))
+            self.assertTrue(has_authorized_broker_connection(self.user, request=request))
             response = self.client.get(reverse("dashboard_page"))
         self.assertEqual(response.status_code, 200)
 
@@ -112,6 +121,7 @@ class BrokerOnboardingGateTests(TestCase):
         )
 
 
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class BrokerMarketplaceDirectoryUiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -180,7 +190,11 @@ class BrokerMarketplaceDirectoryUiTests(TestCase):
             account_id="V987654",
             status="active",
             token_status="active",
+            credentials={"account_type": "demo"},
         )
+        account.set_access_token("marketplace-disconnect-test-token")
+        account.last_synced_at = timezone.now()
+        account.save(update_fields=["access_token", "last_synced_at"])
         BrokerConnection.objects.create(
             broker=self.deriv,
             broker_account=account,

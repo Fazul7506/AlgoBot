@@ -13,12 +13,12 @@ from .models import Strategy, StrategyConfiguration
 from .views import StrategyViewSet
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class StrategyControlPlaneTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='strategy-test', password='test-password')
