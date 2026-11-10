@@ -29,7 +29,7 @@ class GlobalTemplateThemeContractTests(SimpleTestCase):
         theme_styles = base.index("workspace_theme_contract.css")
         self.assertGreater(theme_styles, page_styles)
         self.assertIn("global-template-theme1", base)
-        self.assertIn("theme-navigation-stability2", base)
+        self.assertIn("theme-offline-sync1", base)
 
     def test_light_and_dark_themes_define_complete_shared_tokens(self):
         css = (ROOT / "static/css/workspace_theme_contract.css").read_text(encoding="utf-8")
@@ -53,6 +53,15 @@ class GlobalTemplateThemeContractTests(SimpleTestCase):
         self.assertIn("--pf-panel: #ffffff !important", css)
         self.assertIn("--bill-panel: #ffffff !important", css)
         self.assertIn("--p-panel: #ffffff !important", css)
+
+    def test_global_theme_toggle_keeps_local_choice_and_retries_account_sync(self):
+        shell = (ROOT / "static/js/base_shell.js").read_text(encoding="utf-8")
+        self.assertIn("algobot-theme-pending-sync", shell)
+        self.assertIn("const syncPendingTheme=async()=>", shell)
+        self.assertIn(")},25000)", shell)
+        self.assertIn("Theme is saved on this device. Account synchronization is pending", shell)
+        self.assertIn("if(readPendingTheme())syncPendingTheme().catch(()=>{});", shell)
+        self.assertNotIn("persistLocal(previous);apply(previous);", shell)
 
     def test_standalone_auth_template_restores_saved_theme_before_paint(self):
         auth = (ROOT / "templates/core/auth_page.html").read_text(encoding="utf-8")
