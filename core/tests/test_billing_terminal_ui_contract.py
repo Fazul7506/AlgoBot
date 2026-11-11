@@ -195,7 +195,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("is_preferred", context)
         self.assertNotIn("is_default", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
-        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
+        self.assertIn("const target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
+        self.assertIn("rows.find(a=>a.is_active===true)||null", context)
+        self.assertNotIn("rows.find(a=>a.status==='active'&&a.credential_status==='ready')", context)
         self.assertIn("clearTransientState", context)
         self.assertNotIn("X-Algobot-Account-ID", context)
         self.assertNotIn("rememberedId", context)
@@ -540,9 +542,9 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
     def test_terminal_requires_authoritative_connection_and_credentials_before_execution(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
-        self.assertIn("a.is_connected===true", terminal)
-        self.assertIn("a.credential_status||''", terminal)
-        self.assertIn("a.broker?.status||''", terminal)
+        self.assertIn("selectedAccount()?.connection_eligible===true", terminal)
+        self.assertIn("a.selection_eligible!==true", terminal)
+        self.assertIn("a.connection_eligible!==true", terminal)
         self.assertIn("if(!brokerReady())throw new Error(brokerReadinessReason())", terminal)
         self.assertIn("if(!brokerReady()){result(", terminal)
         self.assertIn("syncExecutionControls", terminal)
