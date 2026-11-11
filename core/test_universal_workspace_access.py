@@ -202,7 +202,7 @@ class UniversalWorkspaceAccessTests(TestCase):
         self.assertIn("data-sidebar-account-switch", switcher)
         self.assertIn("closest?.('[data-sidebar-account-switch]')", switcher)
         self.assertIn("if(!target||String(target.id)!==String(b.dataset.accountId||''))return", switcher)
-        self.assertIn("current.is_connected===true&&String(current.status||'').toLowerCase()==='active'", switcher)
+        self.assertIn("const live=current.connection_eligible===true", switcher)
 
     def test_sidebar_account_area_remains_inside_drawer_end_to_end(self):
         css = self._css("runtime_recovery.css")
