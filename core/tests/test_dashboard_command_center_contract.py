@@ -50,8 +50,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_stale_or_unverified_broker_snapshot_is_not_rendered_as_connected_and_fresh(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const freshness = String(account.data_freshness || 'unknown').toLowerCase()", source)
-        self.assertIn("const connected = account.is_connected === true", source)
+        self.assertIn("const freshness = String(account.data_freshness?.state || account.data_freshness || 'unknown').toLowerCase()", source)
+        self.assertIn("const connected = account.connection_eligible === true", source)
         self.assertIn("Stale broker snapshot", source)
         self.assertIn("CONNECTION UNCONFIRMED", source)
         self.assertIn("Broker snapshot freshness unknown", source)
@@ -166,8 +166,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("money(0, 'USD')", source)
-        self.assertIn("account.equity ?? (pnl != null && account.balance != null ? Number(account.balance) + Number(pnl) : null)", source)
+        template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
+        self.assertIn("$0.00", template)
+        self.assertNotIn("Number(account.balance) + Number(pnl)", source)
+        self.assertIn("const equity = account.equity ?? null", source)
         self.assertIn("setText('[data-kpi=\"equity\"]', money(equity, currency))", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
@@ -177,8 +179,8 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_stale_cache_requires_a_fresh_connected_snapshot_and_is_labelled_stale_on_timeout(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("value.account.is_connected !== true", source)
-        self.assertIn("String(value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
+        self.assertIn("value.account.connection_eligible !== true", source)
+        self.assertIn("String(value.account.data_freshness?.state || value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
         self.assertIn("CONNECTION LAST VERIFIED", source)
         self.assertIn("setText('[data-kpi-state=\"equity\"]', timeoutLabel)", source)
 
