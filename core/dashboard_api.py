@@ -151,6 +151,8 @@ class DashboardViewSet(viewsets.ViewSet):
                         else "stale"
                     ),
                     "is_connected": account.is_connection_eligible,
+                    "connection_eligible": account.is_connection_eligible,
+                    "snapshot_ready": snapshot_synced,
                 },
                 "trading_stats": stats,
             },

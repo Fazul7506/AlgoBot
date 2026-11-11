@@ -162,18 +162,19 @@ class BrokerConnectionService:
         if broker.broker_type == 'deriv':
             if not verified_account_id or verified_account_id != str(account.account_id):
                 raise BrokerAuthenticationError('Deriv verified a different account than the one selected. Reconnect that specific account.')
+            from .adapters.deriv import _normalize_is_virtual
             configured_type = str(account.account_type or '').lower().strip()
-            provider_virtual = verification.get('is_virtual')
+            provider_virtual = _normalize_is_virtual(verification.get('is_virtual'))
             provider_type = 'demo' if provider_virtual is True else 'real' if provider_virtual is False else ''
             if configured_type in {'demo', 'real'} and provider_type and configured_type != provider_type:
                 raise BrokerAuthenticationError('Deriv account type verification did not match the selected demo/real account.')
         latency = await adapter.ping()
         if verification.get('balance') is not None: account.balance = verification['balance']
         if verification.get('currency'): account.currency = verification['currency']
-        account_type = verification.get('is_virtual')
         avatar_url = verification.get('avatar_url')
         credentials = dict(account.credentials or {})
-        if account_type is not None: credentials['account_type'] = 'demo' if account_type else 'real'
+        if broker.broker_type == 'deriv' and provider_virtual is not None:
+            credentials['account_type'] = 'demo' if provider_virtual else 'real'
         credentials['connection_health'] = 'verified'
         if avatar_url: credentials['avatar_url'] = str(avatar_url)
         # Connection verification is not a complete financial snapshot.
@@ -441,13 +442,16 @@ class ExecutionEngine:
 class SynchronizationService:
     async def sync_account(self, account):
         if account.status in {'disabled', 'suspended'}: raise BrokerRoutingError('This broker account is not connected')
-        adapter = BrokerRegistry().adapter(account.broker, account); data = await adapter.get_balance(); fields = []; broker_account_id = data.get('account_id') or account.account_id
+        adapter = BrokerRegistry().adapter(account.broker, account); data = await adapter.get_balance(); fields = []; provider_account_id = data.get('account_id'); broker_account_id = provider_account_id or account.account_id
         if account.broker.broker_type == 'deriv':
-            if broker_account_id and str(broker_account_id) != str(account.account_id):
-                raise BrokerAuthenticationError('Deriv returned a different account during snapshot synchronization. The selected account was not changed.')
+            if not provider_account_id or str(provider_account_id) != str(account.account_id):
+                raise BrokerAuthenticationError('Deriv did not confirm the exact requested account during snapshot synchronization. The selected account was not changed.')
             provider_type = str(data.get('account_type') or '').lower().strip()
-            if provider_type in {'demo', 'real'} and provider_type != account.account_type:
-                raise BrokerAuthenticationError('Deriv account type changed during snapshot synchronization. The selected DEMO/REAL environment was not changed.')
+            expected_type = str(account.account_type or '').lower().strip()
+            if provider_type not in {'demo', 'real'}:
+                raise BrokerAuthenticationError('Deriv did not confirm whether the requested account is DEMO or REAL. Reconnect and verify the account before switching.')
+            if expected_type not in {'demo', 'real'} or provider_type != expected_type:
+                raise BrokerAuthenticationError('Deriv account type verification did not match the selected DEMO/REAL environment. The selected account was not changed.')
         elif broker_account_id and broker_account_id != account.account_id:
             account.account_id = broker_account_id; fields.append('account_id')
         if not any(data.get(field) is not None for field in ('balance', 'equity', 'margin', 'free_margin')):
@@ -455,7 +459,7 @@ class SynchronizationService:
         for f in ['balance', 'equity', 'margin', 'free_margin', 'currency']:
             if data.get(f) is not None: setattr(account, f, data[f]); fields.append(f)
         credentials = dict(account.credentials or {})
-        if data.get('account_type'): credentials['account_type'] = str(data['account_type']).lower()
+        if data.get('account_type') in {'demo', 'real'}: credentials['account_type'] = str(data['account_type']).lower()
         if data.get('avatar_url'): credentials['avatar_url'] = str(data['avatar_url'])
         if credentials != (account.credentials or {}): account.credentials = credentials; fields.append('credentials')
         account.status = 'active'; account.last_synced_at = timezone.now(); fields.extend(['status', 'last_synced_at'])

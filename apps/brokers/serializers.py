@@ -18,11 +18,11 @@ class BrokerSerializer(serializers.ModelSerializer):
         return obj.live_capability_status
 
 class BrokerAccountSerializer(serializers.ModelSerializer):
-    broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); deriv_identity=serializers.SerializerMethodField(); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
+    broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); deriv_identity=serializers.SerializerMethodField(); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); selection_eligible=serializers.SerializerMethodField(); connection_eligible=serializers.SerializerMethodField(); snapshot_ready=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
     class Meta:
         model=BrokerAccount
-        fields=['id','user','broker','broker_name','broker_account_id','account_id','account_type','deriv_identity','avatar_url','display_name','branding','currency','balance','equity','margin','free_margin','net_profit_loss','status','is_active','is_connected','credential_status','last_synced_at','data_freshness','switch_enabled','created_at']
-        read_only_fields=['user','balance','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_active','is_connected','data_freshness','switch_enabled']
+        fields=['id','user','broker','broker_name','broker_account_id','account_id','account_type','deriv_identity','avatar_url','display_name','branding','currency','balance','equity','margin','free_margin','net_profit_loss','status','is_active','is_connected','credential_status','last_synced_at','data_freshness','switch_enabled','selection_eligible','connection_eligible','snapshot_ready','created_at']
+        read_only_fields=['user','balance','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_active','is_connected','data_freshness','switch_enabled','selection_eligible','connection_eligible','snapshot_ready']
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get('request')
@@ -71,7 +71,10 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         if not obj.last_synced_at:return {'state':'never_synced','seconds':None}
         from django.utils import timezone
         s=max(0,int((timezone.now()-obj.last_synced_at).total_seconds())); return {'state':'fresh' if s<=60 else 'stale','seconds':s}
-    def get_switch_enabled(self,obj): return True
+    def get_switch_enabled(self,obj): return bool(obj.is_selection_eligible)
+    def get_selection_eligible(self,obj): return bool(obj.is_selection_eligible)
+    def get_connection_eligible(self,obj): return bool(obj.is_connection_eligible)
+    def get_snapshot_ready(self,obj): return bool(obj.last_synced_at)
     def get_equity(self,obj):
         r=self._realtime(obj); return r['equity'] if r.get('equity') is not None else (obj.equity if obj.equity!=0 else None)
     def get_margin(self,obj):

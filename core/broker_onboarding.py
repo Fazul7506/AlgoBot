@@ -8,9 +8,7 @@ from functools import wraps
 
 from django.http import JsonResponse
 
-from django.utils import timezone
-
-from apps.brokers.models import BrokerAccount
+from core.account_context import get_active_account
 
 logger = logging.getLogger("broker_onboarding")
 
@@ -25,41 +23,25 @@ def has_verified_account_email(user):
     return UserProfile.objects.filter(user_id=user.pk, email_verified=True).exists()
 
 
-def has_authorized_broker_connection(user):
-    """Return True only when this user owns a currently usable Deriv connection."""
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
+def has_authorized_broker_connection(user, request=None):
+    """Return True only for the explicitly selected, provider-verified Deriv account.
 
-    accounts = (
-        BrokerAccount.objects.filter(
-            user_id=user.pk,
-            broker__broker_type="deriv",
-            status="active",
-            broker__status="active",
-            token_status="active",
+    This deliberately delegates account ownership, credential state, snapshot
+    freshness and selection to the single server-side account-context resolver.
+    A connected account row without an explicit session selection is not
+    sufficient to unlock the trading workspace.
+    """
+    if not user or not getattr(user, "is_authenticated", False) or request is None:
+        return False
+    try:
+        account = get_active_account(user, request=request, broker_type="deriv")
+        return bool(account and account.is_connection_eligible and account.last_synced_at)
+    except Exception as exc:
+        logger.warning(
+            "broker_onboarding_account_context_check_failed",
+            extra={"user_id": getattr(user, "pk", None), "error_type": exc.__class__.__name__},
         )
-        .select_related("broker")
-        .prefetch_related("connections")
-    )
-    now = timezone.now()
-    for account in accounts:
-        if account.expires_at is not None and account.expires_at <= now:
-            continue
-        try:
-            if account.is_connection_eligible:
-                return True
-        except Exception as exc:
-            # Missing/invalid encryption keys or unreadable legacy tokens must
-            # fail closed as an incomplete connection, not crash a request.
-            logger.warning(
-                "broker_onboarding_credential_check_failed",
-                extra={
-                    "user_id": user.pk,
-                    "broker_account_id": account.pk,
-                    "error_type": exc.__class__.__name__,
-                },
-            )
-    return False
+        return False
 
 
 
@@ -81,7 +63,7 @@ def require_broker_onboarding(view_func):
                 "code": "email_verification_required",
                 "next_url": "/verify-email/",
             }, status=403)
-        if has_authorized_broker_connection(user):
+        if has_authorized_broker_connection(user, request=request):
             return view_func(request, *args, **kwargs)
         return JsonResponse({
             "detail": "Connect and verify your Deriv account before using trading features.",

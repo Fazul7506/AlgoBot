@@ -1,21 +1,23 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Order, Position
+from core.account_context import SESSION_KEY
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class Phase3MarketIntelligenceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='phase23', password='test-password')
@@ -29,7 +31,13 @@ class Phase3MarketIntelligenceTests(TestCase):
             status='active',
             credentials={'account_type': 'demo'},
         )
+        self.account.set_access_token('phase23-test-token')
+        self.account.last_synced_at = timezone.now()
+        self.account.save(update_fields=['access_token', 'last_synced_at'])
         BrokerConnection.objects.create(broker=self.broker, broker_account=self.account, status='connected')
+        session = self.client.session
+        session[SESSION_KEY] = self.account.pk
+        session.save()
 
     def _strategy(self, name):
         return Strategy.objects.create(name=name, slug=name.lower().replace(' ', '-'), category='Momentum')

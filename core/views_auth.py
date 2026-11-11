@@ -68,7 +68,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 raise serializers.ValidationError({"code": "two_factor_invalid", "detail": "The authenticator or recovery code is invalid."})
         from core.broker_onboarding import has_authorized_broker_connection
         from django.urls import reverse
-        broker_setup_required = not has_authorized_broker_connection(self.user)
+        broker_setup_required = not has_authorized_broker_connection(self.user, request=self.context.get("request"))
         data["broker_setup_required"] = broker_setup_required
         data["next_url"] = reverse(
             "broker_marketplace_page" if broker_setup_required else "dashboard_page"
@@ -122,7 +122,7 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
         # validation after the account eligibility checks above.
         data = super().validate(attrs)
         from core.broker_onboarding import has_authorized_broker_connection
-        broker_setup_required = not has_authorized_broker_connection(user)
+        broker_setup_required = not has_authorized_broker_connection(user, request=self.context.get("request"))
         data["broker_setup_required"] = broker_setup_required
         from django.urls import reverse
         data["next_url"] = reverse(
@@ -249,7 +249,7 @@ def browser_api_token(request):
         refresh["mfa_verified"] = True
     from core.broker_onboarding import has_authorized_broker_connection
     from django.urls import reverse
-    broker_setup_required = not has_authorized_broker_connection(request.user)
+    broker_setup_required = not has_authorized_broker_connection(request.user, request=request)
     return Response({
         'access': str(refresh.access_token),
         'expires_in': int(settings.SIMPLE_JWT.get('ACCESS_TOKEN_LIFETIME', timedelta(hours=1)).total_seconds()),
@@ -378,7 +378,7 @@ def login_view(request):
         refresh["mfa_verified"] = True
     from core.broker_onboarding import has_authorized_broker_connection
     from django.urls import reverse
-    broker_setup_required = not has_authorized_broker_connection(user)
+    broker_setup_required = not has_authorized_broker_connection(user, request=request)
     logger.info('user_login_succeeded', extra={'user_id': user.pk})
     return Response({
         'status': 'success',

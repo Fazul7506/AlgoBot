@@ -4,7 +4,7 @@
   if (window.AlgoBotServiceRuntime) return;
   const active=new Map(),controllers=new Map(),registry=new Map(),errors=[],recentErrorKeys=new Map();
   const MAX_ERRORS=100,now=()=>new Date().toISOString();
-  const accountId=()=>String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'');
+  const accountId=()=>String(window.AlgoBotAccountContext?.getSelectedId?.()||'');
   const emit=(name,detail={})=>window.dispatchEvent(new CustomEvent(name,{detail:{...detail,at:now(),accountId:accountId()}}));
   const inferService=url=>{const path=String(url||'').toLowerCase();if(path.includes('/ai/')||path.includes('/predict'))return'ai';if(path.includes('data-center')||path.includes('/market'))return'market-data';if(path.includes('/orders'))return'orders';if(path.includes('/positions'))return'positions';if(path.includes('/strateg'))return'strategies';if(path.includes('/risk'))return'risk';if(path.includes('/monitor'))return'monitoring';if(path.includes('/notification'))return'notifications';if(path.includes('/automation'))return'automation';if(path.includes('/portfolio'))return'portfolio';if(path.includes('/backtest'))return'backtesting';return document.body?.dataset.service||'platform'};
   const register=(name,config={})=>{if(!name)throw new Error('A service name is required.');const value={...(registry.get(name)||{}),...config,name,registeredAt:(registry.get(name)||{}).registeredAt||now()};registry.set(name,value);emit('algobot:service-registered',{service:value});return Object.freeze({...value})};

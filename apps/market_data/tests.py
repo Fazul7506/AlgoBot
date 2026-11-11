@@ -2,31 +2,39 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from .models import (
     Candle, MarketSymbol, Tick,
 )
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class BrokerTickApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(username="market-test", password="test-pass")
         self.broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active", supports_live=True)
-        self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active")
+        self.account = BrokerAccount.objects.create(user=self.user, broker=self.broker, account_id="VRTC123", status="active", credentials={"account_type": "demo"})
+        self.account.set_access_token("market-tick-test-token")
+        self.account.last_synced_at = timezone.now()
+        self.account.save(update_fields=["access_token", "last_synced_at"])
         BrokerConnection.objects.create(broker=self.broker, broker_account=self.account, status="connected")
         MarketSymbol.objects.create(symbol="TEST", display_name="Test", market="Derived Indices", is_active=True, is_tradable=True)
         self.client.force_authenticate(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = self.account.pk
+        session.save()
 
     def test_broker_tick_accepts_get(self):
         with patch("apps.market_data.api.fetch_tick", return_value={"symbol": "TEST", "quote": 100.25, "epoch": 1}):

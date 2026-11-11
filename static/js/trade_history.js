@@ -21,14 +21,12 @@
   let page = 1;
   let lastPayload = null;
   let requestSeq = 0;
-  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+  let activeAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
 
   const esc = value => String(value ?? '—').replace(/[&<>'"]/g, ch => ({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
   }[ch]));
-  const money = (value, code='USD') => window.AlgoBotMoney?.format
-    ? window.AlgoBotMoney.format(value, code || 'USD')
-    : `$${(Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2)}`;
+  const money = (value, code='USD') => { if(value==null||value===''||!Number.isFinite(Number(value)))return 'Unavailable'; return window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, code || 'USD') : `$${Number(value).toFixed(2)}`; };
   const time = value => {
     if (!value) return '—';
     const d = new Date(value);
@@ -149,14 +147,18 @@
   async function load(targetPage = 1, refreshBroker = true) {
     page = targetPage;
     const seq = ++requestSeq;
-    const requestedAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+    const requestedAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
+    if (!requestedAccountId) {
+      refresh.disabled = false; state.textContent='No confirmed broker account selected'; message.textContent='Connect and explicitly select a broker account to view authoritative trade history.';
+      tbody.innerHTML='<tr><td colspan=\"12\">No confirmed broker account selected.</td></tr>'; prev.disabled=true; next.disabled=true; return;
+    }
     refresh.disabled = true;
     state.textContent = 'Synchronizing…';
     message.textContent = '';
     tbody.innerHTML = '<tr><td colspan="12">Retrieving authoritative Deriv history…</td></tr>';
     try {
       const payload = await window.AlgoBotServices.request('trade-history', `/api/trade-history/?${params(page, refreshBroker).toString()}`, {}, 25000);
-      const currentAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+      const currentAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
       if (seq !== requestSeq || requestedAccountId !== currentAccountId) return;
       lastPayload = payload;
       renderRows(payload.results || []);
@@ -199,7 +201,7 @@
   next.addEventListener('click', () => load(page + 1, false));
   exportButton.addEventListener('click', exportCsv);
   window.AlgoBotBrokerState?.subscribe?.(() => {
-    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     const nextId = account?.id == null ? null : String(account.id);
     if (nextId === activeAccountId) return;
     activeAccountId = nextId;

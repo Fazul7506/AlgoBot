@@ -11,10 +11,10 @@ from apps.brokers.models import Broker, BrokerAccount, Position
 from core.dashboard_api import DashboardViewSet
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class DashboardAccountSnapshotTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="dashboard-snapshot-test", password="test-password")
@@ -29,8 +29,8 @@ class DashboardAccountSnapshotTests(TestCase):
         force_authenticate(request, user=self.user)
         with (
             patch("core.dashboard_api.get_active_account", return_value=self.account),
-            patch("core.permissions.has_verified_account_email", new=lambda user: True),
-            patch("core.permissions.has_authorized_broker_connection", new=lambda user: True),
+            patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True),
+            patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True),
         ):
             return DashboardViewSet.as_view({"get": "account_overview"})(request)
 
@@ -41,6 +41,8 @@ class DashboardAccountSnapshotTests(TestCase):
         self.assertIsNone(account["equity"])
         self.assertIsNone(account["free_margin"])
         self.assertEqual(account["data_freshness"], "unknown")
+        self.assertFalse(account["connection_eligible"])
+        self.assertFalse(account["snapshot_ready"])
 
     def test_synced_zero_balance_and_margin_are_preserved_as_real_values(self):
         self.account.balance = Decimal("0")
@@ -54,6 +56,8 @@ class DashboardAccountSnapshotTests(TestCase):
         self.assertEqual(account["equity"], Decimal("0"))
         self.assertEqual(account["free_margin"], Decimal("0"))
         self.assertEqual(account["data_freshness"], "fresh")
+        self.assertTrue(account["snapshot_ready"])
+        self.assertFalse(account["connection_eligible"])
 
     def test_future_sync_timestamp_is_not_marked_fresh(self):
         self.account.last_synced_at = timezone.now() + timedelta(seconds=120)
@@ -74,8 +78,8 @@ class DashboardAccountSnapshotTests(TestCase):
         force_authenticate(request, user=self.user)
         with (
             patch("core.dashboard_api.get_active_account", return_value=self.account),
-            patch("core.permissions.has_verified_account_email", new=lambda user: True),
-            patch("core.permissions.has_authorized_broker_connection", new=lambda user: True),
+            patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True),
+            patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True),
         ):
             response = DashboardViewSet.as_view({"get": "performance_summary"})(request)
         self.assertEqual(response.status_code, 200)

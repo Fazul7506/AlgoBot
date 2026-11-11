@@ -10,7 +10,7 @@
   const OVERLAYS = [['sma20','SMA 20'],['ema50','EMA 50'],['wma20','WMA 20'],['bb20','Bollinger 20'],['vwap','VWAP']];
   const OSC = [['none','Off'],['rsi','RSI 14'],['macd','MACD 12/26/9'],['stoch','Stochastic 14/3'],['atr','ATR 14'],['cci','CCI 20'],['williams','Williams %R 14']];
   const state = {chart:null,main:null,overlays:{},osc:[],symbol:'',tf:60,type:'ticks',points:[],candles:[],current:null,overlay:new Set(['sma20','ema50']),oscillator:'none',req:10,renderTimer:null};
-  const accountsReady = () => !!(window.AlgoBotBrokerAccounts?.length || window.AlgoBotBrokerState?.get()?.account);
+  const accountsReady = () => !!window.AlgoBotAccountContext?.getSelectedId?.();
   const epoch = v => { const n=Number(v); return Number.isFinite(n)?(n>20000000000?Math.floor(n/1000):Math.floor(n)):null; };
   const fmt = v => Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined,{maximumFractionDigits:8}) : 'Unavailable';
   const text = (sel,v) => $(sel)?.replaceChildren(document.createTextNode(String(v)));
@@ -46,9 +46,19 @@
     }
   }
 
+  function chartThemeTokens(){
+    const css=getComputedStyle(document.documentElement);
+    const read=(name,fallback)=>css.getPropertyValue(name).trim()||fallback;
+    return {text:read('--text','#a7b0bd'),muted:read('--muted','#8fa4c2'),line:read('--line','rgba(148,163,184,.16)'),grid:read('--line','rgba(148,163,184,.08)')};
+  }
+  function applyChartTheme(){
+    if(!state.chart?.applyOptions)return;
+    const t=chartThemeTokens();
+    state.chart.applyOptions({layout:{textColor:t.text},grid:{vertLines:{color:t.grid},horzLines:{color:t.grid}},rightPriceScale:{borderColor:t.line},timeScale:{borderColor:t.line}});
+  }
   function makeChart(){
     const c=$('#chart');if(!c||!L()?.createChart)return false;if(state.chart)state.chart.remove();c.innerHTML='';
-    const x=L();state.chart=x.createChart(c,{autoSize:true,layout:{background:{type:'solid',color:'transparent'},textColor:'#a7b0bd',panes:{enableResize:true}},grid:{vertLines:{color:'rgba(148,163,184,.08)'},horzLines:{color:'rgba(148,163,184,.08)'}},crosshair:{mode:x.CrosshairMode?.Normal??0},rightPriceScale:{borderColor:'rgba(148,163,184,.16)'},timeScale:{borderColor:'rgba(148,163,184,.16)',timeVisible:true,secondsVisible:false,rightOffset:5},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true}});
+    const x=L(),t=chartThemeTokens();state.chart=x.createChart(c,{autoSize:true,layout:{background:{type:'solid',color:'transparent'},textColor:t.text,panes:{enableResize:true}},grid:{vertLines:{color:t.grid},horzLines:{color:t.grid}},crosshair:{mode:x.CrosshairMode?.Normal??0},rightPriceScale:{borderColor:t.line},timeScale:{borderColor:t.line,timeVisible:true,secondsVisible:false,rightOffset:5},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true}});
     state.chart.subscribeCrosshairMove(p=>{const b=p?.seriesData?.get(state.main);if(!b)return;const close=Number(b.close??b.value);text('[data-chart-ohlc]',`O ${fmt(b.open??close)} · H ${fmt(b.high??close)} · L ${fmt(b.low??close)} · C ${fmt(close)}`);});return true;
   }
   function series(data,opt,pane=0){const s=state.chart.addSeries(L().LineSeries,{lineWidth:2,priceLineVisible:false,lastValueVisible:false,...opt},pane);s.setData(data);return s;}
@@ -92,6 +102,7 @@
   function start(){
     if(!$('#chart'))return;
     window.addEventListener('algobot:market-watchdog-tick',onWatchdogTick);
+    window.addEventListener('algobot:theme-changed',applyChartTheme);
     const bootChart=()=>{if(!makeChart())return false;controls();const s=$('#symbol');const wait=()=>{if(s?.value){state.symbol=s.value;history();}else setTimeout(wait,250);};wait();s?.addEventListener('change',()=>{state.symbol=s.value;history();});window.addEventListener('algobot:backend-accounts-loaded',()=>{if(s?.value){state.symbol=s.value;history();}});return true;};
     void loadBrokerTimeframes().then(()=>{if(bootChart())return;window.addEventListener('load',()=>{if(!state.chart)bootChart();},{once:true});setTimeout(()=>{if(!state.chart)bootChart();},1500);});
     window.addEventListener('pagehide',()=>{window.removeEventListener('algobot:market-watchdog-tick',onWatchdogTick);},{once:true});

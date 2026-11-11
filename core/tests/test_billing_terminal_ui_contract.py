@@ -195,7 +195,9 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("is_preferred", context)
         self.assertNotIn("is_default", context)
         self.assertNotIn("(storedId&&rows.find(a=>accountId(a)===storedId))", context)
-        self.assertIn("let target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
+        self.assertIn("const target=(serverId&&rows.find(a=>accountId(a)===serverId))||serverSelected||", context)
+        self.assertIn("rows.find(a=>a.is_active===true)||null", context)
+        self.assertNotIn("rows.find(a=>a.status==='active'&&a.credential_status==='ready')", context)
         self.assertIn("clearTransientState", context)
         self.assertNotIn("X-Algobot-Account-ID", context)
         self.assertNotIn("rememberedId", context)
@@ -461,12 +463,12 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261109-canonical-sidebar-account1", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class TerminalRuntimeBoundaryTests(TestCase):
     def test_authenticated_terminal_loads_without_csrf_cookie_bootstrap(self):
         user_model = get_user_model()
@@ -540,9 +542,9 @@ class TerminalBrokerReadinessContractTests(SimpleTestCase):
     def test_terminal_requires_authoritative_connection_and_credentials_before_execution(self):
         from pathlib import Path
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
-        self.assertIn("a.is_connected===true", terminal)
-        self.assertIn("a.credential_status||''", terminal)
-        self.assertIn("a.broker?.status||''", terminal)
+        self.assertIn("selectedAccount()?.connection_eligible===true", terminal)
+        self.assertIn("a.selection_eligible!==true", terminal)
+        self.assertIn("a.connection_eligible!==true", terminal)
         self.assertIn("if(!brokerReady())throw new Error(brokerReadinessReason())", terminal)
         self.assertIn("if(!brokerReady()){result(", terminal)
         self.assertIn("syncExecutionControls", terminal)

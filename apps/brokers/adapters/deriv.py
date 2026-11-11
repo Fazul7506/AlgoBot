@@ -16,6 +16,34 @@ from .base import BrokerAdapter
 logger = logging.getLogger(__name__)
 
 
+def _normalize_is_virtual(value):
+    """Normalize Deriv's documented boolean-as-0/1 field without guessing.
+
+    The API serializes ``is_virtual`` as 0 or 1 in account-list and authorize
+    responses.  ``bool`` identity checks alone miss those integer values.
+    Unknown values remain unknown so a stale local environment is never
+    silently re-labelled from an ambiguous provider payload.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return value == 1
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true"}:
+            return True
+        if normalized in {"0", "false"}:
+            return False
+    return None
+
+
+def _account_type_from_is_virtual(value):
+    normalized = _normalize_is_virtual(value)
+    if normalized is None:
+        return "unknown"
+    return "demo" if normalized else "real"
+
+
 class DerivAdapter(BrokerAdapter):
     broker_type = "deriv"
     authentication_type = "oauth"
@@ -144,13 +172,17 @@ class DerivAdapter(BrokerAdapter):
     async def disconnect(self): return {"status": "disconnected"}
 
     async def authenticate(self):
-        response = await self._request({"balance": 1, "req_id": 1}, authenticated=True); balance = response.get("balance") or {}; loginid = str(balance.get("loginid") or self._account_id()); broker_virtual = balance.get("is_virtual")
+        response = await self._request({"balance": 1, "req_id": 1}, authenticated=True); balance = response.get("balance") or {}; loginid = str(balance.get("loginid") or "").strip(); broker_virtual = balance.get("is_virtual")
         if broker_virtual is None: broker_virtual = response.get("is_virtual")
+        normalized_virtual = _normalize_is_virtual(broker_virtual)
         configured_type = str((self.credentials or {}).get("account_type") or "").lower().strip()
-        if broker_virtual is not None:
-            is_virtual = bool(broker_virtual)
+        if normalized_virtual is not None:
+            is_virtual = normalized_virtual
         elif configured_type in {"demo", "real"}:
-            is_virtual = configured_type == "demo"
+            # This is only a local expectation, not a provider verification.
+            # Keep it out of the provider response so callers cannot mistake it
+            # for authoritative environment evidence.
+            is_virtual = None
         else:
             is_virtual = None
         return {"loginid": loginid, "account_id": loginid, "balance": balance.get("balance"), "currency": balance.get("currency"), "is_virtual": is_virtual, "avatar_url": balance.get("avatar_url") or response.get("avatar_url")}
@@ -169,16 +201,27 @@ class DerivAdapter(BrokerAdapter):
         account_id = self._account_id(); accounts = await self.get_accounts(); record = next((item for item in accounts if str(item.get("account_id") or item.get("loginid") or "") == account_id), None)
         if record is None: raise BrokerAuthenticationError("The selected Deriv account is no longer available to this OAuth credential")
         if record.get("balance") is None:
-            account = await self.authenticate(); is_virtual = account.get("is_virtual"); account_type = "demo" if is_virtual is True else "real" if is_virtual is False else "unknown"; return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": account_type, "avatar_url": account.get("avatar_url")}
-        is_virtual = record.get("is_virtual"); account_type = str(record.get("account_type") or "").lower().strip()
-        if account_type not in {"demo", "real"}:
-            account_type = ""
-        if isinstance(is_virtual, bool):
-            verified_type = "demo" if is_virtual else "real"
-            if account_type and account_type != verified_type:
-                verified_type = "unknown"
-        else:
-            verified_type = account_type or "unknown"
+            account = await self.authenticate()
+            if str(account.get("account_id") or "") != account_id:
+                raise BrokerAuthenticationError("Deriv authorization did not confirm the requested account identity")
+            account_type = _account_type_from_is_virtual(account.get("is_virtual"))
+            return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": account_type, "avatar_url": account.get("avatar_url")}
+        is_virtual = _normalize_is_virtual(record.get("is_virtual"))
+        account_type = str(record.get("account_type") or "").lower().strip()
+        declared_environment = account_type if account_type in {"demo", "real"} else None
+        # Deriv's account_type commonly describes the product (for example,
+        # "trading"), not DEMO/REAL. Only is_virtual is authoritative for the
+        # environment. If it is absent, request the selected account's
+        # account-scoped authorize/balance response; never infer from the local
+        # account label or an unrelated account in the OAuth account list.
+        if is_virtual is None:
+            authorized = await self.authenticate()
+            if str(authorized.get("account_id") or "") != account_id:
+                raise BrokerAuthenticationError("Deriv authorization did not confirm the requested account identity")
+            is_virtual = _normalize_is_virtual(authorized.get("is_virtual"))
+        verified_type = _account_type_from_is_virtual(is_virtual)
+        if declared_environment and verified_type in {"demo", "real"} and declared_environment != verified_type:
+            verified_type = "unknown"
         return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": verified_type, "avatar_url": record.get("avatar_url")}
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])

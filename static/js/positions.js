@@ -7,12 +7,13 @@
   const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, reconnectTimer: null, accountId: null, loadSeq: 0 };
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const money = (value, currency = '') => {
-    const n = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value);
+    if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable';
+    const n = Number(value);
     if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(n, currency);
     return (currency ? String(currency) + ' ' : '') + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   };
   const accountId = () => {
-    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     return account?.id == null ? null : String(account.id);
   };
   const dateText = value => {
@@ -34,7 +35,7 @@
     if (count) count.textContent = state.status === 'unavailable' ? 'Unavailable' : String(state.rows.length);
     const known = state.rows.filter(r => knownNumber(r.profit)).map(r => Number(r.profit));
     const currency = state.rows.find(r => r.currency)?.currency || '';
-    if (pnl) pnl.textContent = money(known.length ? known.reduce((a,b)=>a+b,0) : 0,currency || 'USD');
+    if (pnl) pnl.textContent = known.length ? money(known.reduce((a,b)=>a+b,0),currency || 'USD') : 'Unavailable';
     if (updated) updated.textContent = state.meta?.synchronized_at ? new Date(state.meta.synchronized_at).toLocaleString() : '—';
   }
   function filtered() {
@@ -57,7 +58,7 @@
     }
     tbody.innerHTML = rows.map(r => {
       const pnlKnown = knownNumber(r.profit), pnl = pnlKnown ? Number(r.profit) : NaN, cls = pnlKnown ? (pnl > 0 ? 'is-profit' : pnl < 0 ? 'is-loss' : '') : 'is-unknown';
-      return '<tr data-position-id="' + esc(r.contract_id) + '" tabindex="0"><td><div class="position-instrument"><span class="market-inline-label">' + (window.AlgoBotMarketPicker?.marketIcon(r)||'') + '<strong>' + esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''}) || r.display_name || 'Market instrument') + '</strong></span><small>' + esc(r.contract_type || 'Broker contract') + '</small></div></td><td><div class="position-contract"><strong>' + esc(r.contract_type || 'Unavailable') + '</strong><code>' + esc(r.contract_id) + '</code></div></td><td>' + money(r.stake,r.currency) + '</td><td>' + money(r.entry_price,r.currency) + '</td><td>' + money(r.current_price,r.currency) + '</td><td><span class="position-pnl ' + cls + '">' + money(pnlKnown ? pnl : 0,r.currency || 'USD') + '</span></td><td>' + esc(dateText(r.expiry_time)) + '</td><td><span class="position-status">' + esc(r.status || 'unknown') + '</span></td></tr>';
+      return '<tr data-position-id="' + esc(r.contract_id) + '" tabindex="0"><td><div class="position-instrument"><span class="market-inline-label">' + (window.AlgoBotMarketPicker?.marketIcon(r)||'') + '<strong>' + esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''}) || r.display_name || 'Market instrument') + '</strong></span><small>' + esc(r.contract_type || 'Broker contract') + '</small></div></td><td><div class="position-contract"><strong>' + esc(r.contract_type || 'Unavailable') + '</strong><code>' + esc(r.contract_id) + '</code></div></td><td>' + money(r.stake,r.currency) + '</td><td>' + money(r.entry_price,r.currency) + '</td><td>' + money(r.current_price,r.currency) + '</td><td><span class="position-pnl ' + cls + '">' + (pnlKnown ? money(pnl,r.currency || 'USD') : 'Unavailable') + '</span></td><td>' + esc(dateText(r.expiry_time)) + '</td><td><span class="position-status">' + esc(r.status || 'unknown') + '</span></td></tr>';
     }).join('');
     rows.forEach(r => {
       const row = [...tbody.querySelectorAll('tr[data-position-id]')].find(el => el.getAttribute('data-position-id') === String(r.contract_id));
@@ -75,6 +76,9 @@
   async function load() {
     const requestSeq = ++state.loadSeq;
     const requestedAccountId = accountId();
+    if (!requestedAccountId) {
+      state.rows=[]; state.meta=null; setState('unavailable','No confirmed broker account selected'); summary(); render(); return;
+    }
     setState('loading','Synchronizing broker positions…');
     try {
       const response=await window.AlgoBotFrontendData.request('/api/positions/open/',{},10000);
@@ -100,6 +104,11 @@
     connect();
   }
   function connect() {
+    if (!accountId()) {
+      const previous=state.socket; state.socket=null;
+      if(previous&&previous.readyState!==WebSocket.CLOSED)previous.close(4001,'no confirmed broker account');
+      return;
+    }
     if (state.socket && (state.socket.readyState === WebSocket.CONNECTING || state.socket.readyState === WebSocket.OPEN)) return;
     const protocol=location.protocol === 'https:' ? 'wss' : 'ws';
     const socket=new WebSocket(protocol + '://' + location.host + '/ws/broker/');
@@ -114,6 +123,7 @@
     };
     socket.onclose=() => {
       if(state.socket !== socket) return;
+      if(!accountId())return;
       const delay=Math.min(30000,1000 * Math.pow(2,Math.min(state.retry++,5)));
       state.reconnectTimer=setTimeout(() => { state.reconnectTimer=null; connect(); },delay);
     };
@@ -131,7 +141,7 @@
         state.accountId=next;
         state.loadSeq += 1;
         state.rows=[]; state.meta=null;
-        setState('loading','Account changed — loading its broker positions…'); summary(); render();
+        setState(next?'loading':'unavailable',next?'Account changed — loading its broker positions…':'No confirmed broker account selected'); summary(); render();
         schedule();
         reconnect();
       }

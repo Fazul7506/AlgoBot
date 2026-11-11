@@ -12,7 +12,7 @@
     return fn(url, options, timeout);
   };
   const accountContext = () => window.AlgoBotAccountContext;
-  const selectedAccount = () => accountContext()?.getSelected?.() || window.AlgoBotBrokerState?.get?.()?.account || null;
+  const selectedAccount = () => accountContext()?.getSelected?.() || null;
   const accountType = account => String(account?.account_type || account?.credentials?.account_type || 'unknown').toUpperCase();
   const accountIdentity = account => {
     const type = String(account?.account_type || account?.credentials?.account_type || 'unknown').toLowerCase();

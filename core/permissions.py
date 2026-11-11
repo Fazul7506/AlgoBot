@@ -21,7 +21,7 @@ class BrokerOnboardingRequired(BasePermission):
                 "code": "email_verification_required",
                 "next_url": "/verify-email/",
             })
-        if has_authorized_broker_connection(request.user):
+        if has_authorized_broker_connection(request.user, request=request):
             return True
         raise PermissionDenied({
             "detail": self.message,

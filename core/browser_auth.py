@@ -140,7 +140,7 @@ def login_page(request):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = request.user.email
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
-        if not has_authorized_broker_connection(request.user):
+        if not has_authorized_broker_connection(request.user, request=request):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
             return redirect("broker_marketplace_page")
@@ -215,7 +215,7 @@ def login_page(request):
         )
         if safe_destination.startswith(("/login/", "/register/", "/auth/google/")):
             safe_destination = ""
-        if not has_authorized_broker_connection(user):
+        if not has_authorized_broker_connection(user, request=request):
             if safe_destination:
                 request.session["broker_onboarding_next"] = safe_destination
                 # Resume an explicitly initiated Deriv connection after login.
@@ -243,7 +243,7 @@ def register_page(request):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = request.user.email
             messages.info(request, "Verify your AlgoBot email before continuing.")
             return redirect("verify_email_page")
-        return redirect("dashboard_page" if has_authorized_broker_connection(request.user) else "broker_marketplace_page")
+        return redirect("dashboard_page" if has_authorized_broker_connection(request.user, request=request) else "broker_marketplace_page")
     if request.method == "POST":
         registration_identifier = str(request.POST.get("email") or request.POST.get("username") or "").strip().lower()
         identity_allowed = allow_auth_attempt(request, "registration-identity", registration_identifier, limit=5, window=3600)
@@ -689,7 +689,7 @@ def two_factor_challenge_page(request):
             request.session[PENDING_VERIFICATION_EMAIL_SESSION_KEY] = user.email
             return redirect("verify_email_page")
         destination = first_safe_auth_destination(request, password_destination)
-        if not has_authorized_broker_connection(user):
+        if not has_authorized_broker_connection(user, request=request):
             if destination:
                 request.session["broker_onboarding_next"] = destination
                 if destination.startswith("/brokers/connect/"):

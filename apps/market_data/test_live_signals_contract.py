@@ -6,18 +6,19 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from apps.strategies.models import Strategy, StrategyConfiguration, StrategySignal
 
 from .models import MarketSnapshot, MarketSymbol
 
 
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class LiveSignalsContractTests(TestCase):
     def setUp(self):
         self.client = self.client_class()
@@ -44,6 +45,9 @@ class LiveSignalsContractTests(TestCase):
             connected_at=timezone.now(),
         )
         self.assertTrue(self.client.login(username="signals-contract", password="test-pass"))
+        session = self.client.session
+        session[SESSION_KEY] = self.account.pk
+        session.save()
         self.market = MarketSymbol.objects.create(symbol="R_100", display_name="Volatility 100", market="Derived Indices", broker="deriv", is_active=True, is_tradable=True)
         self.strategy = Strategy.objects.create(name="Live Test", slug="live-test", category="Trend Following", version="1", enabled=True)
         self.config = StrategyConfiguration.objects.create(strategy=self.strategy, user=self.user, broker_account=self.account, symbol="R_100", timeframe="M1", enabled=True, is_active=True)
@@ -192,8 +196,6 @@ class LiveSignalsContractTests(TestCase):
 
     @patch("apps.market_data.signal_views._live_deriv_ticks")
     def test_signal_is_blocked_when_account_risk_inputs_are_incomplete(self, live_ticks):
-        self.account.last_synced_at = None
-        self.account.save(update_fields=["last_synced_at"])
         StrategySignal.objects.create(
             strategy=self.strategy,
             configuration=self.config,
@@ -204,7 +206,8 @@ class LiveSignalsContractTests(TestCase):
             timestamp=timezone.now(),
         )
         live_ticks.return_value = ({"R_100": {"symbol": "R_100", "quote": 101.0, "epoch": int(timezone.now().timestamp())}}, 10.0)
-        response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
+        with patch("apps.market_data.signal_views.build_account_risk_context", return_value={"inputs_complete": False, "recommended_stake": None, "risk_budget": None, "issues": ["broker_available_funds_unavailable"]}):
+            response = self.client.get("/api/strategy-signals/?symbol=R_100&timeframe=M1")
         self.assertEqual(response.status_code, 200)
         row = response.json()["data"][0]
         self.assertEqual(row["status"], "RISK_CONTEXT_INCOMPLETE")

@@ -33,7 +33,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
-  const money = (value, currency = 'USD') => { if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
   const pct = value => value === null || value === undefined || value === '' ? '—' : `${Number(value).toFixed(1)}%`;
   const normalise = value => Array.isArray(value) ? value : (
     Array.isArray(value?.results) ? value.results : (
@@ -88,24 +88,20 @@
 
   async function accountKPIs() {
     try {
-      const [overview, accounts] = await Promise.all([
-        json('/api/dashboard/account_overview/'),
-        json('/api/brokers/accounts/')
-      ]);
+      const overview = await json('/api/dashboard/account_overview/');
       const data = overview.data || {};
       const stats = data.trading_stats || {};
-      const accountsList = normalise(accounts);
-      const account = accountsList.find(x => x.is_default) || accountsList[0];
+      const account = window.AlgoBotAccountContext?.getSelected?.() || null;
       const balance = $('[data-kpi="balance"]');
       const positions = $('[data-kpi="positions"]');
       const winrate = $('[data-kpi="winrate"]');
       const pnl = $('[data-kpi="pnl"]');
-      if (balance) balance.textContent = account ? money(account.balance, account.currency || 'USD') : money(0, 'USD');
-      if (positions) positions.textContent = stats.open_trades ?? '0';
-      if (winrate) winrate.textContent = pct(stats.win_rate);
-      if (pnl) pnl.textContent = money(stats.total_pnl, account?.currency || 'USD');
+      if (balance) balance.textContent = account && account.last_synced_at ? money(account.balance, account.currency || 'USD') : 'Unavailable';
+      if (positions) positions.textContent = account ? (stats.open_trades ?? 'Unavailable') : 'Unavailable';
+      if (winrate) winrate.textContent = account ? pct(stats.win_rate) : 'Unavailable';
+      if (pnl) pnl.textContent = account ? money(stats.total_pnl, account.currency || 'USD') : 'Unavailable';
       const terminalAccount = $('[data-terminal-account]');
-      if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || data.account?.account_id || 'Not connected'}`;
+      if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || account?.account_id || 'No confirmed account selected'}`;
       return { ...data, selectedAccount: account };
     } catch (error) {
       toast(`Account data unavailable: ${error.message}`, 'error');
@@ -238,6 +234,8 @@
       $$('tbody tr', page).forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(event.target.value.toLowerCase()); });
     });
     load();
+    window.addEventListener('algobot:account-context-changed', load);
+    window.addEventListener('algobot:account-synced', load);
   }
 
   async function init() {
@@ -264,6 +262,8 @@
     // selectors, which could leave the current terminal stuck on its loading
     // placeholders after a successful account synchronization.
     $$('.data-page').forEach(dataPage);
+    window.addEventListener('algobot:account-context-changed', () => accountKPIs().catch(() => {}));
+    window.addEventListener('algobot:account-synced', () => accountKPIs().catch(() => {}));
   }
 
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();

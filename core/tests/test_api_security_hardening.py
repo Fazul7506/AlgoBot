@@ -112,10 +112,10 @@ class APISecurityHardeningTests(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("broker_account", serializer.errors)
 
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
-    @patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.permissions.has_verified_account_email", new=lambda user: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+    @patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
     def test_derived_portfolio_allocation_endpoint_cannot_be_mutated_directly(self):
         portfolio = Portfolio.objects.create(user=self.user, name="Owned Portfolio")
         client = APIClient()

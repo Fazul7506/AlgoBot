@@ -9,7 +9,7 @@
   window.__algoBotWorkspacePrefetch = true;
 
   const data = () => window.AlgoBotFrontendData;
-  const accountId = () => window.AlgoBotAccountContext?.getSelectedId?.() || window.AlgoBotBrokerState?.get?.()?.account?.id || 'none';
+  const accountId = () => window.AlgoBotAccountContext?.getSelectedId?.() || 'none';
   const keyFor = url => `algobot:workspace-cache:v1:${accountId()}:${url}`;
   const safeGet = /^\/api\/(brokers\/accounts(?:\/|$)|market\/(?:ticks\/broker|snapshots)|ticks\/latest|positions\/open|orders\/|dashboard\/(?:account_overview|signals)|signals\/|strategies\/)/;
   const ttlFor = url => {

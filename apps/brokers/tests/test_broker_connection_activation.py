@@ -111,11 +111,14 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertIsNone(self.account.last_synced_at)
         return connection
 
-    def test_demo_account_connects_and_is_verified(self):
-        self._verify_selected_account("VRTC123456", "demo", True)
+    def test_demo_account_connects_and_is_verified_from_integer_is_virtual(self):
+        self._verify_selected_account("VRTC123456", "demo", 1)
 
-    def test_real_account_connects_and_is_verified(self):
-        self._verify_selected_account("CR123456", "real", False)
+    def test_real_account_connects_and_is_verified_from_integer_is_virtual(self):
+        self._verify_selected_account("CR123456", "real", 0)
+
+    def test_string_zero_is_virtual_is_normalized_as_real_not_truthy_demo(self):
+        self._verify_selected_account("CR123456", "real", "0")
 
     def test_connection_rejects_provider_account_id_mismatch_without_rewriting_selection(self):
         self.account.credentials = {"account_type": "demo"}

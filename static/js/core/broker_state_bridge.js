@@ -21,8 +21,8 @@
     window.AlgoBotBrokerAccounts=accounts.slice();
     const account=context.getSelected?.()||null;
     window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}));
-    if(!account){if(!store.get().account)store.reset('backend-no-broker-account');return store.get().account||null}
-    const id=String(account.id),connected=account.status==='active'&&account.is_connected===true,balance=String(account.balance??'');
+    if(!account){store.reset('backend-no-confirmed-broker-account');lastAccountId=null;lastConnection=null;lastBalance=null;return null}
+    const id=String(account.id),connected=account.connection_eligible===true,balance=String(account.balance??'');
     const current=store.get();
     if(!current.account||id!==lastAccountId||connected!==lastConnection||balance!==lastBalance)store.setAccount(account,'backend-broker-account');
     lastAccountId=id;lastConnection=connected;lastBalance=balance;
@@ -49,7 +49,7 @@
       const message=account.credential_status==='credentials_expired'?'Broker credentials have expired. Reconnect your broker account.':'Broker credentials are unavailable. Reconnect your broker account.';
       store.transition(store.STATES.ERROR,{account,lastError:message},'broker-credentials-unavailable');return account;
     }
-    if(account.status==='active'&&account.is_connected===true){
+    if(account.connection_eligible===true){
       store.setAccount(account,'broker-already-connected');
       const syncedAt=Date.parse(account.last_synced_at||'');
       const snapshotNeedsSync=forceSnapshotSyncForId===String(account.id)||!Number.isFinite(syncedAt)||(Date.now()-syncedAt)>60000;
@@ -81,7 +81,7 @@
   }
   function syncFromBackend(){
     const store=window.AlgoBotBrokerState;
-    if(!store||document.body.dataset.authenticated!=='true')return Promise.resolve(store?.get?.().account||null);
+    if(!store||document.body.dataset.authenticated!=='true')return Promise.resolve(window.AlgoBotAccountContext?.getSelected?.()||null);
     if(syncPromise){syncAgain=true;return syncPromise;}
     const generation=syncGeneration;
     syncPromise=(async()=>{
@@ -114,7 +114,7 @@
     window.AlgoBotBrokerState?.setAccount(event.detail,'account-changed');
     syncFromBackend().catch(()=>{});
   });
-  window.addEventListener('algobot:account-synced',event=>{if(!event.detail)return;window.AlgoBotBrokerState?.setAccount(event.detail,'account-synced');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice()});
+  window.addEventListener('algobot:account-synced',event=>{if(!event.detail)return;const selectedId=window.AlgoBotAccountContext?.getSelectedId?.();if(selectedId==null||String(selectedId)!==String(event.detail.id))return;window.AlgoBotBrokerState?.setAccount(event.detail,'account-synced');knownAccounts=knownAccounts.map(a=>String(a.id)===String(event.detail.id)?event.detail:a);window.AlgoBotBrokerAccounts=knownAccounts.slice()});
   window.addEventListener('algobot:account-sync-error',event=>{if(window.AlgoBotBrokerState){const s=window.AlgoBotBrokerState.get();window.AlgoBotBrokerState.transition(window.AlgoBotBrokerState.STATES.DEGRADED,{account:s.account,lastError:event.detail?.error?.message||'Broker connection failed; retrying.'},'account-sync-error')}});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
 })();

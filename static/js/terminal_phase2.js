@@ -7,7 +7,7 @@
   const api=(url,options={},timeout=10000)=>window.AlgoBotFrontendData?.request?.(url,options,timeout);
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
   let previewFingerprint='',previewData=null,executionPoll=null,chartMode='ticks',chartFitRequested=false;
-  const activeAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||window.AlgoBotBrokerState?.get?.()?.account||null;
+  const activeAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||null;
   function orderContext(){const account=activeAccount();return{accountId:account?.id??'',symbol:$('#symbol')?.value||'',direction:$('[data-direction].active')?.dataset.direction||'BUY',stake:$('[name="stake"]')?.value||'1',orderType:$('[name="order_type"]')?.value||'market',strategy:$('[name="strategy"]')?.value||'',contractType:$('[data-contract-type]')?.value||''}}
   const fingerprint=ctx=>JSON.stringify(ctx);
   function setPreview(html,state='info'){const target=$('[data-order-preview]');if(!target)return;target.hidden=false;target.dataset.state=state;target.innerHTML=html}

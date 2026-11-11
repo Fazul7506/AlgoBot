@@ -1,0 +1,277 @@
+/*
+ * Cross-template theme compatibility layer.
+ * Page styles continue to own layout and semantic status colors. This file
+ * normalizes legacy page-specific dark surfaces against the active theme.
+ * Loaded after every page stylesheet and the shared token contract.
+ */
+html[data-theme="light"] {
+  color-scheme: light;
+  --algobot-surface: var(--bg);
+  --algobot-surface-alt: var(--panel);
+  --algobot-surface-soft: var(--panel2);
+  --algobot-border: var(--line);
+  --algobot-text: var(--text);
+  --algobot-text-muted: var(--muted);
+}
+
+/* Account and security forms: override legacy dark-only native controls. */
+html[data-theme="light"] .account-page :where(input,select,textarea) {
+  color: var(--text) !important;
+  background: var(--bg) !important;
+  border-color: var(--line) !important;
+  color-scheme: light !important;
+}
+html[data-theme="light"] .account-page :where(.account-nav,.account-card,.security-panel,.security-status-banner,.security-summary-card,.preferences-profile-summary,.preferences-save-row,.preferences-choice,.preferences-notification-row) {
+  color: var(--text) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .account-page :where(h1,h2,h3,h4,strong,label,legend,.account-toggle strong,.preferences-choice strong) { color: var(--text) !important; }
+html[data-theme="light"] .account-page :where(p,small,.account-kicker,.account-subtitle,.account-card__hint,.account-help,.account-field .account-help,.preferences-choice small) { color: var(--muted) !important; }
+html[data-theme="light"] .account-page .account-nav a { color: var(--muted) !important; border-color: var(--line) !important; }
+html[data-theme="light"] .account-page .account-nav a[aria-current="page"] { color: var(--text) !important; background: var(--algobot-theme-active) !important; }
+html[data-theme="light"] .account-page :where(.account-alert,.account-toggle,.preferences-choice,.preferences-notification-row) { background: var(--panel2) !important; }
+
+/* Broker Marketplace. */
+html[data-theme="light"] .broker-market {
+  --bm-bg: var(--bg); --bm-panel: var(--panel); --bm-panel2: var(--panel2);
+  --bm-line: var(--line); --bm-muted: var(--muted);
+  color: var(--text) !important; background: transparent !important;
+}
+html[data-theme="light"] .broker-market :where(.broker-hero,.broker-hero-status,.broker-search-wrap,.broker-card,.broker-request-card,.broker-empty,.broker-no-results,.broker-side-card,.broker-side-promo,.broker-trust-strip,.broker-request-form,.broker-note,.broker-status-filters button,.broker-search,.broker-request-form input,.broker-request-form textarea) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .broker-market :where(.broker-hero-copy h1,.broker-request-card h2,.broker-brand-copy h2,.broker-side-card h2,.broker-side-promo h2,.broker-connected-copy strong,.broker-trust-strip strong,.broker-request-form label,.broker-results-row strong) { color: var(--text) !important; }
+html[data-theme="light"] .broker-market :where(.broker-hero-copy p,.broker-hero-copy small,.broker-brand-copy small,.broker-card-description,.broker-metadata>div,.broker-metadata strong,.broker-connected-copy small,.broker-side-empty,.broker-side-promo p,.broker-trust-strip small,.broker-note,.broker-request-feedback,.broker-search::placeholder,.broker-request-form input::placeholder,.broker-request-form textarea::placeholder) { color: var(--muted) !important; }
+html[data-theme="light"] .broker-market :where(.broker-tab,.broker-btn:not(.primary),.broker-quick-action,.broker-text-link) { color: var(--text) !important; border-color: var(--line) !important; }
+html[data-theme="light"] .broker-market .broker-tab.is-active { color: var(--accent) !important; }
+html[data-theme="light"] .broker-market :where(.broker-btn.primary,.broker-status-icon,.broker-count,.broker-pill.is-connected,.broker-pill.is-available,.broker-pill.is-unavailable) { color: inherit; }
+
+/* Monitoring and operations workspaces. */
+html[data-theme="light"] .monitoring-workspace {
+  --monitor-bg: var(--bg); --monitor-panel: var(--panel); --monitor-border: var(--line);
+  --monitor-muted: var(--muted); --monitor-text: var(--text);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .monitoring-workspace :where(.monitoring-hero,.monitoring-system-state,.monitoring-card,.monitoring-panel,.monitoring-icon-button,.monitoring-table th,.monitoring-table td,.monitoring-event,.monitoring-channel,.monitoring-quick-actions>a,.monitoring-security-note,.monitoring-range-label,.monitoring-empty,.monitoring-empty-state,.monitoring-metric-row,.monitoring-footnote,.monitoring-note,.rb-log-toolbar,.rb-log-scroll,.mission-log-details) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .monitoring-workspace :where(h1,h2,h3,h4,strong,.monitoring-service-name strong,.monitoring-event-copy strong,.monitoring-channel-copy strong,.monitoring-metric-name strong,.monitoring-empty-state strong) { color: var(--text) !important; }
+html[data-theme="light"] .monitoring-workspace :where(p,small,.monitoring-muted,.monitoring-hero-copy p,.monitoring-hero-copy .monitoring-subtitle,.monitoring-panel-heading p,.monitoring-updated,.monitoring-table td,.monitoring-service-name small,.monitoring-event-copy p,.monitoring-event-copy small,.monitoring-channel-copy small,.monitoring-metric-name small,.monitoring-footnote,.monitoring-note,.monitoring-empty-state p) { color: var(--muted) !important; }
+html[data-theme="light"] .monitoring-workspace :where(.monitoring-kpi-icon,.monitoring-service-icon,.monitoring-event-icon,.monitoring-security-note>span,.monitoring-channel-logo,.monitoring-shield) { background: var(--panel2) !important; border-color: var(--line) !important; }
+html[data-theme="light"] .monitoring-workspace :where(.status-healthy,.status-connected,.status-down,.status-degraded,.status-critical,.status-emergency,.status-not-connected,.status-unknown,.status-available,.severity-label-high,.severity-label-critical,.severity-label-emergency,.severity-label-medium,.severity-label-low,.severity-label-info) { border-color: currentColor; }
+
+/* Risk center. */
+html[data-theme="light"] .risk-center {
+  --risk-bg: var(--bg); --risk-panel: var(--panel); --risk-panel-deep: var(--panel2);
+  --risk-border: var(--line); --risk-muted: var(--muted); --risk-text: var(--text);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .risk-center :where(.risk-hero,.risk-card,.risk-panel,.risk-kpi,.risk-section,.risk-control-card,.risk-table-wrap,.risk-summary-card,.risk-status,.risk-detail,.risk-empty,.risk-alert,.risk-limit-card,.risk-rule-card) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .risk-center :where(h1,h2,h3,h4,strong,label,th,td,.risk-hero h1) { color: var(--text) !important; }
+html[data-theme="light"] .risk-center :where(p,small,.muted,.risk-hero p,.risk-muted,.risk-description,.risk-helper) { color: var(--muted) !important; }
+html[data-theme="light"] .risk-center :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+
+/* Signals workspace and its detail dialog. */
+html[data-theme="light"] .signals-page {
+  --sig-bg: var(--bg); --sig-panel: var(--panel); --sig-panel2: var(--panel2);
+  --sig-border: var(--line); --sig-text: var(--text); --sig-muted: var(--muted);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .signals-page :where(.signals-live-box,.metric-card,.signals-main-panel,.signals-card,.side-panel,.signals-filters,.signals-table th,.signals-table td,.signals-pagination,.signal-detail-dialog,.signals-select-wrap select,.signals-search,.signals-search input,.signals-page-button,.signals-page-number) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .signals-page :where(h1,h2,h3,h4,strong,.signal-time strong,.signal-asset strong,.signal-strategy strong,.performance-counts strong,.performance-financials strong,.side-panel-heading h2) { color: var(--text) !important; }
+html[data-theme="light"] .signals-page :where(p,small,.signals-heading p,.side-panel-heading p,.signal-time small,.signal-asset small,.signal-strategy small,.performance-counts p,.performance-financials span,.panel-note,.recent-entry-copy small,.recent-entry time,.sentiment-unavailable p) { color: var(--muted) !important; }
+html[data-theme="light"] .signals-page :where(.signals-table th,.signals-page-button,.signals-page-number) { background: var(--panel2) !important; }
+html[data-theme="light"] .signals-page :where(.signals-table tbody tr:hover,.recent-entry:hover) { background: var(--algobot-theme-hover) !important; }
+html[data-theme="light"] .signals-page .signals-search input { background: transparent !important; }
+
+/* Backtesting workspace. */
+html[data-theme="light"] .bt-dashboard {
+  --bt-bg: var(--bg); --bt-panel: var(--panel); --bt-border: var(--line);
+  --bt-muted: var(--muted); --bt-text: var(--text);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .bt-dashboard :where(.bt-hero,.bt-card,.bt-panel,.bt-kpi,.bt-chart-panel,.bt-results,.bt-table-wrap,.bt-toolbar,.bt-filter,.bt-empty,.bt-summary) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .bt-dashboard :where(h1,h2,h3,h4,strong,label,th,td) { color: var(--text) !important; }
+html[data-theme="light"] .bt-dashboard :where(p,small,.muted,.bt-muted,.bt-description,.bt-helper) { color: var(--muted) !important; }
+html[data-theme="light"] .bt-dashboard :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+
+/* Analysis workspace and shared chart controls. */
+html[data-theme="light"] .analysis-dashboard {
+  --analysis-bg: var(--bg); --analysis-panel: var(--panel); --analysis-panel-2: var(--panel2);
+  --analysis-border: var(--line); --analysis-muted: var(--muted); --analysis-text: var(--text);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .analysis-dashboard :where(.analysis-hero,.analysis-toolbar,.analysis-kpi,.analysis-panel,.analysis-card,.analysis-chart-panel,.analysis-filter-panel,.analysis-table-wrap,.analysis-empty,.analysis-feed,.analysis-live-card,.toolbar-field select,.toolbar-field input) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] .analysis-dashboard :where(h1,h2,h3,h4,strong,label,th,td) { color: var(--text) !important; }
+html[data-theme="light"] .analysis-dashboard :where(p,small,.muted,.analysis-muted,.analysis-description,.analysis-subtitle) { color: var(--muted) !important; }
+html[data-theme="light"] .analysis-dashboard :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+
+/* Dashboard, terminal, common cards, dialogs and menus. */
+html[data-theme="light"] #app-content :where(.status-card,.health-stack span,.dashboard-links a,.operation-list a,.terminal-toolbar,.terminal-watchlist,.terminal-chart-panel,.terminal-order-panel,.chart-toolbar,.chart-tooltip,.chart-indicators,.indicator-group,.filter-panel,.search-panel,.form-section,.tab-panel,.tab-content,.list-group-item,.accordion-item,.modal-content,.dialog-content,.dropdown-menu,.popover-content,.command-palette,.notification-item,.empty-state,.loading-state) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+html[data-theme="light"] #app-content :where(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {
+  color: var(--text); background: var(--bg); border-color: var(--line); color-scheme: light;
+}
+html[data-theme="light"] #app-content :where(select option) { color: var(--text); background: var(--panel); }
+html[data-theme="light"] #app-content :where(pre,code,.code-block,.terminal-output,.log-output,.console-output) { color: var(--text); background: var(--panel2); border-color: var(--line); }
+html[data-theme="light"] #app-content :where(.text-white,.text-light,.text-gray-100,.text-gray-200,.text-slate-100,.text-slate-200,.heading-light) { color: var(--text) !important; }
+html[data-theme="light"] #app-content :where(.text-gray-300,.text-gray-400,.text-slate-300,.text-slate-400,.text-muted,.muted,.secondary-text,.helper-text) { color: var(--muted) !important; }
+
+/* Standalone authentication template. */
+html[data-theme="light"] body:has(> main) { color-scheme: light; }
+html[data-theme="light"] body:has(> main) main { color: var(--text); background: var(--panel); border-color: var(--line); }
+html[data-theme="light"] body:has(> main) :where(.auth-benefit,.strength-panel,.email-readonly,.auth-footer-note,.notice,.timer-note,.resend-button[disabled]) {
+  color: var(--text); background: var(--panel2); border-color: var(--line);
+}
+html[data-theme="light"] body:has(> main) :where(.auth-benefit strong,.auth-footer-note span,.strength-heading,.strength-rules li[data-met="true"]) { color: var(--text); }
+html[data-theme="light"] body:has(> main) :where(.auth-benefit,.auth-footer-note,.strength-rules li,.field-hint,.match-note,.timer-note,.links a,.secondary,.password-toggle) { color: var(--muted); }
+html[data-theme="light"] body:has(> main) :where(.auth-eyebrow,.auth-footer-note span) { color: var(--accent); }
+html[data-theme="light"] body:has(> main) :where(input,select,textarea) { color: var(--text); background: var(--bg); border-color: var(--line); color-scheme: light; }
+html[data-theme="light"] body:has(> main) :where(.strength-segment) { background: var(--line); }
+html[data-theme="light"] body:has(> main) :where(.password-toggle:hover) { background: var(--panel2); color: var(--text); }
+
+/* Keep reduced-motion behavior consistent across legacy page-local widgets. */
+@media (prefers-reduced-motion: reduce) {
+  #app-content *, #app-content *::before, #app-content *::after,
+  body:has(> main) *, body:has(> main) *::before, body:has(> main) *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Billing dashboard (legacy page-local palette). */
+html[data-theme="light"] .billing-dashboard {
+  --bill-blue: var(--accent); --bill-border: var(--line); --bill-panel: var(--panel); --bill-green: var(--success);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .billing-dashboard :where(.billing-hero,.billing-account-status,.billing-summary-card,.billing-section,.billing-side-card,.billing-intasend-security,.billing-plan-card,.billing-payment-table,.billing-payment-list,.billing-usage-grid,.billing-provider-choices,.billing-provider-button,.billing-plan-features,.billing-provider-mini span,.billing-provider-badges span,.billing-meter,.billing-meter-track,.billing-alert,.billing-section .empty-state) {
+  color: var(--text) !important; background: var(--panel) !important;
+  background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .billing-dashboard :where(h1,h2,h3,h4,strong,label,th,td,.billing-summary-card h2,.billing-section-heading h2) { color: var(--text) !important; }
+html[data-theme="light"] .billing-dashboard :where(p,small,.billing-hero-copy p:not(.eyebrow),.billing-hero-copy small,.billing-account-status small,.billing-summary-card>p,.billing-section-heading p,.billing-meter-note,.billing-settings-note,.billing-side-card p,.billing-payment-empty,.billing-plan-features li) { color: var(--muted) !important; }
+html[data-theme="light"] .billing-dashboard :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+html[data-theme="light"] .billing-dashboard .billing-tabs { border-color: var(--line) !important; }
+html[data-theme="light"] .billing-dashboard .billing-tabs>a { color: var(--muted) !important; }
+html[data-theme="light"] .billing-dashboard .billing-tabs>a.is-active { color: var(--accent) !important; }
+html[data-theme="light"] .billing-dashboard .billing-plan-features li { border-color: var(--line) !important; }
+html[data-theme="light"] .billing-provider-button { background: var(--panel2) !important; color: var(--text) !important; }
+
+/* Performance center and portfolio dashboard. */
+html[data-theme="light"] .performance-page :where(.pf-hero,.pf-card,.pf-panel,.pf-kpi,.pf-metric,.pf-chart-panel,.pf-table-wrap,.pf-table th,.pf-table td,.pf-stat-row,.pf-empty,.pf-insight,.pf-metric-grid) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .performance-page :where(h1,h2,h3,h4,strong,th,td,.pf-metric strong,.pf-table td) { color: var(--text) !important; }
+html[data-theme="light"] .performance-page :where(p,small,.pf-muted,.pf-stat-row span,.pf-bar-label,.pf-bar-value,.pf-metric small,.pf-empty,.pf-insight) { color: var(--muted) !important; }
+html[data-theme="light"] .portfolio-app {
+  --p-bg: var(--bg); --p-panel: var(--panel); --p-line: var(--line); --p-muted: var(--muted);
+  color: var(--text) !important;
+}
+html[data-theme="light"] .portfolio-app :where(.portfolio-hero,.portfolio-connected,.portfolio-kpi,.portfolio-panel,.portfolio-chart-note,.portfolio-state,.portfolio-metric,.portfolio-activity-item,.portfolio-table th,.portfolio-table td,.portfolio-quick a,.portfolio-market-logo,.portfolio-donut:after) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .portfolio-app :where(h1,h2,h3,h4,strong,.portfolio-table td,.portfolio-legend span,.portfolio-state strong,.portfolio-chart-note strong) { color: var(--text) !important; }
+html[data-theme="light"] .portfolio-app :where(p,small,.portfolio-muted,.portfolio-kpi span,.portfolio-table th,.portfolio-table .asset-type,.portfolio-connected small,.portfolio-activity-item small,.portfolio-state) { color: var(--muted) !important; }
+html[data-theme="light"] .portfolio-app :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+
+/* AI Predictions workspace is injected at runtime; selectors intentionally
+   target the generated component tree as well as the server template shell. */
+html[data-theme="light"] [data-page="core-predictions"],
+html[data-theme="light"] .ai-lab { color: var(--text) !important; }
+html[data-theme="light"] .ai-lab :where(.ai-hero,.ai-lab-card,.ai-model,.ai-result,.ai-scroll,.ai-lab-table th,.ai-lab-table td,.ai-chart,.ai-detail-row,.ai-footer,.ai-error,.ai-empty,.ai-lab-controls input,.ai-lab-controls select,.ai-pill,.ai-badge) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .ai-lab :where(h1,h2,h3,h4,strong,.ai-hero h1,.ai-lab-card h2,.ai-lab-card h3,.ai-detail-row strong,.ai-lab-table td) { color: var(--text) !important; }
+html[data-theme="light"] .ai-lab :where(p,small,.ai-note,.ai-stat-label,.ai-lab-table th,.ai-detail-row span,.ai-insight,.ai-empty) { color: var(--muted) !important; }
+html[data-theme="light"] .ai-lab :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+html[data-theme="light"] .ai-lab .ai-action { color: #fff !important; }
+
+/* Profile onboarding and profile/avatar dialogs. */
+html[data-theme="light"] .profile-onboarding { color: var(--text) !important; }
+html[data-theme="light"] .profile-onboarding :where(.profile-onboarding__card,.profile-onboarding__benefits,.profile-onboarding__avatar-field,.profile-onboarding__next article,.avatar-editor__panel,.avatar-editor__stage,.profile-edit-modal__panel) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .profile-onboarding :where(h1,h2,h3,h4,strong,label,.profile-onboarding__field label,.profile-onboarding__benefits-quote p,.profile-onboarding__benefit-list li) { color: var(--text) !important; }
+html[data-theme="light"] .profile-onboarding :where(p,small,.profile-onboarding__lead,.profile-onboarding__cardhead p,.profile-onboarding__hint,.profile-onboarding__benefits-head p,.profile-onboarding__avatar-heading p,.profile-onboarding__legal) { color: var(--muted) !important; }
+html[data-theme="light"] .profile-onboarding :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+html[data-theme="light"] .profile-onboarding :where(.profile-onboarding__step b,.profile-onboarding__avatar-icon,.profile-onboarding__avatar-placeholder,.profile-onboarding__avatar-preview) { background: var(--panel2) !important; border-color: var(--line) !important; }
+html[data-theme="light"] .profile-onboarding .profile-onboarding__submit { color: #fff !important; }
+html[data-theme="light"] .profile-edit-modal,html[data-theme="light"] .profile-edit-modal[open] { color-scheme: light; }
+html[data-theme="light"] .profile-edit-modal__panel { color: var(--text); background: var(--panel); border-color: var(--line); }
+html[data-theme="light"] .avatar-editor__panel { color: var(--text); background: var(--panel); border-color: var(--line); }
+html[data-theme="light"] .avatar-editor__zoom { color: var(--text); }
+
+/* Security center, shared topbar account popovers and injected account modal. */
+html[data-theme="light"] [data-security-page] :where(.security-status-banner,.security-summary-card,.security-banner-status,.security-detail-card,.security-session-card,.security-device-card,.security-panel) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] [data-security-page] :where(h1,h2,h3,h4,strong,th,td) { color: var(--text) !important; }
+html[data-theme="light"] [data-security-page] :where(p,small,.security-muted,.security-description) { color: var(--muted) !important; }
+html[data-theme="light"] .topbar-account-trigger,html[data-theme="light"] .topbar-menu,html[data-theme="light"] .topbar-account-menu,html[data-theme="light"] .algobot-account-modal {
+  color: var(--text) !important; background: var(--panel) !important; border-color: var(--line) !important; box-shadow: var(--shadow-md,0 18px 55px rgba(15,23,42,.18)) !important;
+}
+html[data-theme="light"] .algobot-account-modal :where(.algobot-account-modal-avatar,.algobot-account-modal-stat,.algobot-account-modal-actions button) { color: var(--text) !important; background: var(--panel2) !important; border-color: var(--line) !important; }
+
+
+/* Developer/API workspace. */
+html[data-theme="light"] .dev-page { color: var(--text) !important; }
+html[data-theme="light"] .dev-page :where(.dev-hero,.dev-hero-status,.dev-metric,.dev-quickstart,.dev-endpoints,.dev-sample,.dev-resource-card,.dev-side-card,.dev-management-section,.dev-code-window,.dev-response-example,.dev-code,.dev-empty,.dev-endpoint-row,.dev-tabs,.dev-tab,.dev-usage-track,.dev-usage-row,.dev-mini-key,.dev-docs,.dev-empty-state) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .dev-page :where(h1,h2,h3,h4,strong,th,td,.dev-endpoint-detail code,.dev-code-window pre,.dev-docs) { color: var(--text) !important; }
+html[data-theme="light"] .dev-page :where(p,small,.dev-muted,.dev-hero-copy p,.dev-hero-copy small,.dev-hero-status small,.dev-section-heading p,.dev-side-title p,.dev-side-empty,.dev-usage-note,.dev-endpoint-detail small) { color: var(--muted) !important; }
+html[data-theme="light"] .dev-page :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+html[data-theme="light"] .dev-page :where(.dev-code-window,.dev-response-example,.dev-docs) { background: var(--panel2) !important; }
+
+/* Notification center. */
+html[data-theme="light"] .notifications-page { color: var(--text) !important; }
+html[data-theme="light"] .notifications-page :where(.notice-hero,.notice-system,.notice-panel,.notice-tabs,.notice-filterbar,.notice-control,.notice-feed-head,.notice-item,.notice-side-panel,.notice-summary-row,.notice-summary-total,.notice-empty,.notice-pagination,.notice-pages,.notice-page,.notice-feed,.notice-item-copy,.notice-actions) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .notifications-page :where(h1,h2,h3,h4,strong,.notice-item-copy h3,.notice-summary-value,.notice-system strong) { color: var(--text) !important; }
+html[data-theme="light"] .notifications-page :where(p,small,.notice-hero-copy p,.notice-item-copy p,.notice-item-copy small,.notice-item-time,.notice-summary-label,.notice-system small,.notice-pagination>span,.notice-empty p) { color: var(--muted) !important; }
+html[data-theme="light"] .notifications-page :where(input,select,textarea) { color: var(--text) !important; background: var(--bg) !important; border-color: var(--line) !important; color-scheme: light !important; }
+html[data-theme="light"] .notifications-page :where(.notice-control,.notice-filterbar,.notice-summary-icon,.notice-item-icon,.notice-priority,.notice-page) { background-color: var(--panel2) !important; }
+html[data-theme="light"] .notifications-page :where(.notice-btn.primary,.notice-mark-read) { color: #fff !important; }
+
+/* Extend legacy analytics surfaces beyond their first-level cards. */
+html[data-theme="light"] .performance-page :where(.pf-donut-layout,.pf-stat-list,.pf-bars,.pf-bar-row,.pf-bar-track,.pf-chart-legend,.pf-legend,.pf-heatmap,.pf-table,.pf-table thead,.pf-table tbody tr,.pf-empty-state,.pf-insight-list,.pf-insight-item,.pf-filterbar,.pf-filter,.pf-range-button) {
+  color: var(--text) !important; background-color: var(--panel) !important; border-color: var(--line) !important;
+}
+html[data-theme="light"] .performance-page :where(.pf-stat-row,.pf-bar-label,.pf-bar-value,.pf-table th,.pf-table td,.pf-empty-state p,.pf-insight-item p) { color: var(--muted) !important; }
+html[data-theme="light"] .performance-page :where(.pf-bar-track,.pf-table th,.pf-filter,.pf-range-button) { background: var(--panel2) !important; }
+html[data-theme="light"] .portfolio-app :where(.portfolio-chart,.portfolio-chart-wrap,.portfolio-chart-legend,.portfolio-legend,.portfolio-holding,.portfolio-holdings-table,.portfolio-holdings-table th,.portfolio-holdings-table td,.portfolio-performance,.portfolio-activity,.portfolio-empty,.portfolio-allocation,.portfolio-allocation-legend,.portfolio-quick-actions) {
+  color: var(--text) !important; background: var(--panel) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: none !important;
+}
+html[data-theme="light"] .portfolio-app :where(.portfolio-chart-caption,.portfolio-chart-legend span,.portfolio-holding small,.portfolio-activity small,.portfolio-empty p,.portfolio-allocation-legend small) { color: var(--muted) !important; }
+html[data-theme="light"] .billing-dashboard :where(.billing-plan-grid,.billing-usage-grid,.usage-card,.billing-payment-head,.billing-row,.billing-payment-list,.billing-payment-empty,.billing-summary-action,.billing-side-heading,.billing-security-list li,.billing-intasend-security,.billing-settings-note,.billing-alert) {
+  color: var(--text) !important; background-color: var(--panel) !important; border-color: var(--line) !important;
+}
+html[data-theme="light"] .billing-dashboard :where(.billing-row>span:last-child,.billing-payment-head,.billing-settings-note,.billing-side-heading p,.billing-side-card>p,.billing-plan-card>p:not(.eyebrow),.billing-plan-card .billing-plan-detail,.billing-security-list li) { color: var(--muted) !important; }

@@ -20,7 +20,7 @@
 
   let timer = null;
   let requestId = 0;
-  let activeAccountId = window.AlgoBotBrokerState?.get?.()?.account?.id == null ? null : String(window.AlgoBotBrokerState.get().account.id);
+  let activeAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
 
   const setState = (kind, message) => {
     status.textContent = message;
@@ -87,6 +87,11 @@
 
   const scan = async () => {
     const current = ++requestId;
+    if (!window.AlgoBotAccountContext?.getSelectedId?.()) {
+      error.hidden = false; error.textContent = 'Select a confirmed broker account before scanning its market universe.';
+      rows.innerHTML = '<tr><td colspan=\"12\" class=\"scanner-empty\">No confirmed broker account selected.</td></tr>';
+      setState('idle','Waiting for confirmed account selection'); return;
+    }
     error.hidden = true;
     setState('loading', 'Scanning persisted broker data…');
     rows.innerHTML = '<tr><td colspan="12" class="scanner-empty">Scanning…</td></tr>';
@@ -140,7 +145,7 @@
   });
 
   window.AlgoBotBrokerState?.subscribe?.(() => {
-    const account = window.AlgoBotBrokerState?.get?.()?.account;
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     const nextId = account?.id == null ? null : String(account.id);
     if (nextId === activeAccountId) return;
     activeAccountId = nextId;

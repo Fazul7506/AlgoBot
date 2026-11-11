@@ -18,24 +18,24 @@
   const switchAuthoritativeAccount=id=>window.AlgoBotAccountContext.selectAccount(id);
   let accounts=[],symbols=[],direction='BUY',busy=false,activeAccountId=null,directExecutionBusy=false,executionUncertain=false,catalogueLoadSeq=0,recordsLoadSeq=0,signalsLoadSeq=0;
   const requestedParams=new URLSearchParams(location.search),requestedStrategy=requestedParams.get('strategy')||'',requestedDirection=String(requestedParams.get('direction')||'').toUpperCase(),requestedSignalId=requestedParams.get('signal_id')||'';
-  const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||accounts.find(a=>String(a.id)===String(activeAccountId))||window.AlgoBotBrokerState?.get?.()?.account||null;
+  const selectedAccount=()=>window.AlgoBotAccountContext?.getSelected?.()||null;
   // Mirror the backend's BrokerAccount.is_connection_eligible contract. A saved
   // account alone is not proof of a live, authorized broker connection.
-  const brokerReady=()=>{const a=selectedAccount();return !!a&&String(a.status||'').toLowerCase()==='active'&&String(a.broker?.status||'').toLowerCase()==='active'&&a.is_connected===true&&String(a.credential_status||'').toLowerCase()==='ready'};
-  const brokerReadinessReason=()=>{const a=selectedAccount();if(!a)return 'Connect a broker first';if(String(a.status||'').toLowerCase()!=='active')return 'Broker account is inactive';if(String(a.broker?.status||'').toLowerCase()!=='active')return 'Broker is unavailable';if(a.is_connected!==true)return 'Broker connection is not verified';if(String(a.credential_status||'').toLowerCase()!=='ready')return 'Broker credentials need attention';return 'Pre-trade checks active'};
+  const brokerReady=()=>selectedAccount()?.connection_eligible===true;
+  const brokerReadinessReason=()=>{const a=selectedAccount();if(!a)return 'Connect a broker first';if(a.selection_eligible!==true)return 'Broker account or credentials are not eligible';if(a.connection_eligible!==true)return 'Broker connection is not verified';return 'Pre-trade checks active'};
   const syncExecutionControls=() => { const prepared=String(window.__algobotPreparedManualDirection||'').toUpperCase(); $$('[data-direct-buy],[data-direct-sell]').forEach(b=>{const matches=prepared&&String(b.dataset.direction||'').toUpperCase()===prepared;b.disabled=directExecutionBusy||executionUncertain||!brokerReady()||!matches;b.setAttribute('aria-disabled',String(b.disabled));}); };
   const result=(m,s='info')=>{const n=$('[data-order-result]');if(n){n.hidden=false;n.dataset.state=s;n.textContent=m}};
   const previewResult=(m,s='info')=>{const n=$('[data-order-preview-result]');if(n){n.hidden=false;n.dataset.state=s;n.textContent=m}};
   const renderRows=(selector,rows,empty,format)=>{const n=$(selector);if(n)n.innerHTML=rows.length?rows.map(format).join(''):`<div class="empty-state">${esc(empty)}</div>`};
   function renderSelectedStrategy(){const h=$('[name="strategy"]'),b=$('[data-selected-strategy] strong'),v=requestedStrategy.trim();if(h)h.value=v;if(b)b.textContent=v||'Manual trading';if(requestedDirection==='BUY'||requestedDirection==='SELL'){direction=requestedDirection;const button=document.querySelector(`[data-direct-${requestedDirection.toLowerCase()}]`);button?.setAttribute('aria-label',`Submit ${requestedDirection} contract from broker signal ${requestedSignalId||'selected signal'}`)}}
-  function renderAccount(a){const st=$('#terminal-status'),note=$('[data-terminal-account]'),risk=$('[data-risk-check]');if(!a){if(st)st.textContent='Broker account required';if(note)note.textContent='No connected account';if(risk)risk.textContent='Connect broker first';syncExecutionControls();return}const broker=a.broker?.name||a.broker_name||'Broker';if(st)st.textContent=brokerReady()?`${broker} connected`:`${broker} connection required`;if(note)note.textContent=`Account: ${a.broker_account_id||a.account_id||a.loginid||a.id}`;if(risk)risk.textContent=brokerReadinessReason();syncExecutionControls()}
-  function renderAccounts(rows){accounts=list(rows).filter(a=>a?.id);const s=$('#account');const central=window.AlgoBotAccountContext?.getSelected?.();const current=central?.id||activeAccountId||accounts.find(a=>a.is_active)?.id||null;activeAccountId=current;if(!s)return;if(!accounts.length){activeAccountId=null;s.innerHTML='<option value="">No connected broker account</option>';renderAccount(null);return}s.innerHTML=accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.broker?.name||a.broker_name||'Broker')} · ${esc(a.broker_account_id||a.account_id)} · ${esc(a.account_type&&a.account_type!=='unknown'?a.account_type.toUpperCase():'')} · ${esc(a.currency||'')}</option>`).join('');s.value=String(activeAccountId||'');renderAccount(selectedAccount())}
+  function renderAccount(a){const st=$('#terminal-status'),note=$('[data-terminal-account]'),risk=$('[data-risk-check]');if(!a){if(st)st.textContent='Broker account required';if(note)note.textContent='No confirmed broker account selected';if(risk)risk.textContent='Connect broker first';syncExecutionControls();return}const broker=a.broker?.name||a.broker_name||'Broker';if(st)st.textContent=brokerReady()?`${broker} connected`:`${broker} connection required`;if(note)note.textContent=`Account: ${a.broker_account_id||a.account_id||a.loginid||a.id}`;if(risk)risk.textContent=brokerReadinessReason();syncExecutionControls()}
+  function renderAccounts(rows){accounts=list(rows).filter(a=>a?.id);const s=$('#account');const central=window.AlgoBotAccountContext?.getSelected?.();const current=central?.id??null;activeAccountId=current;if(!s)return;if(!accounts.length||!current){activeAccountId=null;s.innerHTML='<option value="">No confirmed broker account selected</option>';renderAccount(null);return}s.innerHTML=accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.broker?.name||a.broker_name||'Broker')} · ${esc(a.broker_account_id||a.account_id)} · ${esc(a.account_type&&a.account_type!=='unknown'?a.account_type.toUpperCase():'')} · ${esc(a.currency||'')}</option>`).join('');s.value=String(activeAccountId||'');renderAccount(selectedAccount())}
   async function loadAccounts(){
   try{
     if(window.AlgoBotAccountContext){
       await window.AlgoBotAccountContext.load();
       accounts=window.AlgoBotAccountContext.getAccounts();
-      const a=window.AlgoBotAccountContext.getSelected()||window.AlgoBotBrokerState?.get?.()?.account||null;
+      const a=window.AlgoBotAccountContext.getSelected()||null;
       activeAccountId=a?.id??null;
       if(a&&!accounts.some(x=>String(x.id)===String(a.id)))accounts=[a,...accounts];
       renderAccounts(accounts);
@@ -45,7 +45,7 @@
     renderAccounts(rows);
     return selectedAccount();
   }catch(e){
-    const recovered=window.AlgoBotAccountContext?.getSelected?.()||window.AlgoBotBrokerState?.get?.()?.account||null;
+    const recovered=window.AlgoBotAccountContext?.getSelected?.()||null;
     if(recovered){
       activeAccountId=recovered.id;
       if(!accounts.some(x=>String(x.id)===String(recovered.id)))accounts=[recovered,...accounts];
@@ -62,17 +62,19 @@
   function marketArtwork(row){const resolved=window.AlgoBotMarketAssets?.resolve?.(row);if(resolved?.status==='verified'&&resolved.asset?.src){return '<img class="terminal-market-art" data-remote-market-asset data-symbol-fallback="'+esc(String(row.symbol||'?').slice(0,2))+'" src="'+esc(resolved.asset.src)+'" alt="" loading="lazy">'}return '<span class="terminal-market-unmapped" aria-hidden="true">'+esc(String(row.symbol||'?').slice(0,2))+'</span>'}
   function renderWatchlist(filter=''){const n=$('[data-watchlist]');if(!n)return;const q=String(filter).trim().toLowerCase(),rows=symbols.filter(r=>!q||String(r.symbol||'').toLowerCase().includes(q)||String(r.display_name||'').toLowerCase().includes(q)),cur=$('#symbol')?.value,c=$('[data-watchlist-count]');if(c)c.textContent=String(symbols.length);n.innerHTML=rows.length?rows.slice(0,100).map(r=>`<button type="button" class="watchlist-row ${r.symbol===cur?'active':''}" data-watch-symbol="${esc(r.symbol)}"><span class="terminal-watch-artwork">${marketArtwork(r)}</span><span class="terminal-watch-copy"><strong>${esc(marketDisplayName(r))}</strong></span><b aria-hidden="true">›</b></button>`).join(''):'<div class="empty-state">No matching instruments.</div>';n.querySelectorAll('[data-watch-symbol]').forEach(b=>b.addEventListener('click',()=>selectSymbol(b.dataset.watchSymbol)))}
   function selectSymbol(symbol){const s=$('#symbol');if(!s||!symbols.some(r=>r.symbol===symbol))return;s.value=symbol;s.dispatchEvent(new Event('change',{bubbles:true}));renderWatchlist($('[data-watchlist-search]')?.value||'')}
-  const catalogueCacheKey=()=>`algobot:terminal-catalogue:v3:${window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none'}`;
+  const catalogueCacheKey=()=>`algobot:terminal-catalogue:v3:${window.AlgoBotAccountContext?.getSelectedId?.()||'none'}`;
   const readCatalogueCache=()=>{try{const v=JSON.parse(sessionStorage.getItem(catalogueCacheKey())||'null');return v&&Array.isArray(v.symbols)&&v.symbols.length?v:null}catch(_){return null}};
   const writeCatalogueCache=rows=>{try{sessionStorage.setItem(catalogueCacheKey(),JSON.stringify({at:Date.now(),symbols:rows}))}catch(_){}};
   const paintSymbols=(s,rows,previous)=>{symbols=rows.filter(r=>r?.symbol&&r.is_active!==false&&r.is_tradable!==false);if(!symbols.length)return'';s.innerHTML=symbols.map(r=>`<option value="${esc(r.symbol)}">${esc(marketDisplayName(r))}</option>`).join('');const requested=new URLSearchParams(location.search).get('symbol');s.value=[previous,requested,symbols[0].symbol].find(v=>symbols.some(r=>r.symbol===v))||symbols[0].symbol;renderWatchlist($('[data-watchlist-search]')?.value||'');window.dispatchEvent(new CustomEvent('algobot:broker-symbols-loaded',{detail:{count:symbols.length}}));return s.value};
   async function loadSymbols(){
      const s=$('#symbol');if(!s)return'';
      const seq=++catalogueLoadSeq;
-     const accountId=String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none');
+     const selectedId=window.AlgoBotAccountContext?.getSelectedId?.();
+     if(selectedId==null){symbols=[];s.innerHTML='<option value=\"\">Select a confirmed broker account first</option>';renderWatchlist('');return'';}
+     const accountId=String(selectedId);
      const previous=s.value;
      const cached=readCatalogueCache();
-     const isCurrent=()=>seq===catalogueLoadSeq&&accountId===String(window.AlgoBotAccountContext?.getSelectedId?.()||window.AlgoBotBrokerState?.get?.()?.account?.id||'none');
+     const isCurrent=()=>seq===catalogueLoadSeq&&accountId===String(window.AlgoBotAccountContext?.getSelectedId?.()||'none');
      if(cached?.symbols){
        const cachedValue=paintSymbols(s,cached.symbols,previous);
        if(cachedValue&&Date.now()-Number(cached.at||0)<300000){

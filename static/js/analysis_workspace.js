@@ -60,6 +60,7 @@
     drawChart([]);drawIndicators([]);
   }
 
+  function themeToken(name,fallback){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||fallback;}
   function drawChart(candles){
     const canvas=$("analysisChart"),empty=$("chartEmpty");if(!canvas)return;
     const valid=(candles||[]).filter(c=>[c.open,c.high,c.low,c.close].every(v=>Number.isFinite(Number(v))));
@@ -73,7 +74,7 @@
     bands.forEach(b=>{if(b){lows.push(b.lower);highs.push(b.upper)}});
     let lo=Math.min(...lows),hi=Math.max(...highs);if(!Number.isFinite(lo)||!Number.isFinite(hi)){lo=Math.min(...valid.map(c=>Number(c.low)));hi=Math.max(...valid.map(c=>Number(c.high)))}
     const span=hi-lo||Math.max(Math.abs(hi)*.001,1),x=i=>pad.l+i/Math.max(1,valid.length-1)*(w-pad.l-pad.r),y=v=>h-pad.b-(Number(v)-lo)/span*(h-pad.t-pad.b);
-    ctx.font="10px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";ctx.strokeStyle="rgba(148,177,211,.17)";ctx.fillStyle="#8faacc";
+    ctx.font="10px system-ui";ctx.textAlign="left";ctx.textBaseline="middle";ctx.strokeStyle=themeToken("--line","rgba(148,177,211,.17)");ctx.fillStyle=themeToken("--muted","#8faacc");
     for(let i=0;i<=5;i++){const val=hi-(hi-lo)*i/5,yy=y(val);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();ctx.fillText(val.toFixed(Math.abs(val)<10?4:2),w-pad.r+5,yy)}
     const plotLine=(key,color,width=1.1)=>{ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;let begun=false;bands.forEach((b,i)=>{if(!b){begun=false;return}const v=b[key];if(!begun){ctx.moveTo(x(i),y(v));begun=true}else ctx.lineTo(x(i),y(v))});ctx.stroke()};
     plotLine("upper","#2689f4",1);plotLine("mid","#8b72ff",1);plotLine("lower","#2689f4",1);
@@ -101,12 +102,12 @@
     if(opts.min==null){const span=hi-lo||1;lo-=span*.12;hi+=span*.12}
     if(hi===lo)hi=lo+1;
     const px=i=>pad.l+i/Math.max(1,n-1)*(w-pad.l-pad.r),py=v=>h-pad.b-(v-lo)/(hi-lo)*(h-pad.t-pad.b);
-    ctx.lineWidth=1;ctx.strokeStyle="rgba(148,177,211,.18)";
+    ctx.lineWidth=1;ctx.strokeStyle=themeToken("--line","rgba(148,177,211,.18)");
     for(let i=1;i<4;i++){const y=pad.t+(h-pad.t-pad.b)*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}
-    (opts.levels||[]).forEach(level=>{ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(level));ctx.lineTo(w-pad.r,py(level));ctx.stroke();ctx.restore()});
+    (opts.levels||[]).forEach(level=>{ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle=themeToken("--muted","rgba(167,186,215,.55)");ctx.beginPath();ctx.moveTo(pad.l,py(level));ctx.lineTo(w-pad.r,py(level));ctx.stroke();ctx.restore()});
     if(opts.histogram){const values=opts.histogram.filter(Number.isFinite),base=opts.zero?py(0):h-pad.b,bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,opts.histogram.length)*.72);opts.histogram.forEach((v,i)=>{if(!Number.isFinite(v))return;ctx.fillStyle=v>=0?"#25d3a0":"#f05270";const yy=py(v),xx=pad.l+i/Math.max(1,n-1)*(w-pad.l-pad.r);ctx.fillRect(xx-bw/2,Math.min(yy,base),bw,Math.max(1,Math.abs(base-yy)))});}
     valid.forEach(s=>{ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=1.6;let started=false;s.values.forEach((v,i)=>{if(!Number.isFinite(v)){started=false;return}if(!started){ctx.moveTo(px(i),py(v));started=true}else ctx.lineTo(px(i),py(v))});ctx.stroke()});
-    if(opts.zero){ctx.strokeStyle="rgba(167,186,215,.55)";ctx.beginPath();ctx.moveTo(pad.l,py(0));ctx.lineTo(w-pad.r,py(0));ctx.stroke()}
+    if(opts.zero){ctx.strokeStyle=themeToken("--muted","rgba(167,186,215,.55)");ctx.beginPath();ctx.moveTo(pad.l,py(0));ctx.lineTo(w-pad.r,py(0));ctx.stroke()}
   }
   function drawIndicators(candles){
     const closes=(candles||[]).map(c=>Number(c.close)).filter(Number.isFinite);
@@ -283,6 +284,7 @@
     $("refresh")?.addEventListener("click",()=>{if(!A.markets.length){void markets({forceRefresh:true});return;}void load({refreshAccount:false,refreshMarket:true});});$("prepare")?.addEventListener("click",prepare);
     const scheduleAuto=()=>{clearInterval(A.timer);if($("auto")?.checked&&window.AlgoBotPreferences?.autoRefreshEnabled?.()!==false)A.timer=setInterval(()=>load({refreshAccount:false}),window.AlgoBotPreferences?.intervalMs?.(30000)||30000)};$("auto")?.addEventListener("change",scheduleAuto);document.addEventListener("algobot:preferences-loaded",scheduleAuto);window.addEventListener("algobot:preferences-updated",scheduleAuto);
     window.addEventListener("resize",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});
+    window.addEventListener("algobot:theme-changed",()=>{if(A.data){drawChart(A.data.last_candles||[]);drawIndicators(A.data.last_candles||[])}});
     window.addEventListener("pagehide",()=>{A.loadGeneration+=1;A.requestController?.abort();A.requestController=null;clearInterval(A.timer);},{once:true});
     markets();
   }

@@ -10,8 +10,8 @@ from core.models import UserProfile
 
 @override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
 class DashboardTemplateContractTests(TestCase):
-    @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-    @patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+    @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+    @patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
     def test_authenticated_dashboard_does_not_embed_trading_values(self):
         user = get_user_model().objects.create_user("dashboard-owner", "dashboard@example.com", "pass", first_name="Dashboard", last_name="Owner")
         UserProfile.objects.update_or_create(user=user, defaults={"email_verified": True, "terms_accepted_at": timezone.now()})

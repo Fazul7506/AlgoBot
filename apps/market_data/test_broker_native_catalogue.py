@@ -2,19 +2,21 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
+from core.account_context import SESSION_KEY
 from apps.market_data.models import Candle, MarketSymbol, Tick
 
 
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.permissions.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.permissions.has_verified_account_email", new=lambda user: True)
-@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user: True)
-@patch("core.broker_onboarding.has_verified_account_email", new=lambda user: True)
+@override_settings(CREDENTIALS_ENCRYPTION_KEY="test-only-fernet-key")
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.permissions.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.permissions.has_verified_account_email", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
+@patch("core.broker_onboarding.has_verified_account_email", new=lambda user, request=None: True)
 class BrokerNativeCatalogueFallbackTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -32,6 +34,10 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
             status="active",
             credentials={"account_type": "demo"},
         )
+        self.account.set_access_token("catalogue-test-token")
+        from django.utils import timezone
+        self.account.last_synced_at = timezone.now()
+        self.account.save(update_fields=["access_token", "last_synced_at"])
         BrokerConnection.objects.create(
             broker=self.broker, broker_account=self.account, status="connected"
         )
@@ -44,6 +50,9 @@ class BrokerNativeCatalogueFallbackTests(TestCase):
             is_tradable=True,
         )
         self.client.force_authenticate(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = self.account.pk
+        session.save()
 
     @patch(
         "apps.market_data.broker_native._public_deriv",
