@@ -12,6 +12,8 @@ class SessionAccountContextTests(SimpleTestCase):
             pk=17,
             broker=SimpleNamespace(broker_type="deriv"),
             account_type="real",
+            is_connection_eligible=True,
+            last_synced_at=object(),
         )
         queryset = MagicMock()
         queryset.filter.return_value.first.return_value = account
