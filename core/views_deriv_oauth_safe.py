@@ -1,4 +1,5 @@
 """Fast, non-looping Deriv OAuth callback for the browser connection flow."""
+import asyncio
 import logging
 import requests
 from django.conf import settings
@@ -226,12 +227,35 @@ def callback(request):
     # unlock the dashboard or report the broker as connected.
     try:
         from asgiref.sync import async_to_sync
-        from apps.brokers.services import BrokerConnectionService
-        # Always validate the selected account via its account-scoped OTP
-        # session, regardless of the optional global authorize identity probe.
-        # This supports users whose OAuth grants include both demo and real IDs.
-        async_to_sync(BrokerConnectionService().connect)(broker, selected_broker_account)
+        from apps.brokers.services import BrokerConnectionService, SynchronizationService
+
+        async def verify_and_sync_selected_account():
+            # Always validate the selected account via its account-scoped OTP
+            # session, regardless of the optional global identity probe. OAuth
+            # success and a WebSocket handshake alone are not account readiness.
+            await asyncio.wait_for(
+                BrokerConnectionService().connect(broker, selected_broker_account),
+                timeout=30.0,
+            )
+            # connect() deliberately clears last_synced_at. Obtain a fresh,
+            # account-scoped financial snapshot before this account can be
+            # selected or used by the trading workspace.
+            await asyncio.wait_for(
+                SynchronizationService().sync_account(selected_broker_account),
+                timeout=15.0,
+            )
+
+        async_to_sync(verify_and_sync_selected_account)()
         selected_broker_account.refresh_from_db()
+        if (
+            not selected_broker_account.is_connection_eligible
+            or not selected_broker_account.last_synced_at
+            or selected_broker_account.account_type not in {"demo", "real"}
+        ):
+            raise ValueError("Deriv did not confirm a ready account snapshot")
+        # The browser session is updated only after the provider identity,
+        # account environment, connection and authoritative snapshot all pass.
+        select_account(request, selected_broker_account)
         websocket_verification_error = None
     except Exception as exc:
         websocket_verification_error = exc.__class__.__name__
@@ -256,8 +280,6 @@ def callback(request):
             "AlgoBot could not securely persist the selected Deriv account. No dashboard access was granted.",
             "deriv_oauth_selected_account_unavailable",
         )
-    if selected_broker_account.is_connection_eligible:
-        select_account(request, selected_broker_account)
     DerivOAuthService.clear_oauth_session(request)
     logger.info("deriv_oauth_authorized_account_persisted", extra={"account_id":selected_account_id,"account_count":len(persisted_ids)})
     if websocket_verification_error:
@@ -269,10 +291,10 @@ def callback(request):
     else:
         messages.success(
             request,
-            f"Deriv account {selected_account_id} was authorized and its WebSocket identity verified. "
-            "Refresh the dashboard to load the latest broker snapshot.",
+            f"Deriv account {selected_account_id} was authorized, verified and synchronized. "
+            "Its authoritative account snapshot is ready in AlgoBot.",
         )
-    if selected_broker_account.is_connection_eligible:
+    if selected_broker_account.is_connection_eligible and selected_broker_account.last_synced_at:
         # Do not send a newly onboarded user straight into the workspace until
         # the minimum AlgoBot profile identity fields have been completed.
         request.user.refresh_from_db(fields=["first_name", "last_name"])
