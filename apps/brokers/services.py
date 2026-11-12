@@ -236,7 +236,8 @@ class AuthenticationService:
 class LatencyService:
     async def measure(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        latency = await BrokerRegistry().adapter(broker, account).ping()
+        adapter = await async_broker_adapter(account, broker)
+        latency = await adapter.ping()
         await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'latency': latency, 'last_ping': timezone.now(), 'status': 'connected'})
         return latency
 
