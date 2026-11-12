@@ -68,7 +68,10 @@ class DerivOAuthTests(TestCase):
         # before selecting the account. Keep this fixture explicit.
         def persist_snapshot():
             account.last_synced_at = timezone.now()
-            account.save(update_fields=["last_synced_at"])
+            credentials = dict(account.credentials or {})
+            credentials["connection_health"] = "verified"
+            account.credentials = credentials
+            account.save(update_fields=["last_synced_at", "credentials"])
             account.connections.update(status="connected", last_ping=timezone.now())
 
         await sync_to_async(persist_snapshot)()
