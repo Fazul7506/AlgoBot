@@ -50,6 +50,10 @@ class WordPressProbeMiddleware:
         if normalized.startswith(cls._SENSITIVE_PREFIXES):
             return True
         segments = [segment for segment in normalized.split("/") if segment]
+        # This Django deployment has no PHP application. Short-circuit common
+        # PHP shell/info probes before sessions, auth and request telemetry.
+        if any(segment.endswith(".php") for segment in segments):
+            return True
         if any(
             segment.startswith(".") and segment not in cls._ALLOWED_HIDDEN_SEGMENTS
             for segment in segments
