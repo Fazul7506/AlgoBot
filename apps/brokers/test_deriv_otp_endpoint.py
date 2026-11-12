@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
@@ -51,3 +52,15 @@ class DerivAuthenticatedEndpointTests(SimpleTestCase):
             "Deriv returned an invalid authenticated WebSocket endpoint",
         ):
             adapter._authenticated_ws_url()
+
+    @patch("apps.brokers.adapters.deriv.websockets.connect", side_effect=ValueError("invalid URI"))
+    def test_request_converts_websocket_uri_value_error_to_connection_error(
+        self, connect
+    ):
+        adapter = DerivAdapter(broker=Mock(), account=Mock())
+        with self.assertRaisesMessage(
+            BrokerConnectionError,
+            "Deriv returned an invalid authenticated WebSocket endpoint",
+        ):
+            asyncio.run(adapter._request({"balance": 1}))
+        connect.assert_called_once()
