@@ -229,10 +229,14 @@ def callback(request):
         from asgiref.sync import async_to_sync
         from apps.brokers.services import BrokerConnectionService, SynchronizationService
 
+        validation_stage = "account_scoped_websocket_connect"
+
         async def verify_and_sync_selected_account():
+            nonlocal validation_stage
             # Always validate the selected account via its account-scoped OTP
             # session, regardless of the optional global identity probe. OAuth
             # success and a WebSocket handshake alone are not account readiness.
+            validation_stage = "account_scoped_websocket_connect"
             await asyncio.wait_for(
                 BrokerConnectionService().connect(broker, selected_broker_account),
                 timeout=30.0,
@@ -240,10 +244,12 @@ def callback(request):
             # connect() deliberately clears last_synced_at. Obtain a fresh,
             # account-scoped financial snapshot before this account can be
             # selected or used by the trading workspace.
+            validation_stage = "authoritative_snapshot_sync"
             await asyncio.wait_for(
                 SynchronizationService().sync_account(selected_broker_account),
                 timeout=15.0,
             )
+            validation_stage = "post_sync_readiness_check"
 
         async_to_sync(verify_and_sync_selected_account)()
         selected_broker_account.refresh_from_db()
@@ -259,6 +265,14 @@ def callback(request):
         websocket_verification_error = None
     except Exception as exc:
         websocket_verification_error = exc.__class__.__name__
+        # The production formatter omits arbitrary structured extras. Put the
+        # stage and exception class in the log message, but never log exception
+        # text, account IDs, URLs, tokens, or provider response payloads.
+        logger.error(
+            "deriv_oauth_connection_validation_failed stage=%s error_type=%s",
+            validation_stage,
+            websocket_verification_error,
+        )
         BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
             status="degraded",
             last_ping=None,
@@ -269,10 +283,7 @@ def callback(request):
             },
         )
         selected_broker_account.refresh_from_db()
-        logger.warning(
-            "deriv_oauth_connection_validation_failed",
-            extra={"error": websocket_verification_error},
-        )
+
 
     if selected_broker_account is None:
         return _fail(

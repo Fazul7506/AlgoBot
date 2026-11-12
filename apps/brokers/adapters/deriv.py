@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import time
+from urllib.parse import urlsplit
 
 import requests
 import websockets
@@ -94,9 +95,25 @@ class DerivAdapter(BrokerAdapter):
         except (requests.RequestException, ValueError) as exc:
             raise BrokerConnectionError("Unable to obtain an authenticated Deriv WebSocket session") from exc
         url = (payload.get("data") or {}).get("url")
-        if not url:
+        if not isinstance(url, str) or not url.strip():
             raise BrokerConnectionError("Deriv did not return an authenticated WebSocket URL")
-        return url
+        # Validate the account-scoped OTP endpoint before websockets.connect.
+        # Invalid URI values previously escaped as an opaque ValueError.
+        try:
+            parsed = urlsplit(url.strip())
+            valid_endpoint = (
+                parsed.scheme in {"ws", "wss"}
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+                and not parsed.fragment
+            )
+        except ValueError:
+            valid_endpoint = False
+        if not valid_endpoint:
+            logger.error("deriv_authenticated_websocket_url_invalid")
+            raise BrokerConnectionError("Deriv returned an invalid authenticated WebSocket endpoint")
+        return url.strip()
 
     async def _request(self, payload, authenticated=False):
         try:
@@ -108,6 +125,8 @@ class DerivAdapter(BrokerAdapter):
             raise
         except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
             raise BrokerConnectionError("Deriv is unavailable or returned an invalid response") from exc
+        except ValueError as exc:
+            raise BrokerConnectionError("Deriv returned an invalid authenticated WebSocket endpoint") from exc
         if response.get("error"):
             message = response["error"].get("message", "Deriv rejected the request")
             code = response["error"].get("code", "")
