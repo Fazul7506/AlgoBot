@@ -18,7 +18,8 @@ class SensitivePathProbeMiddlewareTests(SimpleTestCase):
             "/.docker/config.json", "/.cursor/mcp.json", "/.claude/settings.local.json",
             "/admin/.env", "/api/.env", "/actuator/env",
             "/api/actuator/env", "/Dockerfile", "/docker-compose.yml",
-            "/phpinfo.php", "/storage/logs/laravel.log", "/appsettings.Production.json",
+            "/phpinfo.php", "/php.php", "/i.php", "/pi.php", "/pinfo.php", "/test.php",
+            "/storage/logs/laravel.log", "/appsettings.Production.json",
             "/config/config.js", "/credentials.json", "/secrets.json", "/.gitlab-ci.yml",
         )
         for path in paths:

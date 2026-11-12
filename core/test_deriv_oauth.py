@@ -5,8 +5,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
+from asgiref.sync import sync_to_async
 
-from apps.brokers.models import BrokerAccount
+from apps.brokers.models import Broker, BrokerAccount
 from core.account_context import SESSION_KEY
 from core.models import BotSettings, Subscription, UserProfile
 from core.services.oauth_service import DerivOAuthService
@@ -62,6 +63,65 @@ class DerivOAuthTests(TestCase):
         accounts_response.json.return_value = {"data": accounts if accounts is not None else [{"account_id": "DOT90004580", "balance": 10000, "currency": "USD", "account_type": "demo", "status": "active"}]}
         get.return_value = accounts_response
 
+    async def _mock_sync_snapshot(self, account):
+        # The production callback must wait for a provider-backed snapshot
+        # before selecting the account. Keep this fixture explicit.
+        def persist_snapshot():
+            account.last_synced_at = timezone.now()
+            credentials = dict(account.credentials or {})
+            credentials["connection_health"] = "verified"
+            credentials["financial_snapshot_fields"] = [
+                field for field in ("balance", "currency", "equity", "margin", "free_margin")
+                if getattr(account, field, None) is not None
+            ]
+            account.credentials = credentials
+            account.save(update_fields=["last_synced_at", "credentials"])
+            account.connections.update(status="connected", last_ping=timezone.now())
+
+        await sync_to_async(persist_snapshot)()
+        return account, {
+            "account_id": account.account_id,
+            "balance": str(account.balance),
+            "currency": account.currency,
+            "account_type": account.account_type,
+        }
+
+    @patch("core.views.DerivOAuthService.create_authorization_url", return_value="https://auth.deriv.com/oauth2/auth?state=retry")
+    @patch("core.views.DerivOAuthService.generate_state", return_value="retry")
+    @patch("core.views.DerivOAuthService.generate_pkce_pair", return_value=("verifier", "challenge"))
+    @patch("core.views.DerivOAuthService.validate_configuration", return_value=(True, None))
+    def test_connect_route_starts_oauth_when_an_incomplete_account_row_exists(
+        self, validate_configuration, generate_pkce_pair, generate_state, create_authorization_url
+    ):
+        user = User.objects.create_user(
+            username="retry-existing-account",
+            email="retry-existing@example.test",
+            password="Local-password-123!secure",
+            first_name="Retry",
+            last_name="Account",
+        )
+        UserProfile.objects.update_or_create(
+            user=user,
+            defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()},
+        )
+        self.client.force_login(user)
+        broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active")
+        BrokerAccount.objects.create(
+            user=user,
+            broker=broker,
+            account_id="VRTC-RETRY-001",
+            credentials={"account_type": "demo", "connection_health": "not_checked"},
+            last_synced_at=None,
+        )
+
+        response = self.client.get(reverse("broker_connect_page"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://auth.deriv.com/oauth2/auth?state=retry")
+        self.assertEqual(self.client.session.get("oauth_state"), "retry")
+        validate_configuration.assert_called_once()
+        create_authorization_url.assert_called_once_with("retry", "challenge")
+
     @patch("core.views_deriv_oauth_safe.fetch_deriv_identity", return_value={
         "user_id": 12345,
         "loginid": "DOT90004580",
@@ -84,7 +144,11 @@ class DerivOAuthTests(TestCase):
         self._oauth_session()
         self._mock_token_exchange(post)
         self._mock_account_response(get)
-        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock), patch(
+            "apps.brokers.services.SynchronizationService.sync_account",
+            new_callable=AsyncMock,
+            side_effect=self._mock_sync_snapshot,
+        ):
             result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.wsgi_request.user.is_authenticated)
@@ -137,7 +201,11 @@ class DerivOAuthTests(TestCase):
             "is_virtual": True,
             "status": "active",
         }])
-        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock) as connect:
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock) as connect, patch(
+            "apps.brokers.services.SynchronizationService.sync_account",
+            new_callable=AsyncMock,
+            side_effect=self._mock_sync_snapshot,
+        ):
             result = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(result.status_code, 302)
         connect.assert_awaited_once()
@@ -170,7 +238,11 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "DOT90004580",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock), patch(
+            "apps.brokers.services.SynchronizationService.sync_account",
+            new_callable=AsyncMock,
+            side_effect=self._mock_sync_snapshot,
+        ):
             first = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(first.status_code, 302)
         first_account = BrokerAccount.objects.get(account_id="DOT90004580")
@@ -190,7 +262,11 @@ class DerivOAuthTests(TestCase):
             "user_id": 12345, "loginid": "CR123456",
             "email": "deriv-user@example.com", "fullname": "Deriv User",
         }
-        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock):
+        with patch("apps.brokers.services.BrokerConnectionService.connect", new_callable=AsyncMock), patch(
+            "apps.brokers.services.SynchronizationService.sync_account",
+            new_callable=AsyncMock,
+            side_effect=self._mock_sync_snapshot,
+        ):
             second = self.client.get(reverse("callback"), {"state": "expected", "code": "abc"})
         self.assertEqual(second.status_code, 302)
         second_account = BrokerAccount.objects.get(account_id="CR123456")

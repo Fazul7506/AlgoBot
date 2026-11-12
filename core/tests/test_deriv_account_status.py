@@ -12,6 +12,19 @@ class DerivAccountStatusTests(TestCase):
         self.assertEqual(_account_type({"is_virtual": True}), "demo")
         self.assertEqual(_account_type({"account_type": "real"}), "real")
 
+    def test_numeric_and_string_is_virtual_flags_are_normalized(self):
+        self.assertEqual(_account_type({"is_virtual": 1}), "demo")
+        self.assertEqual(_account_type({"is_virtual": 0}), "real")
+        self.assertEqual(_account_type({"is_virtual": "1"}), "demo")
+        self.assertEqual(_account_type({"is_virtual": "0"}), "real")
+        self.assertEqual(_account_type({"is_virtual": "unknown"}), "unknown")
+
+    def test_conflicting_provider_environment_metadata_fails_closed(self):
+        self.assertEqual(
+            _account_type({"account_type": "demo", "is_virtual": 0}),
+            "unknown",
+        )
+
     def test_missing_account_type_is_not_misreported_as_demo(self):
         user = get_user_model().objects.create_user(username="unknown-deriv-type")
         broker = Broker.objects.create(

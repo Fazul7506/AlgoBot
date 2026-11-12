@@ -294,9 +294,12 @@ def deriv_login(request):
         return redirect('verify_email_page')
     is_valid,error_message=DerivOAuthService.validate_configuration()
     if not is_valid: logger.error('deriv_oauth_misconfigured',extra={'error':error_message}); return HttpResponse('Deriv OAuth is unavailable. Please try again later.',status=503)
-    if request.user.is_authenticated:
-        if get_active_account(request.user, request=request, broker_type='deriv'): return redirect('dashboard_page')
-        if BrokerAccount.objects.filter(user=request.user, broker__broker_type='deriv').exists(): return redirect('broker_marketplace_page')
+    # This endpoint is an explicit user request to start (or retry) broker
+    # authorization. An existing local BrokerAccount row is not proof of a
+    # healthy connection: it may have been persisted by an earlier OAuth
+    # attempt whose account-scoped WebSocket verification or snapshot sync
+    # failed. Do not redirect away before the user can retry or authorize an
+    # additional DEMO/REAL account. Ownership is revalidated in the callback.
     redirect_uri=settings.DERIV_REDIRECT_URI; configured_uri=urlparse(redirect_uri)
     if configured_uri.scheme and configured_uri.netloc and not settings.DEBUG and (request.scheme!=configured_uri.scheme or request.get_host()!=configured_uri.netloc):
         canonical_url=f'{configured_uri.scheme}://{configured_uri.netloc}{request.path}'; canonical_url=f'{canonical_url}?{request.GET.urlencode()}' if request.GET else canonical_url; return redirect(canonical_url)

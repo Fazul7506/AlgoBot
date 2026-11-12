@@ -459,6 +459,13 @@ class SynchronizationService:
         for f in ['balance', 'equity', 'margin', 'free_margin', 'currency']:
             if data.get(f) is not None: setattr(account, f, data[f]); fields.append(f)
         credentials = dict(account.credentials or {})
+        # Record exactly which financial fields the provider supplied in this
+        # successful snapshot. Model defaults (zero/blank) are storage values,
+        # never evidence that the broker returned those values.
+        credentials['financial_snapshot_fields'] = [
+            field for field in ('balance', 'currency', 'equity', 'margin', 'free_margin')
+            if data.get(field) is not None
+        ]
         if data.get('account_type') in {'demo', 'real'}: credentials['account_type'] = str(data['account_type']).lower()
         if data.get('avatar_url'): credentials['avatar_url'] = str(data['avatar_url'])
         if credentials != (account.credentials or {}): account.credentials = credentials; fields.append('credentials')
