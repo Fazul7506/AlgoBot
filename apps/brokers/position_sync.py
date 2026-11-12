@@ -264,7 +264,8 @@ class BrokerPositionSyncService:
         if not connection_eligible:
             raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
-        adapter = BrokerRegistry().adapter(account.broker, account)
+        from .services import async_broker_adapter
+        adapter = await async_broker_adapter(account)
         try:
             history = await adapter.get_trade_history(limit=max(1, min(int(limit), 100)))
         except BrokerAuthenticationError as exc:
