@@ -2,10 +2,12 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TransactionTestCase
 
 from apps.brokers.adapters.deriv import DerivAdapter, _account_type_from_is_virtual, _normalize_is_virtual
 from apps.brokers.exceptions import BrokerAuthenticationError
+from apps.brokers.models import Broker, BrokerAccount, BrokerConnection
 from apps.brokers.services import SynchronizationService
 
 
@@ -117,3 +119,46 @@ class DerivEnvironmentNormalizationTests(SimpleTestCase):
                     await SynchronizationService().sync_account(account)
             adapter.get_balance.assert_awaited_once()
         asyncio.run(exercise())
+
+class DerivAsyncSnapshotORMBoundaryTests(TransactionTestCase):
+    def test_snapshot_sync_resolves_lazy_broker_relation_outside_event_loop(self):
+        user = get_user_model().objects.create_user(username="deriv-async-snapshot-test")
+        broker = Broker.objects.create(
+            name="Deriv",
+            broker_type="deriv",
+            status="active",
+            metadata={"auth": "oauth"},
+        )
+        created = BrokerAccount.objects.create(
+            user=user,
+            broker=broker,
+            account_id="VRTC123456",
+            status="active",
+            credentials={"account_type": "demo"},
+        )
+        # Re-fetch without select_related to reproduce the production callback:
+        # account.broker is a lazy ORM relation at the async service boundary.
+        account = BrokerAccount.objects.get(pk=created.pk)
+        self.assertNotIn("broker", account._state.fields_cache)
+
+        adapter = SimpleNamespace(
+            get_balance=AsyncMock(return_value={
+                "account_id": "VRTC123456",
+                "account_type": "demo",
+                "balance": "12.34",
+                "currency": "USD",
+            })
+        )
+        with patch("apps.brokers.services.BrokerRegistry.adapter", return_value=adapter):
+            synced, payload = asyncio.run(SynchronizationService().sync_account(account))
+
+        synced.refresh_from_db()
+        self.assertEqual(payload["account_id"], "VRTC123456")
+        self.assertEqual(str(synced.balance), "12.34000000")
+        self.assertIsNotNone(synced.last_synced_at)
+        self.assertEqual(
+            BrokerConnection.objects.get(broker_account=synced).status,
+            "connected",
+        )
+        adapter.get_balance.assert_awaited_once()
+
