@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from . import constants as broker_constants
@@ -43,13 +45,27 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
         value = (obj.credentials or {}).get('deriv_identity') or {}
         return value if isinstance(value, dict) else {}
 
+    def _has_snapshot_field(self, obj, field):
+        if not obj.last_synced_at:
+            return False
+        credentials = obj.credentials if isinstance(obj.credentials, dict) else {}
+        supplied = credentials.get('financial_snapshot_fields')
+        return isinstance(supplied, list) and field in supplied
+
+    def _snapshot_decimal(self, obj, field):
+        if not self._has_snapshot_field(obj, field):
+            return None
+        value = getattr(obj, field, None)
+        if value is None:
+            return None
+        return format(Decimal(str(value)), '.8f')
+
     def get_balance(self,obj):
-        # Model defaults are storage placeholders, not broker facts. Expose
-        # financial values only after an authoritative provider snapshot exists.
-        return obj.balance if obj.last_synced_at else None
+        # Never expose a model default as a broker-reported financial value.
+        return self._snapshot_decimal(obj, 'balance')
 
     def get_currency(self,obj):
-        return obj.currency if obj.last_synced_at else None
+        return obj.currency if self._has_snapshot_field(obj, 'currency') and obj.currency else None
 
     def get_account_type(self,obj):
         value = obj.account_type
@@ -84,14 +100,17 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_connection_eligible(self,obj): return bool(obj.is_connection_eligible)
     def get_snapshot_ready(self,obj): return bool(obj.last_synced_at)
     def get_equity(self,obj):
-        if not obj.last_synced_at:return None
-        r=self._realtime(obj); return r['equity'] if r.get('equity') is not None else obj.equity
+        if not self._has_snapshot_field(obj, 'equity'):return None
+        r=self._realtime(obj); value=r.get('equity') if r.get('equity') is not None else obj.equity
+        return format(Decimal(str(value)), '.8f') if value is not None else None
     def get_margin(self,obj):
-        if not obj.last_synced_at:return None
-        r=self._realtime(obj); return r['margin'] if r.get('margin') is not None else obj.margin
+        if not self._has_snapshot_field(obj, 'margin'):return None
+        r=self._realtime(obj); value=r.get('margin') if r.get('margin') is not None else obj.margin
+        return format(Decimal(str(value)), '.8f') if value is not None else None
     def get_free_margin(self,obj):
-        if not obj.last_synced_at:return None
-        r=self._realtime(obj); return r['available_margin'] if r.get('available_margin') is not None else obj.free_margin
+        if not self._has_snapshot_field(obj, 'free_margin'):return None
+        r=self._realtime(obj); value=r.get('available_margin') if r.get('available_margin') is not None else obj.free_margin
+        return format(Decimal(str(value)), '.8f') if value is not None else None
     def get_net_profit_loss(self,obj): return self._realtime(obj).get('unrealized_pnl')
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):

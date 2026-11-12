@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.brokers.models import Broker, BrokerAccount
@@ -30,8 +31,17 @@ class BrokerAccountApiTests(APITestCase):
 
     @patch("apps.brokers.views.SynchronizationService.sync_account", new_callable=AsyncMock)
     def test_sync_returns_broker_sourced_account_data(self, sync):
-        self.account.balance = "42.50"
-        sync.return_value = (self.account, {"balance": "42.50", "currency": "USD"})
+        async def persist_mock_snapshot(account):
+            # Return a provider-synchronized in-memory instance. The API view
+            # serializes this exact object; database persistence is owned by
+            # SynchronizationService and tested separately.
+            account.balance = "42.50"
+            account.currency = "USD"
+            account.last_synced_at = timezone.now()
+            account.credentials = {**account.credentials, "financial_snapshot_fields": ["balance", "currency"]}
+            return account, {"balance": "42.50", "currency": "USD"}
+
+        sync.side_effect = persist_mock_snapshot
         response = self.client.post(reverse("broker-accounts-sync", args=[self.account.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["source"], "deriv_authorize")

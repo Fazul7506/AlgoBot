@@ -70,6 +70,10 @@ class DerivOAuthTests(TestCase):
             account.last_synced_at = timezone.now()
             credentials = dict(account.credentials or {})
             credentials["connection_health"] = "verified"
+            credentials["financial_snapshot_fields"] = [
+                field for field in ("balance", "currency", "equity", "margin", "free_margin")
+                if getattr(account, field, None) is not None
+            ]
             account.credentials = credentials
             account.save(update_fields=["last_synced_at", "credentials"])
             account.connections.update(status="connected", last_ping=timezone.now())
@@ -93,10 +97,12 @@ class DerivOAuthTests(TestCase):
             username="retry-existing-account",
             email="retry-existing@example.test",
             password="Local-password-123!secure",
+            first_name="Retry",
+            last_name="Account",
         )
         UserProfile.objects.update_or_create(
             user=user,
-            defaults={"email_verified": True, "email_verified_at": timezone.now()},
+            defaults={"email_verified": True, "email_verified_at": timezone.now(), "terms_accepted_at": timezone.now()},
         )
         self.client.force_login(user)
         broker = Broker.objects.create(name="Deriv", broker_type="deriv", status="active")
