@@ -18,11 +18,11 @@ class BrokerSerializer(serializers.ModelSerializer):
         return obj.live_capability_status
 
 class BrokerAccountSerializer(serializers.ModelSerializer):
-    broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); deriv_identity=serializers.SerializerMethodField(); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); selection_eligible=serializers.SerializerMethodField(); connection_eligible=serializers.SerializerMethodField(); snapshot_ready=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
+    balance=serializers.SerializerMethodField(); currency=serializers.SerializerMethodField(); broker=serializers.SerializerMethodField(); broker_name=serializers.CharField(source='broker.name',read_only=True); broker_account_id=serializers.CharField(source='account_id',read_only=True); deriv_identity=serializers.SerializerMethodField(); account_type=serializers.SerializerMethodField(); avatar_url=serializers.SerializerMethodField(); display_name=serializers.SerializerMethodField(); branding=serializers.SerializerMethodField(); is_connected=serializers.SerializerMethodField(); credential_status=serializers.CharField(read_only=True); data_freshness=serializers.SerializerMethodField(); switch_enabled=serializers.SerializerMethodField(); selection_eligible=serializers.SerializerMethodField(); connection_eligible=serializers.SerializerMethodField(); snapshot_ready=serializers.SerializerMethodField(); equity=serializers.SerializerMethodField(); margin=serializers.SerializerMethodField(); free_margin=serializers.SerializerMethodField(); net_profit_loss=serializers.SerializerMethodField(); is_active=serializers.SerializerMethodField()
     class Meta:
         model=BrokerAccount
         fields=['id','user','broker','broker_name','broker_account_id','account_id','account_type','deriv_identity','avatar_url','display_name','branding','currency','balance','equity','margin','free_margin','net_profit_loss','status','is_active','is_connected','credential_status','last_synced_at','data_freshness','switch_enabled','selection_eligible','connection_eligible','snapshot_ready','created_at']
-        read_only_fields=['user','balance','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_active','is_connected','data_freshness','switch_enabled','selection_eligible','connection_eligible','snapshot_ready']
+        read_only_fields=['user','balance','currency','equity','margin','free_margin','net_profit_loss','last_synced_at','broker_account_id','account_type','avatar_url','display_name','branding','is_active','is_connected','data_freshness','switch_enabled','selection_eligible','connection_eligible','snapshot_ready']
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get('request')
@@ -42,6 +42,14 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
             return {}
         value = (obj.credentials or {}).get('deriv_identity') or {}
         return value if isinstance(value, dict) else {}
+
+    def get_balance(self,obj):
+        # Model defaults are storage placeholders, not broker facts. Expose
+        # financial values only after an authoritative provider snapshot exists.
+        return obj.balance if obj.last_synced_at else None
+
+    def get_currency(self,obj):
+        return obj.currency if obj.last_synced_at else None
 
     def get_account_type(self,obj):
         value = obj.account_type
@@ -76,11 +84,14 @@ class BrokerAccountSerializer(serializers.ModelSerializer):
     def get_connection_eligible(self,obj): return bool(obj.is_connection_eligible)
     def get_snapshot_ready(self,obj): return bool(obj.last_synced_at)
     def get_equity(self,obj):
-        r=self._realtime(obj); return r['equity'] if r.get('equity') is not None else (obj.equity if obj.equity!=0 else None)
+        if not obj.last_synced_at:return None
+        r=self._realtime(obj); return r['equity'] if r.get('equity') is not None else obj.equity
     def get_margin(self,obj):
-        r=self._realtime(obj); return r['margin'] if r.get('margin') is not None else (obj.margin if obj.margin!=0 else None)
+        if not obj.last_synced_at:return None
+        r=self._realtime(obj); return r['margin'] if r.get('margin') is not None else obj.margin
     def get_free_margin(self,obj):
-        r=self._realtime(obj); return r['available_margin'] if r.get('available_margin') is not None else (obj.free_margin if obj.free_margin!=0 else None)
+        if not obj.last_synced_at:return None
+        r=self._realtime(obj); return r['available_margin'] if r.get('available_margin') is not None else obj.free_margin
     def get_net_profit_loss(self,obj): return self._realtime(obj).get('unrealized_pnl')
 
 class BrokerConnectionSerializer(serializers.ModelSerializer):
