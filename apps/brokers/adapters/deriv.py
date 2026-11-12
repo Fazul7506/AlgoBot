@@ -17,6 +17,11 @@ from .base import BrokerAdapter
 logger = logging.getLogger(__name__)
 
 
+def _stable_reconnect_delay(current_delay, connected_for, stable_seconds=60.0, initial_delay=1.0):
+    """Reset retry delay only after a connection has remained stable."""
+    return initial_delay if connected_for >= stable_seconds else current_delay
+
+
 def _normalize_is_virtual(value):
     """Normalize Deriv's documented boolean-as-0/1 field without guessing.
 
@@ -176,8 +181,9 @@ class DerivAdapter(BrokerAdapter):
                 # unstable sessions that connect and immediately drop otherwise
                 # retry forever at the minimum interval.
                 connected_for = time.monotonic() - connected_at if connected_at is not None else 0.0
-                if connected_for >= stable_connection_seconds:
-                    backoff = 1.0
+                backoff = _stable_reconnect_delay(
+                    backoff, connected_for, stable_seconds=stable_connection_seconds
+                )
                 safe_error = (
                     "Deriv returned an invalid WebSocket endpoint"
                     if isinstance(exc, ValueError)
