@@ -126,7 +126,7 @@ class DerivAdapter(BrokerAdapter):
         except (asyncio.TimeoutError, OSError, websockets.WebSocketException, json.JSONDecodeError) as exc:
             raise BrokerConnectionError("Deriv is unavailable or returned an invalid response") from exc
         except ValueError as exc:
-            raise BrokerConnectionError("Deriv returned an invalid authenticated WebSocket endpoint") from exc
+            raise BrokerConnectionError("Deriv returned an invalid WebSocket endpoint") from exc
         if response.get("error"):
             message = response["error"].get("message", "Deriv rejected the request")
             code = response["error"].get("code", "")
