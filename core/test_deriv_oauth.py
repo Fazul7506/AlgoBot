@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
+from asgiref.sync import sync_to_async
 
 from apps.brokers.models import Broker, BrokerAccount
 from core.account_context import SESSION_KEY
@@ -65,8 +66,12 @@ class DerivOAuthTests(TestCase):
     async def _mock_sync_snapshot(self, account):
         # The production callback must wait for a provider-backed snapshot
         # before selecting the account. Keep this fixture explicit.
-        account.last_synced_at = timezone.now()
-        account.save(update_fields=["last_synced_at"])
+        def persist_snapshot():
+            account.last_synced_at = timezone.now()
+            account.save(update_fields=["last_synced_at"])
+            account.connections.update(status="connected", last_ping=timezone.now())
+
+        await sync_to_async(persist_snapshot)()
         return account, {
             "account_id": account.account_id,
             "balance": str(account.balance),
