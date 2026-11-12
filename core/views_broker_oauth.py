@@ -182,9 +182,11 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     if not account_id:
         return None
     websocket_balance = websocket_balance or {}
-    currency = record.get("currency") or websocket_balance.get("currency") or "USD"
-    balance_value = record.get("balance") if record.get("balance") is not None else websocket_balance.get("balance") or 0
-    equity_value = websocket_balance.get("equity") if websocket_balance.get("equity") is not None else 0
+    currency = record.get("currency") or websocket_balance.get("currency")
+    balance_value = record.get("balance")
+    if balance_value is None:
+        balance_value = websocket_balance.get("balance")
+    equity_value = websocket_balance.get("equity")
     avatar_url = str(record.get("avatar_url") or websocket_balance.get("avatar_url") or "").strip()
     account_type = _account_type(record, websocket_balance)
 
@@ -194,14 +196,22 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     # be established before any credentials or account metadata are changed.
     if broker_account.user_id != user.pk:
         return None
-    broker_account.currency = currency
-    broker_account.balance = balance_value
-    broker_account.equity = equity_value
+    # OAuth account-list metadata is not a completed account-scoped snapshot.
+    # Preserve existing financial fields when the provider omits them and keep
+    # the snapshot freshness marker empty until SynchronizationService verifies
+    # the exact account through its authenticated adapter.
+    if currency:
+        broker_account.currency = currency
+    if balance_value is not None:
+        broker_account.balance = balance_value
+    if equity_value is not None:
+        broker_account.equity = equity_value
     broker_account.status = "active"
     broker_account.credentials = {
         **(broker_account.credentials or {}),
         "account_type": account_type,
-        "connection_health": websocket_health,
+        "connection_health": "not_checked",
+        "oauth_identity_health": websocket_health,
         **({"avatar_url": avatar_url} if avatar_url else {}),
         **({"deriv_identity": _safe_deriv_identity(deriv_identity)} if deriv_identity else {}),
     }
@@ -210,11 +220,23 @@ def _persist_deriv_account(*, user, broker, record, access_token, refresh_token,
     broker_account.expires_at = expires_at
     broker_account.token_status = "active"
     broker_account.last_refresh = timezone.now()
-    broker_account.last_synced_at = timezone.now()
+    broker_account.last_synced_at = None
     broker_account.save()
 
     BrokerConnection.objects.update_or_create(
         broker_account=broker_account,
-        defaults={"broker": broker, "status": "connected" if websocket_health == "verified" else "degraded", "last_ping": timezone.now() if websocket_health == "verified" else None, "connected_at": timezone.now(), "heartbeat": {"oauth_verified": True, "websocket_health": websocket_health}},
+        defaults={
+            "broker": broker,
+            # The global OAuth authorize identity is not proof that this
+            # selected account's OTP WebSocket and financial snapshot work.
+            "status": "degraded",
+            "last_ping": None,
+            "connected_at": timezone.now(),
+            "heartbeat": {
+                "oauth_verified": True,
+                "websocket_health": websocket_health,
+                "connection_validation": "pending",
+            },
+        },
     )
     return broker_account
