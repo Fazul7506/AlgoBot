@@ -161,6 +161,32 @@ class AccountSwitchingTests(TestCase):
         self.account_one.save(update_fields=['last_synced_at'])
         data = BrokerAccountSerializer(self.account_one, context={'request': request}).data
         self.assertTrue(data['snapshot_ready'])
+    def test_serializer_hides_model_financial_defaults_until_authoritative_snapshot(self):
+        request = self._request()
+        pending = BrokerAccount.objects.create(
+            user=self.user,
+            broker=self.broker,
+            account_id="PENDING-FINANCIAL-SNAPSHOT",
+            credentials={"account_type": "demo"},
+        )
+        pending.set_access_token("pending-snapshot-token")
+        pending.save(update_fields=["access_token"])
+
+        pending_data = BrokerAccountSerializer(pending, context={"request": request}).data
+        self.assertIsNone(pending_data["balance"])
+        self.assertIsNone(pending_data["currency"])
+        self.assertIsNone(pending_data["equity"])
+        self.assertIsNone(pending_data["margin"])
+        self.assertIsNone(pending_data["free_margin"])
+
+        pending.last_synced_at = timezone.now()
+        pending.save(update_fields=["last_synced_at"])
+        synced_data = BrokerAccountSerializer(pending, context={"request": request}).data
+        # Zero is valid only when it belongs to a confirmed provider snapshot.
+        self.assertEqual(str(synced_data["balance"]), "0.00000000")
+        self.assertEqual(synced_data["currency"], "USD")
+        self.assertEqual(str(synced_data["equity"]), "0.00000000")
+
     def test_connected_account_without_authoritative_snapshot_is_not_active(self):
         request = self._request()
         self.assertIsNone(get_active_account(self.user, request=request))
