@@ -60,7 +60,7 @@ class DerivAuthenticatedEndpointTests(SimpleTestCase):
         adapter = DerivAdapter(broker=Mock(), account=Mock())
         with self.assertRaisesMessage(
             BrokerConnectionError,
-            "Deriv returned an invalid authenticated WebSocket endpoint",
+            "Deriv returned an invalid WebSocket endpoint",
         ):
             asyncio.run(adapter._request({"balance": 1}))
         connect.assert_called_once()
