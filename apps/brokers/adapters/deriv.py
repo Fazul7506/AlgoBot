@@ -145,14 +145,16 @@ class DerivAdapter(BrokerAdapter):
     async def _stream(self, subscriptions, callback=None, authenticated=False, stream_name="broker"):
         """Maintain a broker-native stream with bounded reconnect/backoff."""
         backoff = 1.0
+        stable_connection_seconds = 60.0
         while True:
             ws = None
+            connected_at = None
             try:
                 endpoint = await asyncio.to_thread(self._authenticated_ws_url) if authenticated else self.endpoint
                 ws = await websockets.connect(endpoint, open_timeout=self.timeout, close_timeout=5, ping_interval=20, ping_timeout=10, max_size=2**20)
+                connected_at = time.monotonic()
                 for payload in subscriptions:
                     await ws.send(json.dumps(payload))
-                backoff = 1.0
                 await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "connected", "timestamp": time.time()})
                 while True:
                     try:
@@ -170,14 +172,22 @@ class DerivAdapter(BrokerAdapter):
                 await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "authentication_error", "timestamp": time.time()})
                 raise
             except (OSError, asyncio.TimeoutError, websockets.WebSocketException, json.JSONDecodeError, BrokerConnectionError, ValueError) as exc:
-                # websockets.connect may raise ValueError for a syntactically
-                # invalid provider-issued endpoint. Keep the stream state
-                # explicit and retry with bounded backoff instead of silently
-                # terminating the account's stream task.
+                # Do not reset the retry delay merely because the socket opened:
+                # unstable sessions that connect and immediately drop otherwise
+                # retry forever at the minimum interval.
+                connected_for = time.monotonic() - connected_at if connected_at is not None else 0.0
+                if connected_for >= stable_connection_seconds:
+                    backoff = 1.0
                 safe_error = (
                     "Deriv returned an invalid WebSocket endpoint"
                     if isinstance(exc, ValueError)
-                    else str(exc)
+                    else "Deriv WebSocket connection unavailable"
+                )
+                logger.warning(
+                    "deriv_stream_reconnecting stream=%s error_type=%s retry_in=%.1f",
+                    stream_name,
+                    type(exc).__name__,
+                    backoff,
                 )
                 await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "reconnecting", "error": safe_error, "retry_in": backoff, "timestamp": time.time()})
                 await asyncio.sleep(backoff)
