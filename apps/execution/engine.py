@@ -5,7 +5,7 @@ from django.utils import timezone
 from .services import OrderService, OrderValidationService, ExecutionQueueService, PositionService, TradeSynchronizationService
 from .repositories import ExecutionLogRepository
 from . import constants as c
-from apps.brokers.services import BrokerRegistry
+from apps.brokers.services import async_broker_adapter
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import BrokerAccount
 
@@ -33,7 +33,9 @@ class ExecutionEngine:
                 candles = list(reversed(list(Candle.objects.filter(symbol__symbol=symbol, timeframe=candle_timeframe).order_by('-epoch')[:60])))
                 price = float(tick.quote)
                 return {'market_data': {'close': price, 'open': price, 'high': price, 'low': price, 'bid': float(tick.bid) if tick.bid is not None else None, 'ask': float(tick.ask) if tick.ask is not None else None, 'spread': float(tick.spread or 0), 'volume': float(tick.volume or 0), 'source': 'persisted_broker_tick', 'age_seconds': round(age, 3)}, 'candles': [{'open': float(x.open), 'high': float(x.high), 'low': float(x.low), 'close': float(x.close), 'volume': float(x.volume or 0), 'epoch': x.epoch} for x in candles]}
-        async def fetch(): return await asyncio.wait_for(BrokerRegistry().adapter(account.broker, account).get_market_data(symbol), timeout=7.0)
+        async def fetch():
+            adapter = await async_broker_adapter(account)
+            return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=7.0)
         tick_data = asyncio.run(fetch()); price = tick_data.get('price', tick_data.get('quote'))
         if price is None: raise ValueError('Broker returned no usable market price for the selected symbol.')
         return {'market_data': {'close': price, 'open': price, 'high': price, 'low': price, 'bid': tick_data.get('bid'), 'ask': tick_data.get('ask'), 'spread': (tick_data.get('ask') - tick_data.get('bid')) if tick_data.get('ask') is not None and tick_data.get('bid') is not None else 0, 'source': 'live_broker_tick'}}
@@ -125,7 +127,7 @@ class ExecutionEngine:
         RiskEngine().approve_or_raise(order, validation.get('risk_context') or validation)
         start=time.perf_counter(); order.status=c.ORDER_STATUS_SENT; order.submitted_at=timezone.now()
         await asyncio.to_thread(order.save, update_fields=['status','submitted_at','updated_at'])
-        adapter=BrokerRegistry().adapter(account.broker, account)
+        adapter=await async_broker_adapter(account)
         broker_order=SimpleNamespace(symbol=order.symbol,stake=order.stake,quantity=order.stake,direction=order.direction,order_type=order.order_type,price=order.price,contract_type=getattr(order,'contract_type',None),routing_context=validation)
         response = await adapter.place_order(broker_order)
         if not isinstance(response, dict):
