@@ -192,7 +192,7 @@ class BrokerPositionSyncService:
     """Fetch and reconcile one authenticated broker account."""
 
     async def synchronize(self, account):
-        from .services import BrokerRegistry
+        from .services import async_broker_adapter
         from .models import Position
 
         if not account:
@@ -204,7 +204,7 @@ class BrokerPositionSyncService:
         if not connection_eligible:
             raise PositionSyncError("The selected broker account is not connected and ready.", code="BROKER_UNAVAILABLE")
 
-        adapter = BrokerRegistry().adapter(account.broker, account)
+        adapter = await async_broker_adapter(account)
         try:
             records = await adapter.get_positions()
         except BrokerAuthenticationError as exc:
