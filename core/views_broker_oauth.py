@@ -52,6 +52,16 @@ def _account_type(record: dict, websocket_balance: dict | None = None) -> str:
     is_virtual = record.get("is_virtual")
     if is_virtual is None:
         is_virtual = websocket_balance.get("is_virtual")
+    if isinstance(is_virtual, int) and not isinstance(is_virtual, bool) and is_virtual in (0, 1):
+        is_virtual = is_virtual == 1
+    elif isinstance(is_virtual, str):
+        normalized = is_virtual.strip().lower()
+        if normalized in {"1", "true"}:
+            is_virtual = True
+        elif normalized in {"0", "false"}:
+            is_virtual = False
+        else:
+            is_virtual = None
     if isinstance(is_virtual, bool):
         verified_type = "demo" if is_virtual else "real"
         if value and value != verified_type:
