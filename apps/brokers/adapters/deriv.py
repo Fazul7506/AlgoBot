@@ -169,8 +169,17 @@ class DerivAdapter(BrokerAdapter):
             except BrokerAuthenticationError:
                 await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "authentication_error", "timestamp": time.time()})
                 raise
-            except (OSError, asyncio.TimeoutError, websockets.WebSocketException, json.JSONDecodeError, BrokerConnectionError) as exc:
-                await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "reconnecting", "error": str(exc), "retry_in": backoff, "timestamp": time.time()})
+            except (OSError, asyncio.TimeoutError, websockets.WebSocketException, json.JSONDecodeError, BrokerConnectionError, ValueError) as exc:
+                # websockets.connect may raise ValueError for a syntactically
+                # invalid provider-issued endpoint. Keep the stream state
+                # explicit and retry with bounded backoff instead of silently
+                # terminating the account's stream task.
+                safe_error = (
+                    "Deriv returned an invalid WebSocket endpoint"
+                    if isinstance(exc, ValueError)
+                    else str(exc)
+                )
+                await self._dispatch_stream(callback, {"msg_type": "stream_status", "stream": stream_name, "status": "reconnecting", "error": safe_error, "retry_in": backoff, "timestamp": time.time()})
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
             finally:
