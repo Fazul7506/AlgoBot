@@ -11,7 +11,7 @@ DERIV_REDIRECT_URI = env("DERIV_REDIRECT_URI", env("BROKER_REDIRECT_URI", ""))
 DERIV_API_BASE_URL = env("DERIV_API_BASE_URL", "https://api.derivws.com").rstrip("/")
 DERIV_OPTIONS_ACCOUNTS_URL = env("DERIV_OPTIONS_ACCOUNTS_URL", f"{DERIV_API_BASE_URL}/trading/v1/options/accounts").rstrip("/")
 DERIV_PUBLIC_WS_URL = env("DERIV_PUBLIC_WS_URL", "wss://api.derivws.com/trading/v1/options/ws/public")
-DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", DERIV_PUBLIC_WS_URL)
+DERIV_AUTH_WS_BASE_URL = env("DERIV_AUTH_WS_BASE_URL", "wss://api.derivws.com/trading/v1/options/ws")
 
 # Account selection is a control-plane operation. Keep the switch configurable
 # while leaving live trading and broker connectivity independently gated.
