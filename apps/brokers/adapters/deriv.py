@@ -259,6 +259,23 @@ class DerivAdapter(BrokerAdapter):
                 "Deriv authorization did not confirm the requested account identity"
             )
         account_type = _account_type_from_is_virtual(account.get("is_virtual"))
+        if account_type == "unknown":
+            # Deriv's selected-account OAuth account-list record is itself a
+            # provider response and _persist_deriv_account stores its validated
+            # DEMO/REAL classification. The account-scoped OTP session above
+            # independently confirms the exact login ID. Deriv's balance
+            # response may omit is_virtual, so retain that provider-sourced
+            # environment only after the OTP login ID matches this account.
+            provider_account_metadata = (
+                getattr(self, "credentials", None)
+                or getattr(self.account, "credentials", None)
+                or {}
+            )
+            persisted_type = str(
+                provider_account_metadata.get("account_type") or ""
+            ).lower().strip()
+            if persisted_type in {"demo", "real"}:
+                account_type = persisted_type
         return {
             "account_id": provider_account_id,
             "balance": account.get("balance"),

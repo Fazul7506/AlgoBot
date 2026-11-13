@@ -17,6 +17,7 @@ class DerivBalanceSyncTests(SimpleTestCase):
             is_token_expired=False,
         )
         self.adapter.broker = SimpleNamespace(broker_type="deriv", pk=1)
+        self.adapter.credentials = {}
 
     async def test_get_balance_uses_selected_account_otp_authorize_snapshot(self):
         self.adapter.authenticate = AsyncMock(return_value={
@@ -68,6 +69,21 @@ class DerivBalanceSyncTests(SimpleTestCase):
         result = await self.adapter.get_balance()
 
         self.assertEqual(result["account_type"], "unknown")
+
+    async def test_uses_provider_verified_account_type_when_balance_omits_is_virtual(self):
+        self.adapter.credentials = {"account_type": "demo"}
+        self.adapter.authenticate = AsyncMock(return_value={
+            "account_id": "VRTC123",
+            "balance": "42.50",
+            "currency": "EUR",
+            "is_virtual": None,
+            "avatar_url": None,
+        })
+
+        result = await self.adapter.get_balance()
+
+        self.assertEqual(result["account_type"], "demo")
+        self.assertEqual(result["account_id"], "VRTC123")
 
     async def test_get_balance_rejects_authorize_response_for_another_account(self):
         self.adapter.authenticate = AsyncMock(return_value={
