@@ -126,4 +126,4 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
         self.assertEqual(fourth.sent, [subscription])
         self.assertEqual(connect.call_count, 4)
         self.assertEqual([call.args[0] for call in sleep.await_args_list], [2, 4, 8])
-        layer.group_send.assert_awaited_once()
+        self.assertEqual(layer.group_send.await_count, 3)
