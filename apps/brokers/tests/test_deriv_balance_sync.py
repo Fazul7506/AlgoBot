@@ -10,20 +10,25 @@ from apps.brokers.exceptions import BrokerAuthenticationError
 class DerivBalanceSyncTests(SimpleTestCase):
     def setUp(self):
         self.adapter = DerivAdapter.__new__(DerivAdapter)
-        self.adapter.account = SimpleNamespace(account_id="VRTC123")
+        self.adapter.account = SimpleNamespace(
+            account_id="VRTC123",
+            broker_id=1,
+            token_status="active",
+            is_token_expired=False,
+        )
+        self.adapter.broker = SimpleNamespace(broker_type="deriv", pk=1)
 
-    async def test_get_balance_uses_matching_rest_account_without_websocket(self):
-        self.adapter.get_accounts = AsyncMock(return_value=[
-            {"account_id": "VRTC999", "balance": "1.00", "currency": "USD"},
-            {
-                "account_id": "VRTC123",
-                "balance": "42.50",
-                "currency": "EUR",
-                "is_virtual": True,
-                "avatar_url": "https://example.test/avatar.png",
-            },
-        ])
-        self.adapter.authenticate = AsyncMock()
+    async def test_get_balance_uses_selected_account_otp_authorize_snapshot(self):
+        self.adapter.authenticate = AsyncMock(return_value={
+            "account_id": "VRTC123",
+            "balance": "42.50",
+            "currency": "EUR",
+            "is_virtual": True,
+            "avatar_url": "https://example.test/avatar.png",
+        })
+        self.adapter.get_accounts = AsyncMock(
+            side_effect=AssertionError("Snapshot must use the selected account OTP session")
+        )
 
         result = await self.adapter.get_balance()
 
@@ -34,10 +39,10 @@ class DerivBalanceSyncTests(SimpleTestCase):
             "account_type": "demo",
             "avatar_url": "https://example.test/avatar.png",
         })
-        self.adapter.authenticate.assert_not_awaited()
+        self.adapter.authenticate.assert_awaited_once()
+        self.adapter.get_accounts.assert_not_awaited()
 
-    async def test_get_balance_falls_back_to_websocket_when_rest_omits_balance(self):
-        self.adapter.get_accounts = AsyncMock(return_value=[{"account_id": "VRTC123", "currency": "USD"}])
+    async def test_get_balance_maps_authoritative_real_account(self):
         self.adapter.authenticate = AsyncMock(return_value={
             "account_id": "VRTC123",
             "balance": "12.00",
@@ -48,16 +53,10 @@ class DerivBalanceSyncTests(SimpleTestCase):
 
         result = await self.adapter.get_balance()
 
-        self.assertEqual(result["balance"], "12.00")
         self.assertEqual(result["account_type"], "real")
-        self.adapter.authenticate.assert_awaited_once()
+        self.assertEqual(result["account_id"], "VRTC123")
 
     async def test_unknown_account_type_is_not_inferred_as_real_or_demo(self):
-        self.adapter.get_accounts = AsyncMock(return_value=[{
-            "account_id": "VRTC123",
-            "balance": "12.00",
-            "currency": "USD",
-        }])
         self.adapter.authenticate = AsyncMock(return_value={
             "account_id": "VRTC123",
             "balance": "12.00",
@@ -70,21 +69,26 @@ class DerivBalanceSyncTests(SimpleTestCase):
 
         self.assertEqual(result["account_type"], "unknown")
 
-    async def test_conflicting_provider_environment_fields_fail_closed(self):
-        self.adapter.get_accounts = AsyncMock(return_value=[{
-            "account_id": "VRTC123",
-            "balance": "12.00",
+    async def test_get_balance_rejects_authorize_response_for_another_account(self):
+        self.adapter.authenticate = AsyncMock(return_value={
+            "account_id": "VRTC999",
+            "balance": "1.00",
             "currency": "USD",
-            "is_virtual": False,
-            "account_type": "demo",
-        }])
+            "is_virtual": True,
+            "avatar_url": None,
+        })
 
-        result = await self.adapter.get_balance()
+        with self.assertRaises(BrokerAuthenticationError):
+            await self.adapter.get_balance()
 
-        self.assertEqual(result["account_type"], "unknown")
-
-    async def test_get_balance_rejects_an_account_missing_from_oauth_scope(self):
-        self.adapter.get_accounts = AsyncMock(return_value=[{"account_id": "VRTC999", "balance": "1.00"}])
+    async def test_get_balance_rejects_missing_provider_account_identity(self):
+        self.adapter.authenticate = AsyncMock(return_value={
+            "account_id": "",
+            "balance": "1.00",
+            "currency": "USD",
+            "is_virtual": True,
+            "avatar_url": None,
+        })
 
         with self.assertRaises(BrokerAuthenticationError):
             await self.adapter.get_balance()

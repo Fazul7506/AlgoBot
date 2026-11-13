@@ -242,31 +242,30 @@ class DerivAdapter(BrokerAdapter):
         except (requests.RequestException, ValueError) as exc: raise BrokerConnectionError("Unable to retrieve Deriv trading accounts") from exc
 
     async def get_balance(self):
-        account_id = self._account_id(); accounts = await self.get_accounts(); record = next((item for item in accounts if str(item.get("account_id") or item.get("loginid") or "") == account_id), None)
-        if record is None: raise BrokerAuthenticationError("The selected Deriv account is no longer available to this OAuth credential")
-        if record.get("balance") is None:
-            account = await self.authenticate()
-            if str(account.get("account_id") or "") != account_id:
-                raise BrokerAuthenticationError("Deriv authorization did not confirm the requested account identity")
-            account_type = _account_type_from_is_virtual(account.get("is_virtual"))
-            return {"account_id": account["account_id"], "balance": account.get("balance"), "currency": account.get("currency"), "account_type": account_type, "avatar_url": account.get("avatar_url")}
-        is_virtual = _normalize_is_virtual(record.get("is_virtual"))
-        account_type = str(record.get("account_type") or "").lower().strip()
-        declared_environment = account_type if account_type in {"demo", "real"} else None
-        # Deriv's account_type commonly describes the product (for example,
-        # "trading"), not DEMO/REAL. Only is_virtual is authoritative for the
-        # environment. If it is absent, request the selected account's
-        # account-scoped authorize/balance response; never infer from the local
-        # account label or an unrelated account in the OAuth account list.
-        if is_virtual is None:
-            authorized = await self.authenticate()
-            if str(authorized.get("account_id") or "") != account_id:
-                raise BrokerAuthenticationError("Deriv authorization did not confirm the requested account identity")
-            is_virtual = _normalize_is_virtual(authorized.get("is_virtual"))
-        verified_type = _account_type_from_is_virtual(is_virtual)
-        if declared_environment and verified_type in {"demo", "real"} and declared_environment != verified_type:
-            verified_type = "unknown"
-        return {"account_id": str(record.get("account_id") or record.get("loginid") or account_id), "balance": record.get("balance"), "currency": record.get("currency"), "account_type": verified_type, "avatar_url": record.get("avatar_url")}
+        """Return a fresh snapshot from the selected account's own Deriv OTP session.
+
+        The OAuth account-list REST endpoint can omit or represent linked
+        trading accounts differently from the account-scoped OTP session.
+        Connection setup has already obtained an OTP URL for this exact
+        BrokerAccount; use that same provider-authoritative identity path for
+        the financial snapshot instead of requiring a second, potentially
+        incomplete account-list lookup.
+        """
+        account_id = self._account_id()
+        account = await self.authenticate()
+        provider_account_id = str(account.get("account_id") or "").strip()
+        if not provider_account_id or provider_account_id != account_id:
+            raise BrokerAuthenticationError(
+                "Deriv authorization did not confirm the requested account identity"
+            )
+        account_type = _account_type_from_is_virtual(account.get("is_virtual"))
+        return {
+            "account_id": provider_account_id,
+            "balance": account.get("balance"),
+            "currency": account.get("currency"),
+            "account_type": account_type,
+            "avatar_url": account.get("avatar_url"),
+        }
 
     async def get_positions(self): return (await self._request({"portfolio": 1}, authenticated=True)).get("portfolio", {}).get("contracts", [])
     async def get_orders(self): return (await self._request({"statement": 1, "limit": 50}, authenticated=True)).get("statement", {}).get("transactions", [])
