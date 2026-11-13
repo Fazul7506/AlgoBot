@@ -80,6 +80,21 @@ class BrokerRegistry:
     def adapter(self, broker, account=None): return self.get(broker.broker_type)(broker=broker, account=account, credentials=getattr(account, 'credentials', {}) or {})
 
 
+async def async_broker_adapter(account, broker=None):
+    """Resolve ORM-backed broker metadata off the event loop before adapter I/O.
+
+    BrokerRegistry.get() reads persisted adapter metadata and an account's
+    forward broker relation may be lazy. Both are synchronous ORM operations;
+    resolving them inside an ASGI coroutine raises SynchronousOnlyOperation.
+    Keep the existing synchronous registry API for synchronous call sites.
+    """
+    if broker is None:
+        broker = await sync_to_async(lambda: account.broker, thread_sensitive=True)()
+    return await sync_to_async(
+        BrokerRegistry().adapter, thread_sensitive=True
+    )(broker, account)
+
+
 class BrokerManager:
     broker_catalog = {'deriv': {'name': 'Deriv', 'status': 'active', 'websocket_endpoint': settings.DERIV_PUBLIC_WS_URL, 'supports_live': True, 'auth': 'oauth'}, 'binance': {'name': 'Binance', 'auth': 'api_key_secret'}, 'bybit': {'name': 'Bybit', 'auth': 'api_key_secret'}, 'oanda': {'name': 'OANDA', 'auth': 'api_token'}, 'interactive_brokers': {'name': 'Interactive Brokers', 'auth': 'session_gateway'}, 'metatrader_gateway': {'name': 'MetaTrader Gateway', 'auth': 'username_password'}, 'dxtrade': {'name': 'DXTrade', 'auth': 'session_token'}, 'ctrader': {'name': 'cTrader', 'auth': 'oauth'}, 'alpaca': {'name': 'Alpaca', 'auth': 'api_key_secret'}, 'forex_com': {'name': 'Forex.com', 'auth': 'username_password'}, 'pepperstone': {'name': 'Pepperstone', 'auth': 'metatrader_or_ctrader'}, 'ic_markets': {'name': 'IC Markets', 'auth': 'metatrader_or_ctrader'}, 'exness': {'name': 'Exness', 'auth': 'api_key_or_session'}}
     def ensure_defaults(self):
@@ -154,7 +169,7 @@ class BrokerManager:
 class BrokerConnectionService:
     async def connect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter = BrokerRegistry().adapter(broker, account)
+        adapter = await async_broker_adapter(account, broker)
         verification = await adapter.connect()
         verified_account_id = str(verification.get('account_id') or '').strip()
         # Never silently rewrite the user's selected account to a different
@@ -191,7 +206,8 @@ class BrokerConnectionService:
         return connection
     async def disconnect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        await BrokerRegistry().adapter(broker, account).disconnect(); account.status = 'disabled'
+        adapter = await async_broker_adapter(account, broker)
+        await adapter.disconnect(); account.status = 'disabled'
         await sync_to_async(account.save)(update_fields=['status'])
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'disconnected'})
         await sync_to_async(_queue_automation_event, thread_sensitive=False)(
@@ -202,20 +218,26 @@ class BrokerConnectionService:
         return connection
     async def heartbeat(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        adapter = BrokerRegistry().adapter(broker, account); data = await adapter.health_check(); latency = await adapter.ping()
+        adapter = await async_broker_adapter(account, broker); data = await adapter.health_check(); latency = await adapter.ping()
         connection, _ = await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'status': 'connected', 'latency': latency, 'last_ping': timezone.now(), 'heartbeat': data})
         return connection
 
 
 class AuthenticationService:
-    async def authenticate(self, account): return await BrokerRegistry().adapter(account.broker, account).authenticate()
-    async def refresh_token(self, account): return await BrokerRegistry().adapter(account.broker, account).refresh_token()
+    async def authenticate(self, account):
+        adapter = await async_broker_adapter(account)
+        return await adapter.authenticate()
+
+    async def refresh_token(self, account):
+        adapter = await async_broker_adapter(account)
+        return await adapter.refresh_token()
 
 
 class LatencyService:
     async def measure(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
-        latency = await BrokerRegistry().adapter(broker, account).ping()
+        adapter = await async_broker_adapter(account, broker)
+        latency = await adapter.ping()
         await sync_to_async(BrokerConnection.objects.update_or_create)(broker_account=account, defaults={'broker': broker, 'latency': latency, 'last_ping': timezone.now(), 'status': 'connected'})
         return latency
 
@@ -286,7 +308,7 @@ class ExecutionManagementSystem:
 
     async def execute(self, order):
         start = time.perf_counter(); order.status = 'submitted'; order.submitted_at = timezone.now(); await sync_to_async(order.save)(update_fields=['status', 'submitted_at', 'updated_at'])
-        adapter = BrokerRegistry().adapter(order.broker, order.account); timeout = float(getattr(settings, 'BROKER_ORDER_TIMEOUT_SECONDS', 20))
+        adapter = await async_broker_adapter(order.account, order.broker); timeout = float(getattr(settings, 'BROKER_ORDER_TIMEOUT_SECONDS', 20))
         try:
             result = await asyncio.wait_for(adapter.place_order(order), timeout=timeout)
         except asyncio.TimeoutError as exc:
@@ -442,8 +464,9 @@ class ExecutionEngine:
 class SynchronizationService:
     async def sync_account(self, account):
         if account.status in {'disabled', 'suspended'}: raise BrokerRoutingError('This broker account is not connected')
-        adapter = BrokerRegistry().adapter(account.broker, account); data = await adapter.get_balance(); fields = []; provider_account_id = data.get('account_id'); broker_account_id = provider_account_id or account.account_id
-        if account.broker.broker_type == 'deriv':
+        broker = await sync_to_async(lambda: account.broker, thread_sensitive=True)()
+        adapter = await async_broker_adapter(account, broker); data = await adapter.get_balance(); fields = []; provider_account_id = data.get('account_id'); broker_account_id = provider_account_id or account.account_id
+        if broker.broker_type == 'deriv':
             if not provider_account_id or str(provider_account_id) != str(account.account_id):
                 raise BrokerAuthenticationError('Deriv did not confirm the exact requested account during snapshot synchronization. The selected account was not changed.')
             provider_type = str(data.get('account_type') or '').lower().strip()
@@ -481,7 +504,7 @@ class SynchronizationService:
                 BrokerConnection.objects.update_or_create(
                     broker_account=account,
                     defaults={
-                        'broker': account.broker,
+                        'broker': broker,
                         'status': 'connected',
                         'last_ping': now,
                         'connected_at': now,

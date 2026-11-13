@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 import websockets
 from django.conf import settings
@@ -32,9 +33,12 @@ class Command(BaseCommand):
         url = getattr(settings, "DERIV_PUBLIC_WS_URL", DERIV_PUBLIC_WS)
         layer = get_channel_layer()
         reconnect_delay = 2
+        stable_connection_seconds = 60.0
         while True:
+            connected_at = None
             try:
                 async with websockets.connect(url, open_timeout=10, close_timeout=5, ping_interval=20, ping_timeout=30, max_size=2**20) as ws:
+                    connected_at = time.monotonic()
                     req_id = 1
                     for symbol in symbols:
                         await ws.send(json.dumps({"ticks": symbol, "subscribe": 1, "req_id": req_id}))
@@ -56,11 +60,8 @@ class Command(BaseCommand):
                         except MarketDataValidationError as exc:
                             # The stream is alive; a stale/out-of-order or malformed
                             # tick is isolated to this message, not the whole socket.
-                            reconnect_delay = 2
                             self.stderr.write(f"market tick rejected: {exc}")
                             continue
-                        # Reset reconnect backoff only after ingestion succeeds.
-                        reconnect_delay = 2
                         if layer and payload:
                             await layer.group_send(
                                 f"algobot-market-{symbol}",
@@ -69,7 +70,13 @@ class Command(BaseCommand):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.stderr.write(f"market stream reconnecting: {exc}")
+                connected_for = time.monotonic() - connected_at if connected_at is not None else 0.0
+                if connected_for >= stable_connection_seconds:
+                    reconnect_delay = 2
+                self.stderr.write(
+                    f"market stream reconnecting: {type(exc).__name__}; "
+                    f"retry_in={reconnect_delay}s"
+                )
                 await asyncio.sleep(reconnect_delay)
                 reconnect_delay = min(reconnect_delay * 2, 30)
 

@@ -101,7 +101,7 @@ class DerivTradeHistoryAsyncOrmTests(TransactionTestCase):
             "date_start": 1760000000,
         })
 
-        with patch("apps.execution.trade_history.BrokerRegistry.adapter", return_value=adapter):
+        with patch("apps.execution.trade_history.async_broker_adapter", new=AsyncMock(return_value=adapter)):
             from apps.execution.trade_history import DerivTradeHistoryService
 
             result = asyncio.run(

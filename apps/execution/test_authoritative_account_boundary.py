@@ -66,7 +66,7 @@ class AuthoritativeExecutionBoundaryTests(TransactionTestCase):
                 }
             )
         )
-        with patch('apps.execution.engine.BrokerRegistry.adapter', return_value=adapter), \
+        with patch('apps.execution.engine.async_broker_adapter', new=AsyncMock(return_value=adapter)), \
              patch('apps.risk.engine.RiskEngine.approve_or_raise'):
             __import__('asyncio').run(ExecutionEngine().execute(order))
 

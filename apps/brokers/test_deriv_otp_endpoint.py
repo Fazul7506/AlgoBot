@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from apps.brokers.adapters.deriv import DerivAdapter
+from apps.brokers.adapters.deriv import DerivAdapter, _stable_reconnect_delay
 from apps.brokers.exceptions import BrokerConnectionError
 
 
@@ -64,3 +64,8 @@ class DerivAuthenticatedEndpointTests(SimpleTestCase):
         ):
             asyncio.run(adapter._request({"balance": 1}))
         connect.assert_called_once()
+
+    def test_stream_backoff_resets_only_after_stable_connection(self):
+        self.assertEqual(_stable_reconnect_delay(8.0, 10.0), 8.0)
+        self.assertEqual(_stable_reconnect_delay(8.0, 59.9), 8.0)
+        self.assertEqual(_stable_reconnect_delay(8.0, 60.0), 1.0)

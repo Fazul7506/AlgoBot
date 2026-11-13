@@ -1,6 +1,5 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -15,8 +14,7 @@ class BrokerRealtimeSyncTests(SimpleTestCase):
             user_id=42,
             broker=SimpleNamespace(broker_type="deriv"),
         )
-        with patch("apps.brokers.realtime_sync.BrokerRegistry.adapter", return_value=SimpleNamespace()):
-            return BrokerRealtimeSync(account)
+        return BrokerRealtimeSync(account)
 
     def test_group_name_is_user_scoped(self):
         self.assertEqual(self._service().group_name, "algobot-user-42-broker")
@@ -49,6 +47,7 @@ class BrokerRealtimeSyncTests(SimpleTestCase):
 
     def test_account_stream_includes_all_open_contracts_subscription(self):
         service = self._service()
+        service.adapter = SimpleNamespace()
         captured = {}
 
         async def fake_stream(subscriptions, **kwargs):

@@ -10,7 +10,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.brokers.models import BrokerAccount
-from apps.brokers.services import BrokerRegistry
+from apps.brokers.services import async_broker_adapter
 from apps.market_data.models import Candle, MarketSnapshot, Tick
 from apps.market_data.services import MarketDataService
 from core.account_context import get_active_account
@@ -190,7 +190,7 @@ def _connected_account(user, request=None):
 
 
 async def _bounded_market_data(account, symbol):
-    adapter = BrokerRegistry().adapter(account.broker, account)
+    adapter = await async_broker_adapter(account)
     return await asyncio.wait_for(adapter.get_market_data(symbol), timeout=7.0)
 
 

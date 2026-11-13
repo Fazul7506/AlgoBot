@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Avg
 from django.utils import timezone
 from asgiref.sync import sync_to_async
-from apps.brokers.services import BrokerRegistry
+from apps.brokers.services import async_broker_adapter
 from apps.brokers.position_sync import BrokerPositionSyncService
 from .exceptions import OrderValidationError, NonRetryableExecutionError
 from . import constants as c
@@ -336,7 +336,7 @@ class TradeReconciliationService:
 class TradeSynchronizationService:
     async def synchronize(self, broker_account):
         position_sync = await BrokerPositionSyncService().synchronize(broker_account)
-        adapter = BrokerRegistry().adapter(broker_account.broker, broker_account)
+        adapter = await async_broker_adapter(broker_account)
         positions = position_sync["positions"]
         orders = await adapter.get_orders()
         balance = await adapter.get_balance()

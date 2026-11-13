@@ -12,9 +12,9 @@ class ExecutionRecoveryService:
     """Resolve sent-but-unconfirmed orders from the authoritative broker."""
 
     async def recover_account(self, account) -> dict:
-        from apps.brokers.services import BrokerRegistry
+        from apps.brokers.services import async_broker_adapter
 
-        adapter = BrokerRegistry().adapter(account.broker, account)
+        adapter = await async_broker_adapter(account)
         orders = await sync_to_async(list)(
             self._candidate_orders(account)
         )

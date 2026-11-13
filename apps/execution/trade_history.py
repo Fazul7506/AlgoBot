@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.brokers.exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerOrderError
-from apps.brokers.services import BrokerRegistry
+from apps.brokers.services import async_broker_adapter
 from .models import BrokerTradeHistory
 
 
@@ -165,7 +165,7 @@ class DerivTradeHistoryService:
         self.account.save(update_fields=["last_synced_at"])
 
     async def sync(self, *, limit=100, date_from=None, date_to=None):
-        adapter = BrokerRegistry().adapter(self.account.broker, self.account)
+        adapter = await async_broker_adapter(self.account)
         try:
             transactions = await adapter.get_trade_history(
                 limit=min(max(int(limit or 100), 1), 100),

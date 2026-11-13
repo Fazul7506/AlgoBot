@@ -11,7 +11,7 @@ from channels.layers import get_channel_layer
 from django.db import close_old_connections
 from django.utils import timezone
 
-from .services import BrokerRegistry
+from .services import async_broker_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class BrokerRealtimeSync:
         self.account_id = account.pk
         self.account = account
         self.broker = account.broker
-        self.adapter = BrokerRegistry().adapter(self.broker, account)
+        self.adapter = None
         self.channel_layer = get_channel_layer()
         self._task = None
 
@@ -35,6 +35,8 @@ class BrokerRealtimeSync:
             return
         if self.broker.broker_type != "deriv":
             return
+        if self.adapter is None:
+            self.adapter = await async_broker_adapter(self.account, self.broker)
         self._task = asyncio.create_task(self._run_account_stream())
 
     async def stop(self):

@@ -97,8 +97,10 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
             "tick": {"symbol": "R_100", "quote": 123.45, "bid": 123.44, "ask": 123.46, "epoch": epoch},
         }
         first = FakeWebSocket([tick_message, RuntimeError("socket closed")])
-        second = FakeWebSocket([asyncio.CancelledError()])
-        sockets = [first, second]
+        second = FakeWebSocket([tick_message, RuntimeError("socket closed")])
+        third = FakeWebSocket([tick_message, RuntimeError("socket closed")])
+        fourth = FakeWebSocket([asyncio.CancelledError()])
+        sockets = [first, second, third, fourth]
 
         def fake_sync_to_async(fn):
             async def call(*args, **kwargs):
@@ -112,7 +114,7 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
             patch("apps.market_data.management.commands.run_market_stream.websockets.connect", side_effect=lambda *args, **kwargs: sockets.pop(0)) as connect, \
             patch("apps.market_data.management.commands.run_market_stream.get_channel_layer", return_value=layer), \
             patch("apps.market_data.management.commands.run_market_stream.Command.ingest", return_value={"symbol": "R_100", "quote": 123.45, "epoch": epoch}), \
-            patch("apps.market_data.management.commands.run_market_stream.asyncio.sleep", new=AsyncMock(return_value=None)):
+            patch("apps.market_data.management.commands.run_market_stream.asyncio.sleep", new=AsyncMock(return_value=None)) as sleep:
             markets.return_value.values_list.return_value = ["R_100"]
             with self.assertRaises(asyncio.CancelledError):
                 asyncio.run(Command().run())
@@ -120,5 +122,9 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
         subscription = {"ticks": "R_100", "subscribe": 1, "req_id": 1}
         self.assertEqual(first.sent, [subscription])
         self.assertEqual(second.sent, [subscription])
-        self.assertEqual(connect.call_count, 2)
-        layer.group_send.assert_awaited_once()
+        self.assertEqual(third.sent, [subscription])
+        self.assertEqual(fourth.sent, [subscription])
+        self.assertEqual(connect.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.await_args_list], [2, 4, 8])
+        self.assertEqual(layer.group_send.await_count, 3)
+        self.assertTrue(all(call.args[0] == "algobot-market-R_100" for call in layer.group_send.await_args_list))
