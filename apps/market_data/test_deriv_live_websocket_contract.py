@@ -127,3 +127,4 @@ class DerivLiveWebSocketContractTests(SimpleTestCase):
         self.assertEqual(connect.call_count, 4)
         self.assertEqual([call.args[0] for call in sleep.await_args_list], [2, 4, 8])
         self.assertEqual(layer.group_send.await_count, 3)
+        self.assertTrue(all(call.args[0] == "algobot-market-R_100" for call in layer.group_send.await_args_list))
