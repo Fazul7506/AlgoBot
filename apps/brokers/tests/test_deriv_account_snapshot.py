@@ -47,46 +47,55 @@ class DerivEnvironmentNormalizationTests(SimpleTestCase):
             self.assertEqual(result["account_id"], "")
         asyncio.run(missing_identity())
 
-    def test_get_balance_maps_deriv_integer_is_virtual_without_using_product_account_type(self):
+    def test_get_balance_uses_selected_account_otp_authorize_for_snapshot(self):
         async def exercise(is_virtual, expected):
             account = SimpleNamespace(account_id="CR123456")
             adapter = DerivAdapter(broker=SimpleNamespace(broker_type="deriv"), account=account)
-            adapter.get_accounts = AsyncMock(return_value=[{
-                "account_id": "CR123456", "balance": 100.25, "currency": "USD",
-                "is_virtual": is_virtual, "account_type": "trading",
-            }])
+            adapter.authenticate = AsyncMock(return_value={
+                "account_id": "CR123456",
+                "balance": "100.25",
+                "currency": "USD",
+                "is_virtual": is_virtual,
+                "avatar_url": "https://example.invalid/avatar.png",
+            })
+            adapter.get_accounts = AsyncMock(
+                side_effect=AssertionError("Snapshot must not depend on OAuth account-list lookup")
+            )
             result = await adapter.get_balance()
             self.assertEqual(result["account_id"], "CR123456")
             self.assertEqual(result["account_type"], expected)
+            self.assertEqual(result["balance"], "100.25")
+            self.assertEqual(result["currency"], "USD")
+            adapter.authenticate.assert_awaited_once()
+            adapter.get_accounts.assert_not_awaited()
 
         asyncio.run(exercise(0, "real"))
         asyncio.run(exercise(1, "demo"))
 
-    def test_get_balance_uses_account_scoped_authorize_when_account_list_environment_is_missing(self):
+    def test_get_balance_rejects_unknown_provider_environment(self):
         async def exercise():
             account = SimpleNamespace(account_id="CR123456")
             adapter = DerivAdapter(broker=SimpleNamespace(broker_type="deriv"), account=account)
-            adapter.get_accounts = AsyncMock(return_value=[{
-                "account_id": "CR123456", "balance": 100.25, "currency": "USD",
-                "is_virtual": None, "account_type": "trading",
-            }])
             adapter.authenticate = AsyncMock(return_value={
-                "account_id": "CR123456", "balance": 100.25, "currency": "USD", "is_virtual": False,
+                "account_id": "CR123456",
+                "balance": "100.25",
+                "currency": "USD",
+                "is_virtual": None,
             })
             result = await adapter.get_balance()
-            self.assertEqual(result["account_type"], "real")
-            adapter.authenticate.assert_awaited_once()
+            self.assertEqual(result["account_type"], "unknown")
+            self.assertEqual(result["account_id"], "CR123456")
         asyncio.run(exercise())
 
     def test_get_balance_rejects_authorize_response_for_another_account(self):
         async def exercise():
             account = SimpleNamespace(account_id="CR123456")
             adapter = DerivAdapter(broker=SimpleNamespace(broker_type="deriv"), account=account)
-            adapter.get_accounts = AsyncMock(return_value=[{
-                "account_id": "CR123456", "balance": None, "currency": "USD", "is_virtual": None,
-            }])
             adapter.authenticate = AsyncMock(return_value={
-                "account_id": "VR999999", "balance": 100.25, "currency": "USD", "is_virtual": False,
+                "account_id": "VR999999",
+                "balance": "100.25",
+                "currency": "USD",
+                "is_virtual": False,
             })
             with self.assertRaises(BrokerAuthenticationError):
                 await adapter.get_balance()
