@@ -55,9 +55,7 @@
       if (record.type === 'characterData') decorate(record.target.parentElement || document);
       else record.addedNodes.forEach(node => {
         if (node.nodeType === Node.ELEMENT_NODE) decorate(node);
-        else if (node.nodeType === Node.TEXT_NODE && monetaryText.test(node.nodeValue || '')) {
-          node.parentElement?.classList.add('algobot-money-value');
-        }
+        else if (node.nodeType === Node.TEXT_NODE) decorate(node.parentElement || document);
       });
     }));
     observer.observe(document.body, {subtree: true, childList: true, characterData: true});
