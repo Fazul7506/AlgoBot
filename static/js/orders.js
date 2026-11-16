@@ -8,7 +8,49 @@
   let rows = [];
   let loadSeq = 0;
   const dateText = value => { if (!value) return '—'; const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleString() : 'Unavailable'; };
-  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value,currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(value))?Number(value):0).toFixed(2);
+  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value,currency) : ' (Number.isFinite(Number(value))?Number(value):0).toFixed(2);
+  const pending = new Set(['draft','validated','queued']);
+  const statusClass = s => String(s || 'unknown').toLowerCase().replace(/[^a-z0-9_-]/g,'');
+  function render(message = null, state = 'Ready') {
+    const table = $('[data-page-table]'); if (!table) return;
+    const status = $('[data-page-status]'); const count = $('[data-record-count]'); const risk = $('[data-page-risk]');
+    const pendingNode = $('[data-page-pending]'); const executedNode = $('[data-page-executed]');
+    if (status) status.textContent = state;
+    if (count) count.textContent = message ? '—' : rows.length;
+    if (pendingNode) pendingNode.textContent = message ? '—' : rows.filter(r => pending.has(String(r.status || '').toLowerCase())).length;
+    if (executedNode) executedNode.textContent = message ? '—' : rows.filter(r => String(r.status || '').toLowerCase() === 'executed').length;
+    if (risk) risk.textContent = message ? '—' : rows.filter(r => ['rejected','failed','cancelled'].includes(String(r.status || '').toLowerCase())).length;
+    if (message) { table.querySelector('thead').innerHTML=''; table.querySelector('tbody').innerHTML=`<tr class="empty-row"><td colspan="8">${esc(message)}</td></tr>`; return; }
+    const q = String($('[data-page-search]')?.value || '').trim().toLowerCase();
+    const wanted = String($('[data-orders-status]')?.value || '').toLowerCase();
+    const filtered = rows.filter(r => { const hay=[r.display_name,r.symbol,r.broker_reference,r.strategy,r.direction,r.status,r.order_type].join(' ').toLowerCase(); return (!q || hay.includes(q)) && (!wanted || String(r.status || '').toLowerCase() === wanted); });
+    table.querySelector('thead').innerHTML='<tr><th>Market</th><th>Side</th><th>Type</th><th>Stake</th><th>Status</th><th>Broker order</th><th>Created</th><th>Action</th></tr>';
+    table.querySelector('tbody').innerHTML=filtered.length ? filtered.map(r=>{const s=String(r.status||'unknown').toLowerCase();const action=s==='failed'?`<button class="btn small" type="button" data-retry="${esc(r.id)}">Retry</button>`:pending.has(s)?`<button class="btn small" type="button" data-cancel="${esc(r.id)}">Cancel</button>`:'';return `<tr><td><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(r)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''})||r.display_name||'Market instrument')}</strong></span></td><td>${esc(r.direction||'—')}</td><td>${esc(r.order_type||'—')}</td><td>${esc(r.quantity != null ? r.quantity : money(r.stake,r.currency||''))}</td><td><span class="order-status ${statusClass(s)}">${esc(r.status||'unknown')}</span></td><td>${esc(r.broker_order_id||r.broker_reference||'Pending/unknown')}</td><td>${esc(dateText(r.created_at))}</td><td>${action}</td></tr>`;}).join(''):'<tr class="empty-row"><td colspan="8">No orders match the current filters.</td></tr>';
+  }
+  async function request(url, options={}) { const r=await window.AlgoBotFrontendData.request(url, options, 15000); return r; }
+  async function load() {
+    const seq = ++loadSeq;
+    render('Loading authenticated broker orders…','Loading');
+    try {
+      const result = await request('/api/orders/');
+      if (seq !== loadSeq) return;
+      rows = list(result); render();
+    } catch (error) {
+      if (seq !== loadSeq) return;
+      rows=[]; render(`Orders unavailable: ${error?.message || 'The backend did not return an order response.'}`,'Error');
+    }
+  }
+  async function action(url, message, button) {
+    if(!window.confirm(message)) return;
+    if(button) button.disabled = true;
+    try { await request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}); await load(); }
+    catch(e) { window.alert(e?.message || 'Order action failed.'); }
+    finally { if(button) button.disabled = false; }
+  }
+  function boot() { $('[data-page-search]')?.addEventListener('input',render); $('[data-orders-status]')?.addEventListener('change',render); $('[data-orders-refresh]')?.addEventListener('click',load); $('[data-page-table]')?.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.cancel)action(`/api/orders/${encodeURIComponent(b.dataset.cancel)}/cancel/`,'Cancel this order before broker submission? Submitted or accepted contracts cannot be cancelled locally.',b);if(b.dataset.retry)action(`/api/orders/${encodeURIComponent(b.dataset.retry)}/retry/`,'Queue this confirmed failed order for retry?',b);}); load(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
+})();
+ + (Number.isFinite(Number(value))?Number(value):0).toFixed(2);
   const pending = new Set(['draft','validated','queued']);
   const statusClass = s => String(s || 'unknown').toLowerCase().replace(/[^a-z0-9_-]/g,'');
   function render(message = null, state = 'Ready') {
