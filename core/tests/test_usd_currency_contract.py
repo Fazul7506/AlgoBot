@@ -14,6 +14,7 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         source = self.read("static/js/core/money_display.js")
         self.assertIn("const CURRENCY = 'USD';", source)
         self.assertIn("const SYMBOL = '$';", source)
+        self.assertIn("const format = value => SYMBOL + numberFor(value).toLocaleString", source)
         self.assertIn("const symbolFor = () => SYMBOL;", source)
         self.assertNotIn("KSh", source)
         self.assertNotIn("EUR:", source)
