@@ -80,6 +80,9 @@ services:
         value: https://algobot.dpdns.org
       - key: CSRF_TRUSTED_ORIGINS
         value: https://algobot.dpdns.org
+      - key: ALGOBOT_PREVIEW_DEPLOYMENT
+        value: "false"
+        previewValue: "true"
       - key: SESSION_COOKIE_DOMAIN
         value: .algobot.dpdns.org
       - key: CSRF_COOKIE_DOMAIN

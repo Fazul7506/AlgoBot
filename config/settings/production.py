@@ -1,7 +1,7 @@
 """Production settings with fail-fast infrastructure and security validation."""
 
 from .base import *  # noqa: F403,F401
-from .utils import env, env_bool, env_list, validate_required_settings
+from .utils import deployment_cookie_domain, env, env_bool, env_list, validate_required_settings
 from corsheaders.defaults import default_headers
 
 DEBUG = False
@@ -22,11 +22,10 @@ CORS_ALLOW_CREDENTIALS = True
 BASE_URL = env("BASE_URL", "https://algobot.dpdns.org").rstrip("/")
 ALGO_API_BASE_URL = env("ALGO_API_BASE_URL", "https://api.algobot.dpdns.org").rstrip("/")
 
-# Preview hosts are on a different registrable domain from algobot.dpdns.org.
-# Use host-only cookies there; the production cookie domain would prevent the
-# browser from sending the CSRF/session cookies to *.onrender.com.
-RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME", "").lower()
-IS_RENDER_PREVIEW_HOST = RENDER_EXTERNAL_HOSTNAME.endswith(".onrender.com")
+# Render's *.onrender.com hostname is present on production services too,
+# including services reached through custom domains. Never infer preview status
+# from RENDER_EXTERNAL_HOSTNAME: previews must opt in explicitly.
+ALGOBOT_PREVIEW_DEPLOYMENT = env_bool("ALGOBOT_PREVIEW_DEPLOYMENT", False)
 
 SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -43,8 +42,8 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
-SESSION_COOKIE_DOMAIN = None if IS_RENDER_PREVIEW_HOST else env("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org")
-CSRF_COOKIE_DOMAIN = None if IS_RENDER_PREVIEW_HOST else env("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org")
+SESSION_COOKIE_DOMAIN = deployment_cookie_domain("SESSION_COOKIE_DOMAIN", ".algobot.dpdns.org", preview=ALGOBOT_PREVIEW_DEPLOYMENT)
+CSRF_COOKIE_DOMAIN = deployment_cookie_domain("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org", preview=ALGOBOT_PREVIEW_DEPLOYMENT)
 
 WHITENOISE_MANIFEST_STRICT = False
 USE_POSTGRES = True
