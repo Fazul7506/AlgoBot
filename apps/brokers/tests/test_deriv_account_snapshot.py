@@ -87,6 +87,30 @@ class DerivEnvironmentNormalizationTests(SimpleTestCase):
             self.assertEqual(result["account_id"], "CR123456")
         asyncio.run(exercise())
 
+    def test_get_balance_uses_provider_verified_oauth_environment_when_balance_omits_is_virtual(self):
+        async def exercise(persisted_type, expected):
+            account = SimpleNamespace(
+                account_id="VRTC123456",
+                credentials={"account_type": persisted_type},
+            )
+            adapter = DerivAdapter(
+                broker=SimpleNamespace(broker_type="deriv"),
+                account=account,
+                credentials=account.credentials,
+            )
+            adapter.authenticate = AsyncMock(return_value={
+                "account_id": "VRTC123456",
+                "balance": "100.25",
+                "currency": "USD",
+                "is_virtual": None,
+            })
+            result = await adapter.get_balance()
+            self.assertEqual(result["account_type"], expected)
+
+        asyncio.run(exercise("demo", "demo"))
+        asyncio.run(exercise("real", "real"))
+        asyncio.run(exercise("unknown", "unknown"))
+
     def test_get_balance_rejects_authorize_response_for_another_account(self):
         async def exercise():
             account = SimpleNamespace(account_id="CR123456")

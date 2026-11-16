@@ -95,9 +95,13 @@ def _verify_account(access_token: str) -> tuple[dict | None, list[dict]]:
 
 async def _authorize_deriv_identity_async(access_token: str) -> dict:
     """Authorize a Deriv WebSocket and return the provider identity payload."""
-    endpoint = getattr(settings, "DERIV_PUBLIC_WS_URL", "").strip()
+    # Identity authorization is an authenticated control-plane operation.
+    # DERIV_PUBLIC_WS_URL is explicitly the unauthenticated public market-data
+    # endpoint; sending an OAuth authorize request there can be rejected by
+    # Deriv and surfaces as the generic ValueError seen in production logs.
+    endpoint = getattr(settings, "DERIV_AUTH_WS_BASE_URL", "").strip()
     if not endpoint:
-        raise ValueError("DERIV_PUBLIC_WS_URL is not configured")
+        raise ValueError("DERIV_AUTH_WS_BASE_URL is not configured")
     async with websockets.connect(
         endpoint,
         open_timeout=10,
