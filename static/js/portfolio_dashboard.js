@@ -6,7 +6,7 @@ const list=v=>window.AlgoBotFrontendData?.list(v)||[], valid=v=>v!=null&&v!==''&
 const requestTimed=(url,ms=7000)=>Promise.race([window.AlgoBotFrontendData.request(url),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Request timed out after '+Math.round(ms/1000)+' seconds')),ms))]);
 const payloadRows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.results)?v.results:Array.isArray(v?.accounts)?v.accounts:[];
 const accountPayload=v=>v?.active_account||v?.account||v?.data?.active_account||v?.data?.account||null;
-const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
 const set=(s,v)=>{const n=$(s);if(n)n.textContent=v}, empty=(s,t,d)=>{const n=$(s);if(n)n.innerHTML='<div class="portfolio-state"><strong>'+esc(t)+'</strong>'+esc(d)+'</div>'};
 const type=s=>{s=String(s||'').toUpperCase();if(/BTC|ETH|SOL|XRP|DOGE|ADA/.test(s))return'Crypto';if(/XAU|XAG|OIL|WTI|BRENT|GOLD|SILVER/.test(s))return'Commodities';if(/US30|NAS100|SPX|SP500|GER40|UK100|JP225/.test(s))return'Indices';if(/^[A-Z]{6}$/.test(s))return'Forex';return'Stocks'};
 const colors={Forex:'#087cff',Indices:'#00c9a7',Commodities:'#ffb13b',Crypto:'#ec4f91',Stocks:'#9449ed',Other:'#6f91b8'};let generation=0;
