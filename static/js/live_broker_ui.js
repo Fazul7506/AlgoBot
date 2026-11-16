@@ -162,7 +162,7 @@
     $('#balance')?.replaceChildren(document.createTextNode(money(a.balance)));
     $('#equity')?.replaceChildren(document.createTextNode(money(a.equity)));
     $('#margin')?.replaceChildren(document.createTextNode(money(a.margin)));
-    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
+    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(money(a.balance)));
     $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id || a.account_id}`));
   }
 
