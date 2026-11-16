@@ -272,7 +272,7 @@
               <div><span>Contract ID</span><strong>${esc(row.broker_contract_id)}</strong></div>
               <div><span>Transaction ID</span><strong>${esc(row.broker_transaction_id)}</strong></div>
               <div><span>Reference ID</span><strong>${esc(row.reference_id)}</strong></div>
-              <div><span>Currency</span><strong>${esc(row.currency)}</strong></div>
+              <div><span>Currency</span><strong>USD</strong></div>
               <div><span>Purchase</span><strong>${esc(time(row.purchase_time))}</strong></div>
               <div><span>Settlement</span><strong>${esc(time(row.settlement_time))}</strong></div>
               <div><span>Expiry</span><strong>${esc(time(row.expiry_time))}</strong></div>
@@ -301,7 +301,7 @@
       stateValue === 'authentication_failed' ? 'Authentication required' :
       stateValue === 'unavailable' ? 'Broker unavailable' : stateValue;
     if (payload.account) {
-      currency.textContent = `Currency: ${payload.account.currency || '—'}`;
+      currency.textContent = 'Currency: USD';
       syncTime.textContent = `Last synchronization: ${time(payload.account.last_synced_at)}`;
       const accountName = $('[data-history-account-name]');
       if (accountName) accountName.textContent = `Deriv · ${payload.account.broker_account_id || payload.account.id || 'selected account'}`;
