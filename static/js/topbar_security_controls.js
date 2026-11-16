@@ -62,30 +62,44 @@
     const meta = $('[data-topbar-account-meta]', control);
     const identity = $('[data-topbar-account-brand]', control);
     const options = $('[data-topbar-account-options]', control);
-    if (!current) {
-      if (name) name.textContent = 'No active account';
-      if (meta) meta.textContent = 'Connect a broker to continue';
-      if (identity) identity.innerHTML = '';
-      if (options) options.innerHTML = '<span class="topbar-menu-empty">No active broker account is selected.</span>';
-      return;
-    }
-    const currentLabel = accountLabel(current);
-    if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
-    if (meta) meta.textContent = [currentLabel.type, current?.branding?.country_name || current?.branding?.country_code || current?.deriv_identity?.country_name || current?.deriv_identity?.country_code || '', currentLabel.currency, formatBalance(currentLabel)].filter(Boolean).join(' · ');
-    if (identity) identity.innerHTML = accountIdentity(current);
-
     const accounts = accountContext()?.getAccounts?.() || window.AlgoBotBrokerAccounts || [];
+    const eligible = accounts.filter(account =>
+      account?.id && (account.selection_eligible === true || account.is_active === true)
+    );
+
+    if (current) {
+      const currentLabel = accountLabel(current);
+      if (name) name.textContent = currentLabel.broker + (currentLabel.id ? ' · ' + currentLabel.id : '');
+      if (meta) meta.textContent = [
+        currentLabel.type,
+        current?.branding?.country_name || current?.branding?.country_code || current?.deriv_identity?.country_name || current?.deriv_identity?.country_code || '',
+        currentLabel.currency,
+        formatBalance(currentLabel)
+      ].filter(Boolean).join(' · ');
+      if (identity) identity.innerHTML = accountIdentity(current);
+    } else {
+      if (name) name.textContent = eligible.length ? 'Select an account' : 'No active account';
+      if (meta) meta.textContent = eligible.length
+        ? 'Choose a verified broker account to activate'
+        : 'Connect and verify a broker account to continue';
+      if (identity) identity.innerHTML = '';
+    }
+
     if (options) {
-      const eligible = accounts.filter(account => account?.id);
       options.innerHTML = eligible.length ? eligible.map(account => {
         const label = accountLabel(account);
-        const active = String(account.id) === String(current.id);
+        const active = Boolean(current && String(account.id) === String(current.id));
         return '<button type="button" role="option" aria-selected="' + active + '" data-topbar-select-account="' + safe(account.id) + '"' + (active ? ' disabled' : '') + '>' +
           accountIdentity(account) +
           '<span class="topbar-account-option-copy"><strong>' + safe(label.broker + (label.id ? ' · ' + label.id : '')) +
-          '</strong><small>' + safe([label.type, account?.branding?.country_code || account?.deriv_identity?.country_code || '', label.currency, formatBalance(label)].filter(Boolean).join(' · ')) +
-          '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : 'Switch') + '</span></button>';
-      }).join('') : '<span class="topbar-menu-empty">No broker accounts are available.</span>';
+          '</strong><small>' + safe([
+            label.type,
+            account?.branding?.country_code || account?.deriv_identity?.country_code || '',
+            'USD',
+            formatBalance(label)
+          ].filter(Boolean).join(' · ')) +
+          '</small></span><span class="topbar-account-option-status">' + (active ? 'Selected' : current ? 'Switch' : 'Select') + '</span></button>';
+      }).join('') : '<span class="topbar-menu-empty">No verified broker accounts are available. Connect and verify an account first.</span>';
     }
   }
 
