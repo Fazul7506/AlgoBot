@@ -25,5 +25,5 @@ assert.equal(money.numberFor(Infinity), 0);
 assert.equal(money.isValid(false), false);
 
 const css = fs.readFileSync('static/css/money_display.css', 'utf8');
-assert.match(css, /\.algobot-money-value[\\s\\S]*color:[^;]+!important/);
+assert.match(css, /\.algobot-money-value[\s\S]*color:[^;]+!important/);
 console.log('USD-only money formatting and zero fallbacks passed.');
