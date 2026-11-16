@@ -7,7 +7,7 @@
   const num = (v,d=5) => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
   const pct = v => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : Number(v).toFixed(1)+"%";
   const pctNorm = v => v==null || v==="" || !Number.isFinite(Number(v)) ? "—" : pct(Number(v)<=1?Number(v)*100:Number(v));
-  const money = (v,c='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v,c) : '(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const state = v => String(v ?? "UNAVAILABLE").replaceAll("_"," ");
   const tone = v => ["BUY","BULLISH","STRONG BULLISH"].includes(String(v||"").toUpperCase()) ? "positive" : ["SELL","BEARISH","STRONG BEARISH"].includes(String(v||"").toUpperCase()) ? "negative" : "neutral";
   const A = {markets:[],data:null,contract:null,timer:null,requestController:null,loadGeneration:0,overviewKey:'',overviewCache:[],predictionCache:[],overviewFetchedAt:0,overviewPending:false,cachedData:null,cacheKey:''};
