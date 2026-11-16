@@ -189,7 +189,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
         self.assertIn("headers.set('Authorization','Bearer '+accessToken)", client)
         self.assertIn("protectedPublicPaths.test(path)", client)
-        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|user-modules)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|trade-history|user-modules)", client)
 
     def test_shared_service_runtime_never_sends_account_override_header(self):
         from pathlib import Path
@@ -244,7 +244,7 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("isSessionAccountSelectUrl", client)
         self.assertIn("isSessionAccountContextUrl", client)
         self.assertIn("protectedPublicPaths.test(path)", client)
-        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|user-modules)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|trade-history|user-modules)", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
