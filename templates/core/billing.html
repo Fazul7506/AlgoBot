@@ -372,7 +372,7 @@
     const raw=Number(cents);
     const value=(cents==null||cents===''||!Number.isFinite(raw)?0:raw)/100,cur=String(currency||'USD').toUpperCase();
     if(typeof window.AlgoBotMoney?.format==='function')return window.AlgoBotMoney.format(value,cur);
-    return (cur==='USD'?'$':cur+' ')+value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    return '$'+value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   };
   const alertBox=$('[data-billing-alert]');
   const showError=m=>{if(alertBox){alertBox.hidden=!m;alertBox.textContent=m||'';}};

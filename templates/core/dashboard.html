@@ -10,10 +10,10 @@
     <div class="hero-actions"><span class="dashboard-sync" data-dashboard-sync>Loading authoritative snapshot…</span><button class="btn ghost" data-dashboard-refresh type="button">Refresh</button><a class="btn" href="/analysis/">Analysis</a><a class="btn primary" href="/trading/">Open terminal</a></div>
   </header>
   <section class="kpi-grid" aria-label="Authoritative account overview">
-    <article class="kpi-card"><span>Balance</span><strong data-kpi="balance" class="money-value">0.00</strong><small data-kpi-state="balance">Waiting for broker snapshot <span class="sr-only">Placeholder until a verified broker balance is received.</span></small></article>
-    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity" class="money-value">0.00</strong><small data-kpi-state="equity">Waiting for broker equity</small></article>
-    <article class="kpi-card"><span>Available</span><strong data-kpi="available" class="money-value">0.00</strong><small data-kpi-state="available">Broker-reported available margin</small></article>
-    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl" class="money-value">0.00</strong><small data-kpi-state="pnl">Only reported broker/open-contract P/L</small></article>
+    <article class="kpi-card"><span>Balance</span><strong data-kpi="balance" class="money-value">$0.00</strong><small data-kpi-state="balance">Waiting for broker snapshot <span class="sr-only">Placeholder until a verified broker balance is received.</span></small></article>
+    <article class="kpi-card"><span>Equity</span><strong data-kpi="equity" class="money-value">$0.00</strong><small data-kpi-state="equity">Waiting for broker equity</small></article>
+    <article class="kpi-card"><span>Available</span><strong data-kpi="available" class="money-value">$0.00</strong><small data-kpi-state="available">Broker-reported available margin</small></article>
+    <article class="kpi-card"><span>Net P/L</span><strong data-kpi="pnl" class="money-value">$0.00</strong><small data-kpi-state="pnl">Only reported broker/open-contract P/L</small></article>
   </section>
   <section class="dashboard-status" aria-label="Platform readiness">
     <article class="status-card"><span class="status-dot" data-status-dot="account"></span><div><b>Broker account</b><small data-status="account">Checking…</small></div></article>
@@ -37,4 +37,4 @@
   </section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/dashboard_command_center.js' %}?v=20261116-broker-state-repair1" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/dashboard_command_center.js' %}?v=20261116-usd-active-account-repair3" defer></script>{% endblock %}

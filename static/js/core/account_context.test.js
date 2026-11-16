@@ -23,7 +23,7 @@ function createHarness(rows, active) {
     addEventListener() {},
   };
   class CustomEvent { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } }
-  const localStorage = {values: new Map([['algobot:selected-account-id:v1','9']]), setItem(k,v){this.values.set(k,v)}, removeItem(k){this.values.delete(k)}};
+  const localStorage = {values: new Map([['algobot:account-context-revision:v1','9']]), setItem(k,v){this.values.set(k,v)}, removeItem(k){this.values.delete(k)}};
   const context = {window, document, localStorage, CustomEvent, console};
   vm.runInNewContext(fs.readFileSync(require.resolve('./account_context.js'), 'utf8'), context);
   return {window, localStorage};
@@ -36,6 +36,7 @@ function createHarness(rows, active) {
   assert.equal(noSelection.window.AlgoBotAccountContext.getSelected(), null);
   assert.equal(noSelection.window.AlgoBotAccountContext.getSelectedId(), null);
   assert.equal(noSelection.window.AlgoBotAccountContext.getSelected(), null);
+  assert.notEqual(noSelection.localStorage.values.get('algobot:account-context-revision:v1'), '9');
   assert.equal(noSelection.localStorage.values.has('algobot:selected-account-id:v1'), false);
 
   const serverSelected = {...credentialReady, is_active: true, is_connected: true};

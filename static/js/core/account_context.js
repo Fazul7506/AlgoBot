@@ -2,10 +2,10 @@
 (() => {
   'use strict';
   if (window.AlgoBotAccountContext) return;
-  const STORAGE_KEY='algobot:selected-account-id:v1';
+  const STORAGE_KEY='algobot:account-context-revision:v1';
   const list=value=>Array.isArray(value)?value:(Array.isArray(value?.results)?value.results:(Array.isArray(value?.accounts)?value.accounts:[]));
   let accounts=[],selected=null,busy=null,selectionRevision=0,switching=false;
-  const storageSet=id=>{try{id==null?localStorage.removeItem(STORAGE_KEY):localStorage.setItem(STORAGE_KEY,String(id))}catch(_){}};
+  const storageSet=()=>{try{localStorage.setItem(STORAGE_KEY,String(Date.now()))}catch(_){}};
   const accountId=a=>a?.id==null?null:String(a.id);
   const canonical=()=>window.AlgoBotFrontendData?.request;
   function publish(reason){window.AlgoBotBrokerState?.setAccount(selected,reason);window.dispatchEvent(new CustomEvent('algobot:account-context-changed',{detail:{account:selected,reason}}));window.dispatchEvent(new CustomEvent('algobot:account-changed',{detail:selected}));window.dispatchEvent(new CustomEvent('algobot:backend-accounts-loaded',{detail:accounts.slice()}))}

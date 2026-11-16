@@ -6,7 +6,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, reconnectTimer: null, accountId: null, loadSeq: 0 };
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
-  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const accountId = () => {
     const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     return account?.id == null ? null : String(account.id);
@@ -64,7 +64,7 @@
   function detail(r) {
     const panel=$('[data-position-detail]'), grid=$('[data-position-detail-grid]');
     if(!panel || !grid) return;
-    const fields=[['Contract ID',r.contract_id],['Transaction ID',r.transaction_id],['Broker order ID',r.broker_order_id],['Market',window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''})||r.display_name||'Market instrument'],['Contract type',r.contract_type],['Direction',r.direction],['Stake',money(r.stake,r.currency)],['Entry price',money(r.entry_price,r.currency)],['Current price',money(r.current_price,r.currency)],['Exit price',money(r.exit_price,r.currency)],['Payout',money(r.payout,r.currency)],['P/L',money(r.profit,r.currency)],['P/L %',knownNumber(r.roi) ? Number(r.roi).toFixed(4) + '%' : 'Unavailable'],['Currency',r.currency],['Status',r.status],['Opened',dateText(r.opened_at)],['Expiry',r.expiry_time ? new Date(r.expiry_time).toLocaleString() : 'Unavailable'],['Closed',dateText(r.closed_at)],['Settlement',dateText(r.settlement_time)],['Broker timestamp',dateText(r.broker_timestamp)]];
+    const fields=[['Contract ID',r.contract_id],['Transaction ID',r.transaction_id],['Broker order ID',r.broker_order_id],['Market',window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''})||r.display_name||'Market instrument'],['Contract type',r.contract_type],['Direction',r.direction],['Stake',money(r.stake,r.currency)],['Entry price',money(r.entry_price,r.currency)],['Current price',money(r.current_price,r.currency)],['Exit price',money(r.exit_price,r.currency)],['Payout',money(r.payout,r.currency)],['P/L',money(r.profit,r.currency)],['P/L %',knownNumber(r.roi) ? Number(r.roi).toFixed(4) + '%' : 'Unavailable'],['Currency','USD'],['Status',r.status],['Opened',dateText(r.opened_at)],['Expiry',r.expiry_time ? new Date(r.expiry_time).toLocaleString() : 'Unavailable'],['Closed',dateText(r.closed_at)],['Settlement',dateText(r.settlement_time)],['Broker timestamp',dateText(r.broker_timestamp)]];
     grid.innerHTML=fields.map(x => '<div><dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd></div>').join('');
     panel.hidden=false;
   }

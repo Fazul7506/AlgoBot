@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Order, ExecutionLog, ExecutionQueue, ReconciliationEvent, BrokerTradeHistory
 from apps.brokers.models import Position
+from core.account_context import get_active_account
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -45,6 +46,9 @@ class OrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('The selected broker account does not belong to the authenticated user.')
         if account.status != 'active' or account.broker.status != 'active':
             raise serializers.ValidationError('The selected broker account is not active.')
+        active_account = get_active_account(user, request=request)
+        if active_account is None or active_account.pk != account.pk:
+            raise serializers.ValidationError('Orders must use the server-selected active broker account.')
         return account
 
 

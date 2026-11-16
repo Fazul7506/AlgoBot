@@ -4,7 +4,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : [])));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (v, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
+  const money = v => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v) : '$' + (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
@@ -156,13 +156,13 @@
 
   function updateTerminalAccount(a) {
     if (!a) return;
-    const t = typeOf(a).toUpperCase(), c = a.currency || '';
+    const t = typeOf(a).toUpperCase();
     const s = $('#terminal-status');
     if (s) s.innerHTML = `<span class="status-dot"></span>${safe(a.broker?.name || a.broker_name || 'Broker')} · ${safe(a.broker_account_id || a.account_id)} · ${safe(t)}`;
-    $('#balance')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
-    $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity)}`.trim()));
-    $('#margin')?.replaceChildren(document.createTextNode(`${c} ${money(a.margin)}`.trim()));
-    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
+    $('#balance')?.replaceChildren(document.createTextNode(money(a.balance)));
+    $('#equity')?.replaceChildren(document.createTextNode(money(a.equity)));
+    $('#margin')?.replaceChildren(document.createTextNode(money(a.margin)));
+    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(money(a.balance)));
     $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id || a.account_id}`));
   }
 

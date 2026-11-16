@@ -182,11 +182,19 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         self.assertIn("const api=(u,o={},t=10000)=>{const options={...o};", terminal)
         self.assertNotIn("const options={credentials:'include',...o}", terminal)
-        # The shared data contract scopes session cookies to account-context routes
-        # and uses bearer auth for preview/order/AI API mutations.
+        # The shared data contract sends the authenticated session only to
+        # server-account-scoped workspace routes, while bearer tokens remain
+        # the API authentication authority for preview/order/AI mutations.
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
         self.assertIn("headers.set('Authorization','Bearer '+accessToken)", client)
+        self.assertIn("protectedPublicPaths.test(path)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|trade-history|user-modules)", client)
+
+    def test_shared_service_runtime_never_sends_account_override_header(self):
+        from pathlib import Path
+        runtime = Path("static/js/core/service_runtime.js").read_text(encoding="utf-8")
+        self.assertNotIn("X-Algobot-Account-ID", runtime)
 
     def test_account_context_never_lets_stale_local_storage_override_server_state(self):
         from pathlib import Path
@@ -235,7 +243,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("ensureCsrfCookie", client)
         self.assertIn("isSessionAccountSelectUrl", client)
         self.assertIn("isSessionAccountContextUrl", client)
-        self.assertIn("path==='/api/brokers/accounts/'||path==='/api/brokers/accounts/active/'", client)
+        self.assertIn("protectedPublicPaths.test(path)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|trade-history|user-modules)", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
@@ -460,7 +469,7 @@ class TerminalLegacyTransportContractTests(SimpleTestCase):
         self.assertNotIn("X-CSRFToken", client)
         self.assertNotIn("csrftoken=", client)
         template = Path("templates/base.html").read_text(encoding="utf-8")
-        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261116-money-zero-placeholders1", template)
+        self.assertIn("{% static 'js/live_broker_ui.js' %}?v=20261116-usd-active-account-repair2", template)
         self.assertNotIn("{% static 'js/live_broker_ui.js' %}?v=20260827-logoutmodal1", template)
 
 @patch("core.broker_onboarding.has_authorized_broker_connection", new=lambda user, request=None: True)
