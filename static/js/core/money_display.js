@@ -31,6 +31,7 @@
   });
 
   const monetaryText = /\$\s*-?\d[\d,]*(?:\.\d+)?/;
+  const bareMoney = /^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
   function decorate(root = document) {
     if (!root || !document.body) return;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -39,7 +40,13 @@
     nodes.forEach(node => {
       const parent = node.parentElement;
       if (!parent || /^(SCRIPT|STYLE|TEXTAREA|INPUT|CODE|PRE)$/i.test(parent.tagName)) return;
-      if (monetaryText.test(node.nodeValue || '')) parent.classList.add('algobot-money-value');
+      const raw = (node.nodeValue || '').trim();
+      if (parent.closest?.('.money-value') && bareMoney.test(raw)) {
+        node.nodeValue = format(raw);
+        parent.classList.add('algobot-money-value');
+        return;
+      }
+      if (monetaryText.test(raw)) parent.classList.add('algobot-money-value');
     });
   }
   function boot() {
