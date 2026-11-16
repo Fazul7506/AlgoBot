@@ -5,7 +5,7 @@
   window.__algoBotSidebarAccountSwitch = true;
   const $=(s,r=document)=>r.querySelector(s);
   const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money=(v,c='USD')=>v==null||v===''||!Number.isFinite(Number(v))?'Unavailable':(window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'$'+Number(v).toFixed(2));
+  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):(c?String(c)+' ':'')+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   const typeOf=a=>String(a?.account_type||a?.credentials?.account_type||'unknown').toLowerCase();
   let accounts=[],switching=false;
   const context=()=>window.AlgoBotAccountContext;
@@ -21,7 +21,7 @@
     const type=typeOf(current).toUpperCase(),targetType=target?typeOf(target).toUpperCase():'',targetId=target?(target.broker_account_id||target.account_id||target.id):'';
     const live=current.connection_eligible===true,disabled=!target||switching;
     card.classList.add('algobot-account-modal-trigger');card.setAttribute('role','group');
-    const summary='<div class="algobot-account-summary"><span class="algobot-account-avatar small">'+identity(current)+'</span><div class="algobot-account-copy"><strong>'+safe(broker)+' · '+safe(id)+'</strong><span>'+safe(type)+' · '+safe(current.branding?.country_code||'')+' · '+safe(money(current.balance,current.currency||'USD'))+'</span></div></div>';
+    const summary='<div class="algobot-account-summary"><span class="algobot-account-avatar small">'+identity(current)+'</span><div class="algobot-account-copy"><strong>'+safe(broker)+' · '+safe(id)+'</strong><span>'+safe(type)+' · '+safe(current.branding?.country_code||'')+' · '+safe(money(current.balance,current.currency||''))+'</span></div></div>';
     const fresh='<div class="algobot-account-fresh">'+safe(live?(current.last_synced_at?'Verified '+new Date(current.last_synced_at).toLocaleTimeString():'Broker verified'):'Account '+(current.status||'unavailable'))+'</div>';
     const targetMarkup=target?identity(target)+'<span>Switch to '+safe(targetType)+'</span>':'<span>Demo / Real</span>';
     const button='<button type="button" class="algobot-account-switch" data-sidebar-account-switch data-account-id="'+safe(target?.id||'')+'" '+(disabled?'disabled':'')+' title="'+safe(target?'Switch to '+targetType+' account '+targetId:'No alternate broker account is available')+'" aria-label="'+safe(target?'Switch to '+targetType+' account '+targetId:'No alternate broker account available')+'">'+targetMarkup+'</button>';

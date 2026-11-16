@@ -25,7 +25,7 @@ class AccountSwitchingTests(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='account-switch-user', password='test-password')
         self.client = APIClient()
-        self.client.force_authenticate(self.user)
+        self.client.force_login(self.user)
         self.broker = Broker.objects.create(
             name='Deriv', broker_type='deriv', status='active',
             supports_demo=True, supports_live=True,
@@ -100,7 +100,12 @@ class AccountSwitchingTests(TransactionTestCase):
         first = self.client.post(f'/api/brokers/accounts/{previous.pk}/select/', {}, format='json')
         self.assertEqual(first.status_code, 200)
         import asyncio
-        with patch('apps.brokers.views._run_bounded', side_effect=asyncio.TimeoutError):
+        def timeout_and_close(awaitable, *args, **kwargs):
+            close = getattr(awaitable, 'close', None)
+            if close:
+                close()
+            raise asyncio.TimeoutError
+        with patch('apps.brokers.views._run_bounded', side_effect=timeout_and_close):
             result = self.client.post(f'/api/brokers/accounts/{candidate.pk}/select/', {}, format='json')
         self.assertEqual(result.status_code, 504)
         active = self.client.get('/api/brokers/accounts/active/')
@@ -172,6 +177,38 @@ class AccountSwitchingTests(TransactionTestCase):
         # Reject the mixed-identity request before mutating the browser session.
         self.assertEqual(result.status_code, 403)
         self.assertNotIn('active_broker_account_id', client.session)
+
+    def test_jwt_account_list_cannot_clear_a_different_users_browser_session_selection(self):
+        from django.test import Client
+
+        self.make_account('JWT-API-ACCOUNT', 'demo')
+        other_user = User.objects.create_user(username='other-session-owner', password='test-password')
+        other_account = BrokerAccount.objects.create(
+            user=other_user, broker=self.broker, account_id='OTHER-SESSION-ACCOUNT',
+            status='active', credentials={'account_type': 'real'},
+            last_synced_at=timezone.now(),
+        )
+        other_account.set_access_token('ci-test-token-other-session')
+        other_account.save(update_fields=['access_token'])
+        BrokerConnection.objects.create(
+            broker=self.broker, broker_account=other_account, status='connected',
+            last_ping=timezone.now(), connected_at=timezone.now(),
+        )
+
+        client = Client()
+        self.assertTrue(client.login(username=other_user.username, password='test-password'))
+        session = client.session
+        session['active_broker_account_id'] = other_account.pk
+        session.save()
+        token = str(AccessToken.for_user(self.user))
+
+        response = client.get(
+            '/api/brokers/accounts/',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(client.session.get('active_broker_account_id'), other_account.pk)
 
     def test_session_authenticated_switch_requires_csrf_token(self):
         self.make_account('DEMO-CSRF-1', 'demo')

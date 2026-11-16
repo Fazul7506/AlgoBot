@@ -27,12 +27,12 @@
     broker: account?.broker?.name || account?.broker_name || 'Broker',
     id: account?.broker_account_id || account?.account_id || account?.id || '',
     type: accountType(account),
-    currency: account?.currency || 'USD',
+    currency: account?.currency || '',
     balance: account?.balance
   });
   const formatBalance = label => window.AlgoBotMoney?.format
-    ? window.AlgoBotMoney.format(label.balance, label.currency || 'USD')
-    : '$' + (Number(label.balance) || 0).toFixed(2);
+    ? window.AlgoBotMoney.format(label.balance, label.currency)
+    : (label.currency ? label.currency + ' ' : '') + (Number.isFinite(Number(label.balance)) ? Number(label.balance) : 0).toFixed(2);
 
   function closeMenus(except) {
     document.querySelectorAll('[data-topbar-account-menu],[data-notification-menu],[data-profile-menu]').forEach(menu => {

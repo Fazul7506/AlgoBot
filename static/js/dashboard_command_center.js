@@ -6,7 +6,13 @@
   const $ = (selector) => document.querySelector(selector);
   const list = (value) => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const esc = (value) => { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; };
-  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); const safeValue = Number(value); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = '') => {
+    const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value);
+    const code = String(currency || '').toUpperCase();
+    if (code && typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(safeValue, code);
+    const prefix = code === 'USD' ? '$' : code ? code + ' ' : '';
+    return prefix + safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
@@ -79,11 +85,14 @@
 
   function renderAccount(account, message = '', persistSnapshot = true, staleDisplay = false) {
     if (!account) {
-      ['balance','equity','available','pnl'].forEach(key => setText(`[data-kpi="${key}"]`, 'Unavailable'));
-      setText('[data-kpi-state="balance"]', message || 'No authoritative broker account');
-      setText('[data-kpi-state="equity"]', 'No broker equity reported');
-      status('account', 'error', message || 'Broker account unavailable');
-      setHtml('[data-dashboard-brokers]', `<span><b></b>${esc(message || 'No confirmed broker account selected')}</span>`);
+      // Numeric placeholders are display-only until a broker snapshot exists.
+      ['balance','equity','available','pnl'].forEach(key => setText('[data-kpi="' + key + '"]', money(0)));
+      setText('[data-kpi-state="balance"]', message || 'Select a broker account · placeholder value');
+      setText('[data-kpi-state="equity"]', 'Select a broker account · placeholder value');
+      setText('[data-kpi-state="available"]', 'Select a broker account · placeholder value');
+      setText('[data-kpi-state="pnl"]', 'Select a broker account · placeholder value');
+      status('account', 'warn', message || 'No active broker account selected');
+      setHtml('[data-dashboard-brokers]', '<span><b></b>' + esc(message || 'Connect and select a broker account to continue') + '</span>');
       return;
     }
     selectedAccountId = account.id != null ? String(account.id) : selectedAccountId;
@@ -93,12 +102,14 @@
     setText('[data-kpi="balance"]', money(account.balance, currency));
     setText('[data-kpi="equity"]', money(equity, currency));
     setText('[data-kpi="available"]', money(account.free_margin ?? account.available_margin ?? account.available, currency));
-    setText('[data-kpi="pnl"]', money(pnl, currency || 'USD'));
+    setText('[data-kpi="pnl"]', money(pnl, currency));
     const freshness = String(account.data_freshness?.state || account.data_freshness || 'unknown').toLowerCase();
     const connected = account.connection_eligible === true;
     const snapshotLabel = staleDisplay ? 'Last verified broker snapshot' : freshness === 'fresh' ? 'Fresh broker snapshot' : freshness === 'stale' ? 'Stale broker snapshot' : 'Broker snapshot freshness unknown';
-    setText('[data-kpi-state="balance"]', freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel);
-    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
+    setText('[data-kpi-state="balance"]', account.balance == null ? 'Not reported by broker · displaying 0.00' : (freshness === 'fresh' ? 'Authoritative broker snapshot' : snapshotLabel));
+    setText('[data-kpi-state="equity"]', account.equity == null ? 'Not reported by broker · displaying 0.00' : (freshness === 'fresh' ? 'Authoritative broker equity' : snapshotLabel));
+    setText('[data-kpi-state="available"]', available == null ? 'Not reported by broker · displaying 0.00' : 'Broker-reported available margin');
+    setText('[data-kpi-state="pnl"]', pnl == null ? 'Not reported by broker · displaying 0.00' : 'Only reported broker/open-contract P/L');
     const broker = typeof account.broker === 'string' ? account.broker : (account.broker?.name || account.broker_name || 'Broker');
     const id = account.account_id || account.broker_account_id || account.loginid || 'Account';
     const sync = account.last_synced_at ? new Date(account.last_synced_at).toLocaleTimeString() : 'not verified';
@@ -128,6 +139,7 @@
 
   const marketName = item => { const raw = typeof item?.symbol === 'object' ? item.symbol.symbol : (item?.symbol || item?.underlying_symbol || ''); const supplied = item?.display_name || (typeof item?.symbol === 'object' ? item.symbol.display_name : '') || item?.name || ''; return window.AlgoBotMarketPicker?.marketName({value:raw,textContent:supplied||raw}) || supplied || 'Market instrument'; };
   function renderCollections(result) {
+    const waitingForAccount = !window.AlgoBotAccountContext?.getSelectedId?.();
     const positions = result.positions.ok ? list(result.positions.value).slice(0, 8) : [];
     const orders = result.orders.ok ? list(result.orders.value).slice(0, 8) : [];
     const markets = result.markets.ok ? list(result.markets.value).slice(0, 8) : [];
@@ -136,10 +148,10 @@
     const positionsStale = result.positions.ok && (result.positions.value?.status === 'stale' || result.positions.value?.source === 'broker_cache');
     const ordersStale = result.orders.ok && (result.orders.value?.status === 'stale' || result.orders.value?.source === 'broker_cache');
 
-    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(money(item.profit ?? item.pnl ?? item.profit_loss, item.currency || window.AlgoBotAccountContext?.getSelected?.()?.currency || 'USD'))}</b></div>`, result.positions.pending ? 'Loading positions…' : result.positions.ok ? 'No open positions reported by the backend.' : 'Position service unavailable.');
-    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.pending ? 'Loading orders…' : result.orders.ok ? 'No orders reported by the backend.' : 'Order service unavailable.');
-    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.pending ? 'Loading market snapshots…' : result.markets.ok ? 'No market snapshot is currently available.' : 'Market data service unavailable.');
-    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))} · ${esc(item.direction || item.signal || 'HOLD')}</strong></span><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.pending ? 'Loading recent signals…' : result.signals.ok ? 'No recent backend signals.' : 'Signal service unavailable.');
+    renderRows('[data-dashboard-positions]', positions, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(money(item.profit ?? item.pnl ?? item.profit_loss, item.currency || window.AlgoBotAccountContext?.getSelected?.()?.currency || ''))}</b></div>`, result.positions.pending ? 'Loading positions…' : result.positions.ok ? 'No open positions reported by the backend.' : waitingForAccount ? 'Select a broker account to view open positions.' : 'Position service unavailable.');
+    renderRows('[data-dashboard-orders]', orders, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${esc(item.direction || item.side || '')}</span><b>${esc(item.status || 'Unknown')}</b></div>`, result.orders.pending ? 'Loading orders…' : result.orders.ok ? 'No orders reported by the backend.' : waitingForAccount ? 'Select a broker account to view recent orders.' : 'Order service unavailable.');
+    renderRows('[data-dashboard-markets]', markets, item => `<div class="mini-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))}</strong></span><span>${item.bid_price != null || item.bid != null ? `Bid ${esc(item.bid_price ?? item.bid ?? 'Unavailable')} · Ask ${esc(item.ask_price ?? item.ask ?? 'Unavailable')}` : 'Broker market catalogue'} · ${esc(snapshotAge(item.timestamp))}</span><b>${esc(item.price ?? item.last_price ?? item.close ?? 'Available')}</b></div>`, result.markets.pending ? 'Loading market snapshots…' : result.markets.ok ? 'No market snapshot is currently available.' : waitingForAccount ? 'Select a broker account to load its market snapshots.' : 'Market data service unavailable.');
+    renderRows('[data-dashboard-signals]', signals, item => `<div class="signal-row"><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(item)||''}<strong>${esc(marketName(item))} · ${esc(item.direction || item.signal || 'HOLD')}</strong></span><span>${esc(item.strategy?.name || item.strategy || item.market_regime || '')}</span><b>${item.confidence != null && Number.isFinite(Number(item.confidence)) ? `${Number(item.confidence).toFixed(0)}%` : '—'}</b></div>`, result.signals.pending ? 'Loading recent signals…' : result.signals.ok ? 'No recent backend signals.' : waitingForAccount ? 'Select a broker account to view account-scoped signals.' : 'Signal service unavailable.');
 
     const positionSync = result.positions.value?.meta?.last_synced_at || result.positions.value?.meta?.last_synced || null;
     const orderSync = result.orders.value?.meta?.last_synced_at || result.orders.value?.meta?.last_synced || null;
@@ -154,7 +166,7 @@
       ...orders.map(item => ({label: item.symbol?.symbol || item.symbol || 'Order', meta: item.status || 'Order', time: item.updated_at || item.created_at})),
       ...signals.map(item => ({label: item.symbol?.symbol || item.symbol || 'Signal', meta: item.direction || item.signal || 'Signal', time: item.created_at || item.timestamp}))
     ].filter(item => item.time && Number.isFinite(Date.parse(item.time))).sort((a,b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 8);
-    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, result.orders.pending || result.signals.pending ? 'Loading recent activity…' : 'No recent backend activity.');
+    renderRows('[data-dashboard-activity]', activity, item => `<div class="mini-row"><strong>${esc(item.label)}</strong><span>${esc(item.meta)}</span><b>${esc(new Date(item.time).toLocaleString())}</b></div>`, result.orders.pending || result.signals.pending ? 'Loading recent activity…' : waitingForAccount ? 'Select a broker account to view recent activity.' : 'No recent backend activity.');
   }
 
   async function load() {

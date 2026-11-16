@@ -26,7 +26,7 @@
   const esc = value => String(value ?? '—').replace(/[&<>'"]/g, ch => ({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
   }[ch]));
-  const money = (value, code='USD') => { if(value==null||value===''||!Number.isFinite(Number(value)))return 'Unavailable'; return window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, code || 'USD') : `$${Number(value).toFixed(2)}`; };
+  const money = (value, code='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, code) : (code ? String(code) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const time = value => {
     if (!value) return '—';
     const d = new Date(value);

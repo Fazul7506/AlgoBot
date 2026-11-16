@@ -9,7 +9,7 @@
   window.__algoBotBrokerUIConsistencyGuard = true;
   const $ = selector => document.querySelector(selector);
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (value, currency='USD') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : `$${(Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2)}`;
+  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   let currentState = null;
   let modal = null;
 
@@ -29,7 +29,7 @@
   function openAccountModal(){
     const account=currentState?.account; if(!account)return; closeModal(); ensureModalStyles();
     const broker=account.broker?.name||account.broker_name||'Broker'; const id=account.broker_account_id||account.account_id||'Unknown account';
-    const type=String(account.account_type||account.credentials?.account_type||'unknown').toUpperCase(); const currency=account.currency||'USD';
+    const type=String(account.account_type||account.credentials?.account_type||'unknown').toUpperCase(); const currency=account.currency||'';
     const status=currentState?.status||(account.is_connected?'CONNECTED':'UNAVAILABLE'); const synced=account.last_synced_at?new Date(account.last_synced_at).toLocaleString():'Not available';
     const balance=money(account.balance,currency); const equity=money(account.equity??account.balance,currency); const margin=money(account.margin,currency);
     const backdrop=document.createElement('div'); backdrop.className='algobot-account-modal-backdrop';
@@ -43,7 +43,7 @@
     if(indicator){const label=account?.broker?.name&&account?.broker_account_id?`${account.broker.name} · ${account.broker_account_id}`:state.status==='DEGRADED'?`Broker degraded${state.lastError?` · ${state.lastError}`:''}`:state.status==='ERROR'?'Broker connection error':'No connected broker account'; indicator.classList.toggle('connected',live); indicator.classList.toggle('error',!live); indicator.innerHTML=`<i></i><span>${safe(label)}</span>`;}
     const card=$('[data-sidebar-account]'); if(!card)return; card.classList.add('algobot-account-modal-trigger'); card.setAttribute('role','button'); card.setAttribute('tabindex','0'); card.setAttribute('aria-label','Open connected broker account details');
     if(!account){card.innerHTML=`<span class="algobot-account-error">${safe(state.lastError||'No connected broker account')}</span>`;return;}
-    const broker=account.broker?.name||account.broker_name||'Broker'; const id=account.broker_account_id||account.account_id||'Unknown account'; const type=String(account.account_type||'unknown').toUpperCase(); const currency=account.currency||'USD';
+    const broker=account.broker?.name||account.broker_name||'Broker'; const id=account.broker_account_id||account.account_id||'Unknown account'; const type=String(account.account_type||'unknown').toUpperCase(); const currency=account.currency||'';
     const detail=live?`${type} · ${money(account.balance,currency)}`:`NOT LIVE · ${state.status}`; const freshness=live?(account.last_synced_at?`Verified ${new Date(account.last_synced_at).toLocaleTimeString()}`:'Broker verified'):(state.lastError||'Waiting for live broker verification');
     card.innerHTML=`<div class="algobot-account-summary"><span class="algobot-account-avatar small">${safe(broker[0]?.toUpperCase()||'B')}</span><div class="algobot-account-copy"><strong>${safe(broker)} · ${safe(id)}</strong><span>${safe(detail)}</span></div></div><div class="algobot-account-fresh">${safe(freshness)}</div>`;
   }
