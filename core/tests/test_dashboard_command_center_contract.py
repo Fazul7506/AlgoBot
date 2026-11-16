@@ -192,34 +192,6 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn("KES:", money)
         self.assertNotIn("EUR:", money)
 
-    def test_dashboard_api_reads_preserve_server_session_account_context(self):
-        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("return shared(url, {credentials: 'include', ...options}, timeout)", source)
-        self.assertIn("server-side Django session", source)
-
-    def test_stale_cache_requires_a_fresh_connected_snapshot_and_is_labelled_stale_on_timeout(self):
-        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("value.account.connection_eligible !== true", source)
-        self.assertIn("String(value.account.data_freshness?.state || value.account.data_freshness || '').toLowerCase() !== 'fresh'", source)
-        self.assertIn("CONNECTION LAST VERIFIED", source)
-        self.assertIn("setText('[data-kpi-state=\"equity\"]', timeoutLabel)", source)
-
-    def test_dashboard_sections_render_progressively_without_waiting_for_slowest_endpoint(self):
-        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const updateCollection = (key, settled) =>", source)
-        self.assertIn("renderCollections(collections);", source)
-        self.assertIn("must not hold back orders, signals, markets, or the account snapshot", source)
-        self.assertIn("result.positions.pending ? 'Loading positions…'", source)
-
-    def test_forced_account_hydration_cannot_clear_a_newer_in_flight_request(self):
-        source = (ROOT / "static" / "js" / "core" / "account_context.js").read_text(encoding="utf-8")
-        self.assertIn("const tracked=pending.finally(()=>{if(busy===tracked)busy=null;});", source)
-        self.assertNotIn("})().finally(()=>{busy=null});return busy;", source)
-", money)
-        self.assertNotIn("KES:", money)
-        self.assertNotIn("EUR:", money)
-
-
     def test_dashboard_money_fields_never_render_unavailable_placeholders(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value)", source)
