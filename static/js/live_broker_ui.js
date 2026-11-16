@@ -4,7 +4,235 @@
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : [])));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (v, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
+  const money = (v, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v, currency) : ' (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
+  let accounts = [], terminalSyncBusy = false;
+
+  function ensureMaterialSymbols() {
+    document.documentElement.classList.add('material-symbols-ready');
+  }
+
+  const canonicalRequest = (url, options = {}, timeout = 7000) => {
+    const request = window.AlgoBotFrontendData?.request;
+    if (typeof request !== 'function') {
+      return Promise.reject(Object.assign(new Error('Canonical frontend transport is not ready.'), {
+        code: 'FRONTEND_TRANSPORT_UNAVAILABLE',
+        retryable: true
+      }));
+    }
+    return request(url, options, timeout);
+  };
+
+  const typeOf = a => {
+    const value = String(a?.account_type || a?.credentials?.account_type || '').trim().toLowerCase();
+    return ['demo', 'real'].includes(value) ? value : 'unknown';
+  };
+  const current = () => {
+    // The canonical account context is authoritative. Never silently fall back
+    // to a preferred/default/first account while a switch is unresolved.
+    const selected = window.AlgoBotAccountContext?.getSelected?.();
+    return selected?.id ? selected : null;
+  };
+  const BROKER_SVG={
+    deriv:'/static/icons/brokers/deriv.svg',binance:'/static/icons/brokers/binance.svg',coinbase:'/static/icons/brokers/coinbase.svg',
+    exness:'https://d33vw3iu5hs0zi.cloudfront.net/media/exness_logo_76096879aa.svg',oanda:'https://www.oanda.com/assets/images/oanda-logo.370e04d3507d.svg',
+    pepperstone:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt170ddde20eb927c5/6aa8ac0963177a84cc7771bb/Pepperstone_logo.svg?branch=main',
+    ctrader:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt3a4db3259d633e7d/6aa8abe5ca2a94302fe1269b/ctrader_logo.svg?branch=main',
+    mt4:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/blt147ccf6e97a62074/6aa8abfb22a09568933cb3c1/MT4_logo.svg?branch=main',
+    mt5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    metatrader_gateway:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    metatrader5:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    metaquotes:'https://eu-images.contentstack.com/v3/assets/bltd74737b907a31bbb/bltd4ab1ccf0b920045/6aa8ac038dfc5906443f146f/MT5_logo.svg?branch=main',
+    dxtrade:'https://cdn.simpleicons.org/dxtrade',bybit:'https://cdn.simpleicons.org/bybit',forex_com:'https://cdn.simpleicons.org/forexcom',
+    ic_markets:'https://cdn.simpleicons.org/icmarkets',interactive_brokers:'https://cdn.simpleicons.org/interactivebrokers',
+    kraken:'https://cdn.simpleicons.org/kraken',xtb:'https://cdn.simpleicons.org/xtb',alpaca:'https://cdn.simpleicons.org/alpaca'
+  };
+  const brokerType=a=>String(a?.broker?.broker_type||a?.broker?.type||a?.broker_type||'').trim().toLowerCase();
+  const isSvgUrl=value=>/^(https:\/\/|\/static\/)/i.test(String(value||'').trim())&&(/\.svg(?:[?#]|$)/i.test(String(value||'').trim())||String(value||'').trim().startsWith('/static/icons/brokers/'));
+  const logoUrl=a=>{const mapped=BROKER_SVG[brokerType(a)];if(mapped)return mapped;const candidates=[a?.broker?.logo_svg_url,a?.branding?.logo_svg_url,a?.logo_svg_url,a?.branding?.avatar_url,a?.avatar_url,a?.broker?.avatar_url];return candidates.find(isSvgUrl)||'';};
+  const flagUrl=a=>{
+    const branding=a?.branding||{},identity=a?.deriv_identity||{};
+    const supplied=String(branding.flag||identity.flag||'').trim();
+    if(/^https:\/\//i.test(supplied)&&/\.svg(?:[?#]|$)/i.test(supplied))return supplied;
+    let code=String(branding.country_code||identity.country_code||identity.country?.code||identity.country||'').trim().toUpperCase();
+    code=({'USA':'US','UNITED STATES':'US','UNITED STATES OF AMERICA':'US','UK':'GB','UNITED KINGDOM':'GB'})[code]||code;
+    return /^[A-Z]{2}$/.test(code)?'https://flagcdn.com/'+code.toLowerCase()+'.svg':'';
+  };
+  const identityMarkup=(a,scope)=>{
+    const logo=logoUrl(a),name=a?.broker?.name||a?.broker_name||'Connected broker';
+    const type=typeOf(a);
+    // Deriv account identity mirrors its own account selector: the broker's D mark
+    // remains visible, DEMO is explicitly marked, and REAL carries the US flag.
+    let flag=flagUrl(a);
+    if(brokerType(a)==='deriv'&&type==='real')flag='/static/icons/account-real-us.svg';
+    const mode=type==='demo'?'<img class="'+scope+'-account-mode-icon '+scope+'-account-mode-icon--demo" src="/static/icons/account-demo.svg" alt="Demo account" loading="lazy" decoding="async">':(type==='real'&&brokerType(a)==='deriv'?'<img class="'+scope+'-account-mode-icon '+scope+'-account-mode-icon--real" src="/static/icons/account-real-us.svg" alt="Real account · United States flag" loading="lazy" decoding="async">':'');
+    return '<span class="'+scope+'-broker-identity" aria-label="'+safe(name)+' '+safe(type)+' account">'+(logo?'<img class="'+scope+'-broker-logo" src="'+safe(logo)+'" alt="'+safe(name)+' logo" loading="lazy" decoding="async">':'')+(flag&&!(brokerType(a)==='deriv'&&type==='real')?'<img class="'+scope+'-country-flag" src="'+safe(flag)+'" alt="'+safe(a?.branding?.country_name||a?.deriv_identity?.country_name||a?.branding?.country_code||'Account country')+'" loading="lazy" decoding="async">':'')+mode+'</span>';
+  };
+  const avatar=(a,small)=>'<span class="algobot-account-avatar'+(small?' small':'')+' broker-svg-avatar" data-broker-icon="'+safe(brokerType(a))+'">'+identityMarkup(a,'account')+'</span>';
+  window.AlgoBotBrokerBranding=Object.freeze({logoUrl:logoUrl,flagUrl:flagUrl,identityMarkup:identityMarkup});
+
+  function placeLogout() {
+    const side = $('.sidebar-user');
+    const account = $('[data-sidebar-account]', side);
+    if (!side || !account) return;
+    let actions = $('.sidebar-user-actions', side);
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'sidebar-user-actions';
+      actions.innerHTML = '<form method="post" action="/logout/" data-logout-form><input type="hidden" name="csrfmiddlewaretoken"><button type="submit" aria-label="Log out" title="Log out"><span class="material-symbols-rounded">logout</span></button></form>';
+      actions.querySelector('input').value = csrf();
+    }
+    if (actions.parentElement !== side) side.appendChild(actions);
+  }
+
+  function mount() {
+    ensureMaterialSymbols();
+    const side = $('.sidebar-user');
+    if (!side) return;
+    side.querySelectorAll('[data-top-account],.algobot-top-account,.sidebar-account-duplicate,[data-duplicate-account],.broker-account-duplicate').forEach(n => n.remove());
+    let accountNode = $('[data-sidebar-account]', side);
+    if (!accountNode) {
+      accountNode = document.createElement('div');
+      accountNode.className = 'algobot-sidebar-account';
+      accountNode.dataset.sidebarAccount = '';
+      side.insertBefore(accountNode, side.firstChild);
+    }
+    side.querySelectorAll('[data-sidebar-account]').forEach((n, i) => { if (i > 0) n.remove(); });
+    placeLogout();
+  }
+
+  async function selectAccount(id) {
+    // Compatibility API only: the canonical account context owns the mutation.
+    const context = window.AlgoBotAccountContext;
+    if (!context?.selectAccount) throw new Error('Broker account context is not ready.');
+    const account = await context.selectAccount(id);
+    accounts = context.getAccounts?.() || accounts;
+    render();
+    return account;
+  }
+  function render() {
+    mount();
+    const a = current();
+    const t = typeOf(a);
+    // Sidebar account presentation and switching are owned by
+    // sidebar_account_switch.js. This module must not replace that DOM or
+    // render a second, differently-targeted account-switch control.
+    const global = $('[data-global-connection]');
+    if (global) {
+      const ok = a?.connection_eligible === true;
+      global.classList.toggle('connected', ok); global.classList.toggle('error', !ok);
+      global.innerHTML = `<i></i><span>${safe(a ? `${a.broker?.name || a.broker_name || 'Broker'} · ${a.broker_account_id || a.account_id} · ${t.toUpperCase()}` : 'No connected broker account')}</span>`;
+    }
+    // Account selection is owned exclusively by core/account_context.js
+    // and rendered by sidebar_account_switch.js.
+    placeLogout();
+  }
+
+  async function syncAccounts() {
+    const canonical = window.AlgoBotBrokerAccounts;
+    const selected = window.AlgoBotAccountContext?.getSelected?.()||null;
+    accounts = (Array.isArray(canonical) ? canonical : (selected ? [selected] : accounts))
+      .filter(a => a?.id && a?.broker_account_id);
+    render();
+    return accounts;
+  }
+
+  async function syncSelectedAccount() {
+    if (terminalSyncBusy) return;
+    const select = $('#account');
+    const a = current();
+    if (!a) return;
+    terminalSyncBusy = true;
+    try {
+      const r = await canonicalRequest(`/api/brokers/accounts/${a.id}/sync/`, {method:'POST'}, 8000);
+      if (r.account) {
+        accounts = accounts.map(x => x.id === r.account.id ? r.account : x);
+        render();
+        window.dispatchEvent(new CustomEvent('algobot:account-synced', {detail:r.account}));
+      }
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('algobot:account-sync-error', {detail:{account:a,error:e}}));
+    } finally { terminalSyncBusy = false; }
+  }
+
+  function updateTerminalAccount(a) {
+    if (!a) return;
+    const t = typeOf(a).toUpperCase(), c = a.currency || '';
+    const s = $('#terminal-status');
+    if (s) s.innerHTML = `<span class="status-dot"></span>${safe(a.broker?.name || a.broker_name || 'Broker')} · ${safe(a.broker_account_id || a.account_id)} · ${safe(t)}`;
+    $('#balance')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
+    $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity)}`.trim()));
+    $('#margin')?.replaceChildren(document.createTextNode(`${c} ${money(a.margin)}`.trim()));
+    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
+    $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id || a.account_id}`));
+  }
+
+  function discoverSymbol() {
+    const catalogue = window.AlgoBotServices?.instruments?.list;
+    if (typeof catalogue !== 'function') return Promise.reject(new Error('Shared instrument service is unavailable.'));
+    return catalogue({ timeout: 7000 }).then(list).then(rows => {
+      const active = rows.filter(x => x?.symbol && x.is_active !== false && x.is_tradable !== false);
+      const s = $('[data-symbol]');
+      const requested = new URLSearchParams(window.location.search).get('symbol');
+      if (s && !s.value) {
+        s.innerHTML = active.map(x => `<option value="${safe(x.symbol)}">${safe(x.display_name || x.symbol)} · ${safe(x.symbol)}</option>`).join('');
+        if (requested && active.some(x => x.symbol === requested)) s.value = requested;
+      }
+      return s?.value || active[0]?.symbol || '';
+    }).catch(() => '');
+  }
+
+  async function boot() {
+    if (document.body.dataset.authenticated !== 'true') return;
+    ensureMaterialSymbols(); mount(); await syncAccounts();
+    const chart = $('#chart'); if (!chart) return;
+    const select = $('#account');
+    if (select && !document.querySelector('.terminal-page')) select.addEventListener('change', () => { const a = accounts.find(x => String(x.id) === String(select.value)); if (a) selectAccount(a.id).catch(error => window.dispatchEvent(new CustomEvent('algobot:account-context-error',{detail:error}))); });
+    if (window.AlgoBotBrokerUI) return;
+    window.AlgoBotBrokerUI = {getAccounts:() => accounts, getCurrentAccount:current, syncAccounts, syncSelectedAccount, updateTerminalAccount, selectAccount};
+    const symbol = await discoverSymbol();
+    if (symbol) { const el = $('[data-symbol]'); if (el && el.value !== symbol) el.value = symbol; }
+    // Account state is synchronized by the canonical account context. Do not
+    // run a background interval here; it causes needless requests and can race
+    // account selection. Explicit broker/account actions trigger synchronization.
+  }
+  window.addEventListener('algobot:backend-accounts-loaded', event => {
+    accounts = list(event.detail).filter(a => a?.id && a?.broker_account_id);
+    render();
+  });
+  window.addEventListener('algobot:state-changed', event => {
+    const account = event.detail?.state?.account;
+    if (account && !accounts.some(item => String(item.id) === String(account.id))) {
+      accounts = [account];
+      render();
+    }
+  });
+  window.addEventListener('DOMContentLoaded', boot, {once:true});
+})();
+
+(() => {
+  const openLogout = form => {
+    if (document.querySelector('.algobot-logout-backdrop')) return;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'algobot-logout-backdrop';
+    // Keep the confirmation in a top-level viewport layer, outside sidebar stacking contexts.
+    Object.assign(backdrop.style, {position:'fixed',inset:'0',zIndex:'2147483647',isolation:'isolate',display:'grid',placeItems:'center'});
+    backdrop.innerHTML = '<div class="algobot-logout-dialog" role="dialog" aria-modal="true" aria-labelledby="algobot-logout-title"><h2 id="algobot-logout-title">Log out of AlgoBot?</h2><p>Your current workspace session will be ended. You can sign back in at any time.</p><div class="algobot-logout-actions"><button type="button" class="cancel">Cancel</button><button type="button" class="confirm">Log out</button></div></div>';
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove(), cancel = backdrop.querySelector('.cancel'), confirm = backdrop.querySelector('.confirm');
+    cancel.addEventListener('click', close);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+    confirm.addEventListener('click', () => { close(); form.dataset.logoutConfirmed = 'true'; if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit(); });
+    const esc = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } };
+    document.addEventListener('keydown', esc); cancel.focus();
+  };
+  document.addEventListener('submit', e => {
+    const form = e.target?.closest?.('[data-logout-form]');
+    if (!form) return;
+    if (form.dataset.logoutConfirmed === 'true') { delete form.dataset.logoutConfirmed; return; }
+    e.preventDefault(); openLogout(form);
+  });
+})();
+ + (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
