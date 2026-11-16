@@ -18,6 +18,9 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertNotIn("KSh", source)
         self.assertNotIn("EUR:", source)
         self.assertNotIn("KES:", source)
+        self.assertIn("const bareMoney =", source)
+        self.assertIn("parent.closest?.('.money-value')", source)
+        self.assertIn("node.nodeValue = format(raw);", source)
 
     def test_zero_money_placeholders_always_include_usd_symbol(self):
         templates = (
