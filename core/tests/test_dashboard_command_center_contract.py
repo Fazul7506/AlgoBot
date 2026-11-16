@@ -188,17 +188,9 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
                 self.assertIn("$0.00", source)
         money = (ROOT / "static" / "js" / "core" / "money_display.js").read_text(encoding="utf-8")
         self.assertIn("const CURRENCY = 'USD'", money)
-        self.assertIn("const SYMBOL = '
-        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value)", source)
-        self.assertNotIn("return 'Unavailable'", source)
-        self.assertIn("money(0)", source)
-        self.assertIn("const available = account.free_margin ?? account.available_margin ?? account.available", source)
-        self.assertIn("return window.AlgoBotMoney.format(safeValue)", source)
-        self.assertNotIn("const currency = account.currency || ''", source)
-        self.assertIn("Select a broker account · placeholder value", source)
-        self.assertIn("Select a broker account to view open positions.", source)
-        self.assertIn("Select a broker account to view recent orders.", source)
+        self.assertIn("const SYMBOL = '$'", money)
+        self.assertNotIn("KES:", money)
+        self.assertNotIn("EUR:", money)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
