@@ -26,7 +26,200 @@
   const esc = value => String(value ?? '—').replace(/[&<>'"]/g, ch => ({
     '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'
   }[ch]));
-  const money = (value, code='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, code) : (code ? String(code) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const money = (value, code='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, code) : ' (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const time = value => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+  };
+
+  function params(pageNumber = 1, refreshBroker = true) {
+    const p = new URLSearchParams({page: String(pageNumber), page_size: '25'});
+    const q = $('[data-history-search]').value.trim();
+    const symbol = $('[data-history-symbol]').value.trim();
+    const status = $('[data-history-status-filter]').value;
+    const direction = $('[data-history-direction-filter]').value;
+    const dateFrom = $('[data-history-date-from]').value;
+    const dateTo = $('[data-history-date-to]').value;
+    if (q) p.set('q', q);
+    if (symbol) p.set('symbol', symbol);
+    if (status) p.set('status', status);
+    if (direction) p.set('direction', direction);
+    if (dateFrom) p.set('date_from', dateFrom);
+    if (dateTo) p.set('date_to', dateTo);
+    if (!refreshBroker) p.set('refresh', '0');
+    return p;
+  }
+
+  function renderRows(rows) {
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="12">No broker trades match the current filters.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((row, index) => {
+      const detailId = `trade-detail-${row.id}-${index}`;
+      return `
+        <tr>
+          <td>${esc(time(row.broker_timestamp || row.purchase_time))}</td>
+          <td><span class="market-inline-label">${window.AlgoBotMarketPicker?.marketIcon(row)||''}<strong>${esc(window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument')}</strong></span></td>
+          <td>${esc(row.contract_type)}</td>
+          <td>${esc(row.direction)}</td>
+          <td class="num">${money(row.stake, row.currency)}</td>
+          <td class="num">${money(row.entry_price ?? row.buy_price, row.currency)}</td>
+          <td class="num">${money(row.exit_price ?? row.sell_price, row.currency)}</td>
+          <td class="num">${money(row.payout, row.currency)}</td>
+          <td class="num">${money(row.profit_loss, row.currency)}</td>
+          <td><span class="trade-history-status">${esc(row.status)}</span></td>
+          <td class="id">${esc(row.broker_contract_id || row.broker_transaction_id)}</td>
+          <td><button class="btn" type="button" data-expand="${esc(detailId)}" aria-expanded="false" aria-controls="${esc(detailId)}">View</button></td>
+        </tr>
+        <tr id="${esc(detailId)}" class="trade-history-detail">
+          <td colspan="12">
+            <div class="trade-history-detail-grid">
+              <div><span>Contract ID</span><strong>${esc(row.broker_contract_id)}</strong></div>
+              <div><span>Transaction ID</span><strong>${esc(row.broker_transaction_id)}</strong></div>
+              <div><span>Reference ID</span><strong>${esc(row.reference_id)}</strong></div>
+              <div><span>Currency</span><strong>${esc(row.currency)}</strong></div>
+              <div><span>Purchase</span><strong>${esc(time(row.purchase_time))}</strong></div>
+              <div><span>Settlement</span><strong>${esc(time(row.settlement_time))}</strong></div>
+              <div><span>Expiry</span><strong>${esc(time(row.expiry_time))}</strong></div>
+              <div><span>AI analysis</span><strong>${row.ai ? `${esc(row.ai.prediction)} · ${esc(row.ai.confidence)}% · AI only` : 'No linked AI analysis'}</strong></div>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+    root.querySelectorAll('[data-expand]').forEach(button => {
+      button.addEventListener('click', () => {
+        const target = document.getElementById(button.dataset.expand);
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        target?.classList.toggle('is-expanded', !expanded);
+      });
+    });
+  }
+
+  function renderMeta(payload) {
+    const stateValue = payload.state || 'unknown';
+    state.textContent = stateValue === 'success' ? 'Broker synchronized' :
+      stateValue === 'partial' ? 'Partial broker data' :
+      stateValue === 'cached' ? 'Cached broker data' :
+      stateValue === 'stale' ? 'Stale · broker unavailable' :
+      stateValue === 'empty' ? 'No broker trades' :
+      stateValue === 'authentication_failed' ? 'Authentication required' :
+      stateValue === 'unavailable' ? 'Broker unavailable' : stateValue;
+    if (payload.account) {
+      currency.textContent = `Currency: ${payload.account.currency || '—'}`;
+      syncTime.textContent = `Last synchronization: ${time(payload.account.last_synced_at)}`;
+      const accountName = $('[data-history-account-name]');
+      if (accountName) accountName.textContent = `Deriv · ${payload.account.broker_account_id || payload.account.id || 'selected account'}`;
+    }
+    message.textContent = payload.error
+      ? `${payload.error.detail || 'Broker history synchronization failed.'} Existing rows, if any, are explicitly marked stale.`
+      : stateValue === 'empty' ? 'Deriv confirmed that no matching trade records are available.' : '';
+    const current = payload.results || [];
+    const currentPage = Number(payload.current_page || page);
+    const totalPages = Number(payload.total_pages || 1);
+    pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+    prev.disabled = !payload.previous;
+    next.disabled = !payload.next;
+  }
+
+  async function loadMarketCatalogue() {
+    const select = $('[data-history-symbol]');
+    if (!select) return;
+    const previous = select.value;
+    try {
+      const payload = await window.AlgoBotServices.instruments.list({ timeout: 7000 });
+      const items = Array.isArray(payload?.symbols) ? payload.symbols : Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.markets) ? payload.markets : [];
+      select.innerHTML = '<option value="">All markets</option>' + items.map(item => {
+        const symbol = String(item?.symbol || item?.underlying_symbol || item?.code || '');
+        if (!symbol) return '';
+        const supplied = item?.display_name || item?.name || item?.underlying_symbol_name || '';
+        const label = window.AlgoBotMarketPicker?.marketName({value:symbol,textContent:String(supplied || symbol)}) || supplied || 'Market instrument';
+        return '<option value="' + esc(symbol) + '">' + esc(label) + '</option>';
+      }).join('');
+      if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    } catch (_) {
+      select.innerHTML = '<option value="">All markets · catalogue unavailable</option>';
+    }
+  }
+
+  async function load(targetPage = 1, refreshBroker = true) {
+    page = targetPage;
+    const seq = ++requestSeq;
+    const requestedAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
+    if (!requestedAccountId) {
+      refresh.disabled = false; state.textContent='No confirmed broker account selected'; message.textContent='Connect and explicitly select a broker account to view authoritative trade history.';
+      tbody.innerHTML='<tr><td colspan=\"12\">No confirmed broker account selected.</td></tr>'; prev.disabled=true; next.disabled=true; return;
+    }
+    refresh.disabled = true;
+    state.textContent = 'Synchronizing…';
+    message.textContent = '';
+    tbody.innerHTML = '<tr><td colspan="12">Retrieving authoritative Deriv history…</td></tr>';
+    try {
+      const payload = await window.AlgoBotServices.request('trade-history', `/api/trade-history/?${params(page, refreshBroker).toString()}`, {}, 25000);
+      const currentAccountId = window.AlgoBotAccountContext?.getSelectedId?.() == null ? null : String(window.AlgoBotAccountContext.getSelectedId());
+      if (seq !== requestSeq || requestedAccountId !== currentAccountId) return;
+      lastPayload = payload;
+      renderRows(payload.results || []);
+      renderMeta(payload);
+    } catch (error) {
+      if (seq !== requestSeq) return;
+      const payload = error?.payload || {};
+      state.textContent = error?.status === 401 ? 'Authentication required' : 'Broker unavailable';
+      message.textContent = payload.detail || payload.error?.detail || 'Broker Trade History could not be retrieved. No fabricated records were generated.';
+      tbody.innerHTML = '<tr><td colspan="12">Trade history is unavailable.</td></tr>';
+      prev.disabled = true;
+      next.disabled = true;
+    } finally {
+      if (seq === requestSeq) refresh.disabled = false;
+    }
+  }
+
+  function exportCsv() {
+    const rows = lastPayload?.results || [];
+    if (!rows.length) return;
+    const header = ['time','market','contract','direction','stake','entry','exit','payout','profit_loss','status','contract_id','transaction_id'];
+    const data = rows.map(row => [
+      time(row.broker_timestamp || row.purchase_time), window.AlgoBotMarketPicker?.marketName({value:row.symbol||'',textContent:row.display_name||row.symbol||''}) || row.display_name || 'Market instrument', row.contract_type, row.direction,
+      row.stake ?? '', row.entry_price ?? row.buy_price ?? '', row.exit_price ?? row.sell_price ?? '',
+      row.payout ?? '', row.profit_loss ?? '', row.status, row.broker_contract_id ?? '', row.broker_transaction_id ?? ''
+    ]);
+    const csv = [header, ...data].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `algobot-deriv-trade-history-page-${page}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  [refresh, apply].forEach(control => control.addEventListener('click', () => load(1, true)));
+  prev.addEventListener('click', () => load(Math.max(1, page - 1), false));
+  next.addEventListener('click', () => load(page + 1, false));
+  exportButton.addEventListener('click', exportCsv);
+  window.AlgoBotBrokerState?.subscribe?.(() => {
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
+    const nextId = account?.id == null ? null : String(account.id);
+    if (nextId === activeAccountId) return;
+    activeAccountId = nextId;
+    requestSeq += 1;
+    lastPayload = null;
+    $('[data-history-account-name]').textContent = nextId ? `Deriv · ${account?.account_id || 'selected account'}` : 'No selected Deriv account';
+    state.textContent = nextId ? 'Synchronizing selected account…' : 'No selected account';
+    currency.textContent = 'Currency: —';
+    syncTime.textContent = 'Last synchronization: —';
+    message.textContent = 'Account changed. Previous account history has been cleared.';
+    tbody.innerHTML = '<tr><td colspan="12">Loading selected account history…</td></tr>';
+    prev.disabled = true; next.disabled = true;
+    if (nextId) load(1, true);
+  });
+  void loadMarketCatalogue();
+  load();
+})();
+ + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const time = value => {
     if (!value) return '—';
     const d = new Date(value);
