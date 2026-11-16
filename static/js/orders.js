@@ -8,7 +8,7 @@
   let rows = [];
   let loadSeq = 0;
   const dateText = value => { if (!value) return '—'; const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleString() : 'Unavailable'; };
-  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value,currency) : ' (Number.isFinite(Number(value))?Number(value):0).toFixed(2);
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const pending = new Set(['draft','validated','queued']);
   const statusClass = s => String(s || 'unknown').toLowerCase().replace(/[^a-z0-9_-]/g,'');
   function render(message = null, state = 'Ready') {
