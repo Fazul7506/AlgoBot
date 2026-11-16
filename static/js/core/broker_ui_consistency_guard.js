@@ -9,7 +9,7 @@
   window.__algoBotBrokerUIConsistencyGuard = true;
   const $ = selector => document.querySelector(selector);
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : ';
+  const money = (value, currency='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   let currentState = null;
   let modal = null;
 
