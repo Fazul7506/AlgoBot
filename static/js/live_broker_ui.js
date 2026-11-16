@@ -384,13 +384,13 @@
 
   function updateTerminalAccount(a) {
     if (!a) return;
-    const t = typeOf(a).toUpperCase(), c = a.currency || '';
+    const t = typeOf(a).toUpperCase();
     const s = $('#terminal-status');
     if (s) s.innerHTML = `<span class="status-dot"></span>${safe(a.broker?.name || a.broker_name || 'Broker')} · ${safe(a.broker_account_id || a.account_id)} · ${safe(t)}`;
-    $('#balance')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
-    $('#equity')?.replaceChildren(document.createTextNode(`${c} ${money(a.equity)}`.trim()));
-    $('#margin')?.replaceChildren(document.createTextNode(`${c} ${money(a.margin)}`.trim()));
-    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(`${c} ${money(a.balance)}`.trim()));
+    $('#balance')?.replaceChildren(document.createTextNode(money(a.balance)));
+    $('#equity')?.replaceChildren(document.createTextNode(money(a.equity)));
+    $('#margin')?.replaceChildren(document.createTextNode(money(a.margin)));
+    $('[data-kpi="balance"]')?.replaceChildren(document.createTextNode(money(a.balance)));
     $('[data-terminal-account]')?.replaceChildren(document.createTextNode(`Account: ${a.broker_account_id || a.account_id}`));
   }
 
