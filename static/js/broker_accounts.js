@@ -6,7 +6,8 @@
   const grid=document.querySelector('[data-account-grid]');if(!grid)return;
   const count=document.querySelector('[data-account-count]'),connected=document.querySelector('[data-connected-count]'),preferred=document.querySelector('[data-preferred-account]'),ready=document.querySelector('[data-ready-count]'),refresh=document.querySelector('[data-refresh-accounts]');
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '  const api=(url,options={})=>window.AlgoBotFrontendData?.request?window.AlgoBotFrontendData.request(url,options,15000):fetch(url,{credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},...options}).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.detail||data.message||`Request failed (${r.status})`);return data});
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const api=(url,options={})=>window.AlgoBotFrontendData?.request?window.AlgoBotFrontendData.request(url,options,15000):fetch(url,{credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},...options}).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.detail||data.message||`Request failed (${r.status})`);return data});
   const list=value=>window.AlgoBotFrontendData?.list(value)|| (Array.isArray(value)?value:(value?.results||value?.accounts||[]));
   let accounts=[];
   function render(rows){
