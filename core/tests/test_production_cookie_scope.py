@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from config.settings.utils import deployment_cookie_domain
@@ -41,6 +42,12 @@ class ProductionCookieScopeTests(unittest.TestCase):
                 deployment_cookie_domain("CSRF_COOKIE_DOMAIN", ".algobot.dpdns.org"),
                 ".algobot.dpdns.org",
             )
+
+    def test_render_blueprint_overrides_preview_cookie_scope(self):
+        blueprint = Path(__file__).resolve().parents[2] / "render.yaml"
+        content = blueprint.read_text(encoding="utf-8")
+        self.assertIn("key: ALGOBOT_PREVIEW_DEPLOYMENT", content)
+        self.assertIn('previewValue: "true"', content)
 
     def test_explicit_production_cookie_domain_is_preserved(self):
         with patch.dict(os.environ, {
