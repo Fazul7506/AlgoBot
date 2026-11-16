@@ -82,6 +82,8 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertNotIn("['Currency',r.currency]", positions)
         terminal = self.read("static/js/live_broker_ui.js")
         self.assertNotIn("${c} ", terminal)
+        orders = self.read("static/js/orders.js")
+        self.assertIn("esc(money(r.stake,r.currency||''))", orders)
 
     def test_server_rendered_billing_and_monitoring_money_use_usd(self):
         billing = self.read("templates/core/billing_success.html")
