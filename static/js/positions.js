@@ -6,7 +6,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, reconnectTimer: null, accountId: null, loadSeq: 0 };
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
-  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : ';
+  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const accountId = () => {
     const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     return account?.id == null ? null : String(account.id);
