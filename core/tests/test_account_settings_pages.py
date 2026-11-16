@@ -227,7 +227,8 @@ class AccountSettingsPagesTests(TestCase):
         self.assertIn("window.AlgoBotFrontendData", preferences_script)
         self.assertIn("persisted:true", preferences_script)
         self.assertNotIn("fetch('/api/settings/'", preferences_script)
-        self.assertIn("path==='/api/settings/'", api_contract)
+        self.assertIn("protectedPublicPaths.test(path)", api_contract)
+        self.assertIn("settings", api_contract)
 
     def test_preferences_dropdowns_use_searchable_portal_and_theme_aware_surfaces(self):
         settings_template = (Path(__file__).resolve().parents[2] / "templates" / "core" / "settings.html").read_text()
