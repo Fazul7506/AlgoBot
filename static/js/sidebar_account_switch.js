@@ -5,7 +5,35 @@
   window.__algoBotSidebarAccountSwitch = true;
   const $=(s,r=document)=>r.querySelector(s);
   const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):(c?String(c)+' ':'')+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const typeOf=a=>String(a?.account_type||a?.credentials?.account_type||'unknown').toLowerCase();
+  let accounts=[],switching=false;
+  const context=()=>window.AlgoBotAccountContext;
+  function activeAccount(){return context()?.getSelected?.()||null}
+  // The alternate account need not already be connected: selecting it is what lets the broker bridge establish its account-scoped connection.
+  function targetFor(current){if(!current||!['demo','real'].includes(typeOf(current)))return null;const brokerId=current.broker?.id??current.broker_id;const brokerName=String(current.broker?.name||current.broker_name||'').trim().toLowerCase();const sameBroker=a=>brokerId!=null?String(a.broker?.id??a.broker_id)===String(brokerId):(!!brokerName&&String(a.broker?.name||a.broker_name||'').trim().toLowerCase()===brokerName);const eligible=a=>String(a.id)!==String(current.id)&&['demo','real'].includes(typeOf(a))&&typeOf(a)!==typeOf(current)&&a.selection_eligible===true&&a.switch_enabled===true;return accounts.find(a=>eligible(a)&&sameBroker(a))||null}
+  const identity=a=>window.AlgoBotBrokerBranding?.identityMarkup?.(a,'sidebar')||'';
+  function render(){
+    const card=$('[data-sidebar-account]');if(!card)return;
+    const current=activeAccount(),target=targetFor(current);
+    if(!current){card.innerHTML='<span class="algobot-account-error">No confirmed broker account selected</span>';return}
+    const broker=current.broker?.name||current.broker_name||'Broker',id=current.broker_account_id||current.account_id||current.id;
+    const type=typeOf(current).toUpperCase(),targetType=target?typeOf(target).toUpperCase():'',targetId=target?(target.broker_account_id||target.account_id||target.id):'';
+    const live=current.connection_eligible===true,disabled=!target||switching;
+    card.classList.add('algobot-account-modal-trigger');card.setAttribute('role','group');
+    const summary='<div class="algobot-account-summary"><span class="algobot-account-avatar small">'+identity(current)+'</span><div class="algobot-account-copy"><strong>'+safe(broker)+' · '+safe(id)+'</strong><span>'+safe(type)+' · '+safe(current.branding?.country_code||'')+' · '+safe(money(current.balance,current.currency||''))+'</span></div></div>';
+    const fresh='<div class="algobot-account-fresh">'+safe(live?(current.last_synced_at?'Verified '+new Date(current.last_synced_at).toLocaleTimeString():'Broker verified'):'Account '+(current.status||'unavailable'))+'</div>';
+    const targetMarkup=target?identity(target)+'<span>Switch to '+safe(targetType)+'</span>':'<span>Demo / Real</span>';
+    const button='<button type="button" class="algobot-account-switch" data-sidebar-account-switch data-account-id="'+safe(target?.id||'')+'" '+(disabled?'disabled':'')+' title="'+safe(target?'Switch to '+targetType+' account '+targetId:'No alternate broker account is available')+'" aria-label="'+safe(target?'Switch to '+targetType+' account '+targetId:'No alternate broker account available')+'">'+targetMarkup+'</button>';
+    card.innerHTML=summary+fresh+button;
+  }
+  async function refresh(){try{if(context()){await context().load();accounts=context().getAccounts();}else{accounts=Array.isArray(window.AlgoBotBrokerAccounts)?window.AlgoBotBrokerAccounts:[]}render()}catch(_){accounts=context()?.getAccounts?.()||accounts;render()}}
+  async function selectAccount(id){if(switching||!id)return;switching=true;render();try{if(!context())throw new Error('Broker account context is not ready.');await context().selectAccount(id);accounts=context().getAccounts();render()}catch(error){window.AlgoBotMessage?.(error?.message||'Account switch failed.','error')}finally{switching=false;render()}}
+  function bind(){const card=$('[data-sidebar-account]');if(!card||card.dataset.accountSwitchBound==='true')return;card.dataset.accountSwitchBound='true';card.addEventListener('click',event=>{const b=event.target?.closest?.('[data-sidebar-account-switch]');if(!b||b.disabled)return;event.preventDefault();event.stopPropagation();const target=targetFor(activeAccount());if(!target||String(target.id)!==String(b.dataset.accountId||''))return;void selectAccount(target.id)},true)}
+  function boot(){if(document.body.dataset.authenticated!=='true')return;bind();refresh();window.addEventListener('algobot:backend-accounts-loaded',event=>{accounts=Array.isArray(event.detail)?event.detail:context()?.getAccounts?.()||accounts;render()});window.addEventListener('algobot:account-changed',()=>{accounts=context()?.getAccounts?.()||accounts;render()});window.addEventListener('algobot:account-context-changed',()=>{accounts=context()?.getAccounts?.()||accounts;render()});window.addEventListener('algobot:account-synced',()=>{accounts=context()?.getAccounts?.()||accounts;render()});window.addEventListener('algobot:state-changed',render)}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
++(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   const typeOf=a=>String(a?.account_type||a?.credentials?.account_type||'unknown').toLowerCase();
   let accounts=[],switching=false;
   const context=()=>window.AlgoBotAccountContext;
