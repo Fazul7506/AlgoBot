@@ -209,7 +209,7 @@
     lastPayload = null;
     $('[data-history-account-name]').textContent = nextId ? `Deriv · ${account?.account_id || 'selected account'}` : 'No selected Deriv account';
     state.textContent = nextId ? 'Synchronizing selected account…' : 'No selected account';
-    currency.textContent = 'Currency: —';
+    currency.textContent = 'Currency: USD';
     syncTime.textContent = 'Last synchronization: —';
     message.textContent = 'Account changed. Previous account history has been cleared.';
     tbody.innerHTML = '<tr><td colspan="12">Loading selected account history…</td></tr>';
@@ -402,7 +402,7 @@
     lastPayload = null;
     $('[data-history-account-name]').textContent = nextId ? `Deriv · ${account?.account_id || 'selected account'}` : 'No selected Deriv account';
     state.textContent = nextId ? 'Synchronizing selected account…' : 'No selected account';
-    currency.textContent = 'Currency: —';
+    currency.textContent = 'Currency: USD';
     syncTime.textContent = 'Last synchronization: —';
     message.textContent = 'Account changed. Previous account history has been cleared.';
     tbody.innerHTML = '<tr><td colspan="12">Loading selected account history…</td></tr>';
