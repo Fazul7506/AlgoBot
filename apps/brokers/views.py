@@ -308,14 +308,19 @@ def connect_broker(request):
                 },
             )
     account.refresh_from_db()
+    active_account = get_active_account(request.user, request=request)
     all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'))
     target_ids={item.pk for item in target_accounts}
     serialized_account=BrokerAccountSerializer(account,context={'request':request}).data
+    serialized_active_account=(
+        BrokerAccountSerializer(active_account,context={'request':request}).data
+        if active_account else None
+    )
     payload={
         'connection':BrokerConnectionSerializer(connection).data,
         'account':serialized_account,
-        'active_account':serialized_account if serialized_account.get('is_active') else None,
-        'active_account_id':account.pk if serialized_account.get('is_active') else None,
+        'active_account':serialized_active_account,
+        'active_account_id':active_account.pk if active_account else None,
         'auto_selected':auto_selected,
         'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,
         'connected_account_ids':connected_ids,
