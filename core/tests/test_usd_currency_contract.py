@@ -21,6 +21,7 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertIn("const bareMoney =", source)
         self.assertIn("parent.closest?.('.money-value')", source)
         self.assertIn("node.nodeValue = format(raw);", source)
+        self.assertIn("else if (node.nodeType === Node.TEXT_NODE) decorate", source)
 
     def test_zero_money_placeholders_always_include_usd_symbol(self):
         templates = (
