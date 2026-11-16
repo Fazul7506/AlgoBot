@@ -398,6 +398,28 @@ class DerivTerminalSafetyTests(SimpleTestCase):
         force_authenticate(request, user=self.user)
         return request
 
+    def test_deriv_account_resolution_ignores_browser_supplied_account_ids(self):
+        view = DerivTradingActionView()
+        request = SimpleNamespace(
+            user=self.user,
+            data={"broker_account_id": "999"},
+            query_params={"broker_account_id": "888"},
+        )
+        with patch("apps.execution.deriv_views.get_active_account", return_value=self.account) as resolver:
+            self.assertIs(view._account(request), self.account)
+        resolver.assert_called_once_with(self.user, request=request, broker_type="deriv")
+
+    def test_deriv_account_resolution_fails_closed_without_server_selection(self):
+        view = DerivTradingActionView()
+        request = SimpleNamespace(
+            user=self.user,
+            data={"broker_account_id": "999"},
+            query_params={"broker_account_id": "888"},
+        )
+        with patch("apps.execution.deriv_views.get_active_account", return_value=None):
+            with self.assertRaises(BrokerOrderError):
+                view._account(request)
+
     def test_connection_failure_is_unknown_and_non_retryable(self):
         view = DerivTradingActionView()
         with patch.object(view, "_account", return_value=self.account), patch(

@@ -188,6 +188,11 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
         self.assertIn("headers.set('Authorization','Bearer '+accessToken)", client)
 
+    def test_shared_service_runtime_never_sends_account_override_header(self):
+        from pathlib import Path
+        runtime = Path("static/js/core/service_runtime.js").read_text(encoding="utf-8")
+        self.assertNotIn("X-Algobot-Account-ID", runtime)
+
     def test_account_context_never_lets_stale_local_storage_override_server_state(self):
         from pathlib import Path
         context = Path("static/js/core/account_context.js").read_text(encoding="utf-8")

@@ -7,22 +7,20 @@ from apps.brokers.exceptions import (
     BrokerConnectionError,
     BrokerOrderError,
 )
-from apps.brokers.models import BrokerAccount
 from core.permissions import BrokerOnboardingRequired
+from core.account_context import get_active_account
 
 
 class DerivTradingActionView(views.APIView):
     permission_classes = [permissions.IsAuthenticated, BrokerOnboardingRequired]
 
     def _account(self, request):
-        account_id = request.data.get("broker_account_id") or request.query_params.get("broker_account_id")
-        if not account_id:
-            raise BrokerOrderError("broker_account_id is required")
-        account = BrokerAccount.objects.select_related("broker").filter(
-            pk=account_id, user=request.user, status="active", broker__broker_type="deriv"
-        ).first()
+        # Proposals and contract discovery must use the same server-selected
+        # account as every other workspace service. A browser-supplied account
+        # ID (body, query string, or custom header) is never account authority.
+        account = get_active_account(request.user, request=request, broker_type="deriv")
         if account is None or not account.is_connection_eligible:
-            raise BrokerOrderError("The selected Deriv account is not connected or is not usable")
+            raise BrokerOrderError("No active, connected Deriv account is selected for this session")
         return account
 
     def _execute(self, request, operation):
