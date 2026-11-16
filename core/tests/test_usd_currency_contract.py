@@ -70,3 +70,22 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertIn("assert.equal(money.format(null), '$0.00');", source)
         self.assertIn("assert.equal(money.format(1234.5, 'KES'), '$1,234.50');", source)
         self.assertIn("assert.equal(money.format(10, 'EUR'), '$10.00');", source)
+
+    def test_currency_labels_are_usd_even_when_broker_metadata_is_missing(self):
+        topbar = self.read("static/js/topbar_security_controls.js")
+        self.assertIn("currency: 'USD'", topbar)
+        trade_history = self.read("static/js/trade_history.js")
+        self.assertIn("Currency: USD", trade_history)
+        self.assertNotIn("${esc(row.currency)}", trade_history)
+        positions = self.read("static/js/positions.js")
+        self.assertIn("['Currency','USD']", positions)
+        self.assertNotIn("['Currency',r.currency]", positions)
+        terminal = self.read("static/js/live_broker_ui.js")
+        self.assertNotIn("${c} ", terminal)
+
+    def test_server_rendered_billing_and_monitoring_money_use_usd(self):
+        billing = self.read("templates/core/billing_success.html")
+        self.assertIn('class="money-value">${{ invoice_amount|floatformat:2 }}', billing)
+        self.assertNotIn("invoice.currency|upper", billing)
+        monitoring = self.read("templates/monitoring/dashboard.html")
+        self.assertIn("metric.unit|upper == 'USD'", monitoring)
