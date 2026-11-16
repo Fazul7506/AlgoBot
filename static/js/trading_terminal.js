@@ -6,7 +6,7 @@
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const list=v=>window.AlgoBotFrontendData?.list(v)||[];
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):(c?String(c)+' ':'')+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'$'+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   // All terminal API traffic goes through the shared service facade so account
   // headers, transport, timeout, retry and error lifecycle are identical to the
   // dashboard and every other authenticated workspace.
