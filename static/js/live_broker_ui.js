@@ -4,7 +4,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const list = v => Array.isArray(v) ? v : (Array.isArray(v?.symbols) ? v.symbols : (Array.isArray(v?.results) ? v.results : (Array.isArray(v?.data) ? v.data : [])));
   const safe = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money = (v, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v, currency) : ';
+  const money = (v, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v, currency) : '$' + (Number.isFinite(Number(v)) ? Number(v) : 0).toFixed(2);
   let accounts = [], terminalSyncBusy = false;
 
   function ensureMaterialSymbols() {
