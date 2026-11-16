@@ -32,7 +32,7 @@
   });
   const formatBalance = label => window.AlgoBotMoney?.format
     ? window.AlgoBotMoney.format(label.balance)
-    : '
+    : '$' + (Number.isFinite(Number(label.balance)) ? Number(label.balance) : 0).toFixed(2);
 
   function closeMenus(except) {
     document.querySelectorAll('[data-topbar-account-menu],[data-notification-menu],[data-profile-menu]').forEach(menu => {
