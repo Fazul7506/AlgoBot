@@ -32,7 +32,7 @@ class DashboardTemplateContractTests(TestCase):
         content = response.content.decode()
         self.assertIn("Broker-backed dashboard", content)
         self.assertIn("Placeholder until a verified broker balance is received.", content)
-        self.assertIn('data-kpi="balance" class="money-value">0.00', content)
+        self.assertIn('data-kpi="balance" class="money-value">$0.00', content)
         self.assertNotIn("25000", content)
         self.assertNotIn("12345", content)
     def test_authenticated_user_without_verified_broker_is_redirected_to_setup(self):

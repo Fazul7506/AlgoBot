@@ -7,7 +7,7 @@
   const state = {category:'all', market:'', asset:'', search:'', page:1, pageSize:10, loading:false, lastData:null};
   const fmt = (v, digits=5) => v == null || v === '' || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString(undefined,{maximumFractionDigits:digits});
   const pct = v => v == null || !Number.isFinite(Number(v)) ? 'Unavailable' : Number(v).toFixed(1)+'%';
-  const money = (v,c='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v,c) : (c?String(c)+' ':'')+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money = (v,c='') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(v,c) : '$'+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   const title = v => String(v || 'unknown').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
   // Preserve lifecycle semantics and strategy classification from the reference implementation.
   const lifecycleStatus = row => String(row.lifecycle || row.execution_state || row.settlement_state || row.status || 'unavailable').toLowerCase();

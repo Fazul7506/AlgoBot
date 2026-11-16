@@ -83,7 +83,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261116-broker-state-repair1", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261116-usd-active-account-repair3", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -168,17 +168,38 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
         self.assertIn("0.00", template)
-        self.assertNotIn("$0.00", template)
+        self.assertIn("$0.00", template)
         self.assertNotIn("Number(account.balance) + Number(pnl)", source)
         self.assertIn("const equity = account.equity ?? null", source)
-        self.assertIn("setText('[data-kpi=\"equity\"]', money(equity, currency))", source)
+        self.assertIn("setText('[data-kpi=\"equity\"]', money(equity))", source)
 
+
+
+    def test_initial_monetary_placeholders_use_usd_symbol_across_workspaces(self):
+        for relative in (
+            "templates/core/dashboard.html",
+            "templates/portfolio/dashboard.html",
+            "templates/core/risk.html",
+            "templates/core/signals.html",
+            "templates/core/billing.html",
+        ):
+            with self.subTest(template=relative):
+                source = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("$0.00", source)
+        money = (ROOT / "static" / "js" / "core" / "money_display.js").read_text(encoding="utf-8")
+        self.assertIn("const CURRENCY = 'USD'", money)
+        self.assertIn("const SYMBOL = '$'", money)
+        self.assertNotIn("KES:", money)
+        self.assertNotIn("EUR:", money)
 
     def test_dashboard_money_fields_never_render_unavailable_placeholders(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value)", source)
         self.assertNotIn("return 'Unavailable'", source)
         self.assertIn("money(0)", source)
+        self.assertIn("const available = account.free_margin ?? account.available_margin ?? account.available", source)
+        self.assertIn("return window.AlgoBotMoney.format(safeValue)", source)
+        self.assertNotIn("const currency = account.currency || ''", source)
         self.assertIn("Select a broker account · placeholder value", source)
         self.assertIn("Select a broker account to view open positions.", source)
         self.assertIn("Select a broker account to view recent orders.", source)
