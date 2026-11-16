@@ -16,6 +16,8 @@ assert.equal(money.format(1234.5, 'USD'), '$1,234.50');
 assert.equal(money.format(-12.3, 'USD'), '$-12.30');
 assert.equal(money.format(1234.5, 'KES'), 'KSh 1,234.50');
 assert.equal(money.format(10, 'EUR'), '€10.00');
+assert.equal(money.format(null, ''), '0.00');
+assert.equal(money.format(10, ''), '10.00');
 assert.equal(money.numberFor(Infinity), 0);
 
 const css = fs.readFileSync('static/css/money_display.css', 'utf8');

@@ -33,7 +33,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
-  const money = (value, currency = 'USD') => { if (value == null || value === '' || !Number.isFinite(Number(value))) return 'Unavailable'; if (typeof window.AlgoBotMoney?.format === 'function') return window.AlgoBotMoney.format(value, currency); return `${String(currency || 'USD').toUpperCase() === 'USD' ? '$' : `${String(currency || '').toUpperCase()} `}${Number(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`; };
+  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const pct = value => value === null || value === undefined || value === '' ? '—' : `${Number(value).toFixed(1)}%`;
   const normalise = value => Array.isArray(value) ? value : (
     Array.isArray(value?.results) ? value.results : (
@@ -96,10 +96,10 @@
       const positions = $('[data-kpi="positions"]');
       const winrate = $('[data-kpi="winrate"]');
       const pnl = $('[data-kpi="pnl"]');
-      if (balance) balance.textContent = account && account.last_synced_at ? money(account.balance, account.currency || 'USD') : 'Unavailable';
+      if (balance) balance.textContent = money(account?.balance, account?.currency || '');
       if (positions) positions.textContent = account ? (stats.open_trades ?? 'Unavailable') : 'Unavailable';
       if (winrate) winrate.textContent = account ? pct(stats.win_rate) : 'Unavailable';
-      if (pnl) pnl.textContent = account ? money(stats.total_pnl, account.currency || 'USD') : 'Unavailable';
+      if (pnl) pnl.textContent = money(account ? stats.total_pnl : 0, account?.currency || '');
       const terminalAccount = $('[data-terminal-account]');
       if (terminalAccount) terminalAccount.textContent = `Account: ${account?.broker_account_id || account?.account_id || 'No confirmed account selected'}`;
       return { ...data, selectedAccount: account };

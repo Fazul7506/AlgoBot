@@ -83,7 +83,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261109-zero-placeholder-preserved2", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261116-broker-state-repair1", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -167,10 +167,21 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
     def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
-        self.assertIn("$0.00", template)
+        self.assertIn("0.00", template)
+        self.assertNotIn("$0.00", template)
         self.assertNotIn("Number(account.balance) + Number(pnl)", source)
         self.assertIn("const equity = account.equity ?? null", source)
         self.assertIn("setText('[data-kpi=\"equity\"]', money(equity, currency))", source)
+
+
+    def test_dashboard_money_fields_never_render_unavailable_placeholders(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value)", source)
+        self.assertNotIn("return 'Unavailable'", source)
+        self.assertIn("money(0)", source)
+        self.assertIn("Select a broker account · placeholder value", source)
+        self.assertIn("Select a broker account to view open positions.", source)
+        self.assertIn("Select a broker account to view recent orders.", source)
 
     def test_dashboard_api_reads_preserve_server_session_account_context(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")

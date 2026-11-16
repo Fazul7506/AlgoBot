@@ -6,7 +6,7 @@
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
   const list=v=>window.AlgoBotFrontendData?.list(v)||[];
   const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  const money=(v,c='USD')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'$'+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):(c?String(c)+' ':'')+(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
   // All terminal API traffic goes through the shared service facade so account
   // headers, transport, timeout, retry and error lifecycle are identical to the
   // dashboard and every other authenticated workspace.
@@ -120,7 +120,7 @@
     const unresolved=or.some(order=>Boolean(order?.validation_context?.reconciliation_required)||['sent','submitted','pending','unknown'].includes(String(order?.status||'').toLowerCase()));
     if(unresolved){executionUncertain=true;result('A previous broker order is still unconfirmed. Terminal order buttons remain locked until broker state is reconciled. Do not retry.','error');syncExecutionControls();}
     else if(executionUncertain&&o.status==='fulfilled'){executionUncertain=false;result('The selected account order list is reconciled. Manual execution is available again.','success');syncExecutionControls();}
-    renderRows('[data-positions]',pr,p.status==='rejected'?'Positions temporarily unavailable.':'No open positions.',r=>`<div class="mini-row"><strong>${esc(marketDisplayName(r))}</strong><span>${esc(r.direction||r.side||'')}</span><b>${esc(money(r.profit??r.pnl,r.currency||'USD'))}</b></div>`);
+    renderRows('[data-positions]',pr,p.status==='rejected'?'Positions temporarily unavailable.':'No open positions.',r=>`<div class="mini-row"><strong>${esc(marketDisplayName(r))}</strong><span>${esc(r.direction||r.side||'')}</span><b>${esc(money(r.profit??r.pnl,r.currency||''))}</b></div>`);
     renderRows('[data-orders]',or,o.status==='rejected'?'Orders temporarily unavailable.':'No orders yet.',r=>`<div class="mini-row"><strong>${esc(marketDisplayName(r))}</strong><span>${esc(r.direction||r.side||'')}</span><b>${esc(r.status||'')}</b></div>`)
 }
   async function loadSignals(){const n=$('[data-signals]');if(!n)return;const seq=++signalsLoadSeq,accountId=String(selectedAccount()?.id||'none'),current=()=>seq===signalsLoadSeq&&accountId===String(selectedAccount()?.id||'none');try{const rows=list(await api('/api/dashboard/signals/?limit=8',{},8000));if(!current())return;n.innerHTML=rows.length?rows.map(r=>`<div class="mini-row"><strong>${esc(r.display_name||r.symbol||'Signal')}</strong><span>${esc(r.direction||r.signal||r.action||'')}</span><b>${esc(r.confidence??r.status??'')}</b></div>`).join(''):'<div class="empty-state">No active strategy signals.</div>'}catch(_){if(current())n.innerHTML='<div class="empty-state">Signals temporarily unavailable.</div>'}}

@@ -39,9 +39,15 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with patch(
-            'apps.brokers.views.BrokerConnectionService.connect',
-            new=AsyncMock(return_value=connection),
+        with (
+            patch(
+                'apps.brokers.views.BrokerConnectionService.connect',
+                new=AsyncMock(return_value=connection),
+            ),
+            patch(
+                'apps.brokers.views.SynchronizationService.sync_account',
+                new=AsyncMock(return_value=(self.account, {'balance': 0})),
+            ),
         ):
             response = self.client.post(
                 reverse('broker-connect'),
@@ -69,9 +75,15 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with patch(
-            'apps.brokers.views.BrokerConnectionService.connect',
-            new=AsyncMock(side_effect=[primary_connection, BrokerConnectionError('secondary account unavailable')]),
+        with (
+            patch(
+                'apps.brokers.views.BrokerConnectionService.connect',
+                new=AsyncMock(side_effect=[primary_connection, BrokerConnectionError('secondary account unavailable')]),
+            ),
+            patch(
+                'apps.brokers.views.SynchronizationService.sync_account',
+                new=AsyncMock(return_value=(self.account, {'balance': 0})),
+            ),
         ):
             response = self.client.post(
                 reverse('broker-connect'),

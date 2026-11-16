@@ -222,90 +222,138 @@ def callback(request):
                 selected_broker_account = persisted
     if selected_broker_account is None:
         return _fail(request, "Deriv authorization succeeded, but AlgoBot could not persist the selected trading account. Your dashboard was not opened.", "deriv_oauth_selected_account_not_persisted")
-    # Establish and persist the canonical broker connection only after the provider
-    # identity check succeeded. OAuth token exchange by itself is not enough to
-    # unlock the dashboard or report the broker as connected.
+    # Verify every account Deriv returned, not only the first account in the
+    # provider's list. Each account gets its own OTP WebSocket and authoritative
+    # snapshot; a DEMO login must never stand in for a REAL account (or vice versa).
+    active_broker_account = None
+    failed_account_checks = []
     try:
-        from asgiref.sync import async_to_sync
-        from apps.brokers.services import BrokerConnectionService, SynchronizationService
+        from asgiref.sync import async_to_sync, sync_to_async
+        from apps.brokers.services import BrokerConnectionService
 
-        validation_stage = "account_scoped_websocket_connect"
+        persisted_accounts_by_id = {
+            account.account_id: account
+            for account in BrokerAccount.objects.filter(
+                user=user, broker=broker, account_id__in=persisted_ids
+            ).select_related("broker")
+        }
+        accounts_to_verify = [
+            persisted_accounts_by_id[account_id]
+            for account_id in persisted_ids
+            if account_id in persisted_accounts_by_id
+        ]
+        connection_service = BrokerConnectionService()
 
-        async def verify_and_sync_selected_account():
-            nonlocal validation_stage
-            # Always validate the selected account via its account-scoped OTP
-            # session, regardless of the optional global identity probe. OAuth
-            # success and a WebSocket handshake alone are not account readiness.
-            validation_stage = "account_scoped_websocket_connect"
-            await asyncio.wait_for(
-                BrokerConnectionService().connect(broker, selected_broker_account),
-                timeout=30.0,
+        async def verify_one_account(account):
+            stage = "account_connection_and_snapshot_verification"
+            try:
+                # OAuth authorization alone does not prove that this individual
+                # trading account can establish its account-scoped OTP session.
+                await asyncio.wait_for(
+                    connection_service.connect_and_sync(broker, account),
+                    timeout=45.0,
+                )
+                stage = "post_sync_readiness_check"
+                await sync_to_async(account.refresh_from_db, thread_sensitive=True)()
+                ready = await sync_to_async(
+                    lambda: (
+                        account.is_connection_eligible
+                        and bool(account.last_synced_at)
+                        and account.account_type in {"demo", "real"}
+                    ),
+                    thread_sensitive=True,
+                )()
+                if not ready:
+                    raise ValueError("Deriv did not confirm a ready account snapshot")
+                return account, None, stage
+            except Exception as exc:
+                return account, exc, stage
+
+        # Verify DEMO and REAL accounts independently. Running the account-scoped
+        # checks concurrently avoids serially multiplying the provider timeout.
+        async def verify_all_accounts():
+            return await asyncio.gather(
+                *(verify_one_account(account) for account in accounts_to_verify)
             )
-            # connect() deliberately clears last_synced_at. Obtain a fresh,
-            # account-scoped financial snapshot before this account can be
-            # selected or used by the trading workspace.
-            validation_stage = "authoritative_snapshot_sync"
-            await asyncio.wait_for(
-                SynchronizationService().sync_account(selected_broker_account),
-                timeout=15.0,
-            )
-            validation_stage = "post_sync_readiness_check"
 
-        async_to_sync(verify_and_sync_selected_account)()
-        selected_broker_account.refresh_from_db()
-        if (
-            not selected_broker_account.is_connection_eligible
-            or not selected_broker_account.last_synced_at
-            or selected_broker_account.account_type not in {"demo", "real"}
-        ):
-            raise ValueError("Deriv did not confirm a ready account snapshot")
-        # The browser session is updated only after the provider identity,
-        # account environment, connection and authoritative snapshot all pass.
-        select_account(request, selected_broker_account)
-        websocket_verification_error = None
+        verification_results = async_to_sync(verify_all_accounts)()
+        verified_accounts = []
+        for account, error, stage in verification_results:
+            if error is None:
+                verified_accounts.append(account)
+                continue
+            error_type = error.__class__.__name__
+            failed_account_checks.append(error_type)
+            logger.error(
+                "deriv_oauth_account_validation_failed stage=%s error_type=%s",
+                stage,
+                error_type,
+            )
+            BrokerConnection.objects.filter(broker_account=account).update(
+                status="degraded",
+                last_ping=None,
+                heartbeat={
+                    "oauth_verified": True,
+                    "connection_validation": "failed",
+                    "error_type": error_type,
+                },
+            )
+
+        if verified_accounts:
+            # Keep the provider's first account as the initial active account
+            # when it passed verification; otherwise use the first independently
+            # verified account. All other verified accounts remain selectable.
+            active_broker_account = next(
+                (
+                    account for account in verified_accounts
+                    if account.account_id == selected_account_id
+                ),
+                verified_accounts[0],
+            )
+            select_account(request, active_broker_account)
+            websocket_verification_error = (
+                "partial_account_verification" if failed_account_checks else None
+            )
+        else:
+            websocket_verification_error = (
+                failed_account_checks[0] if failed_account_checks else "no_verified_accounts"
+            )
     except Exception as exc:
+        active_broker_account = None
         websocket_verification_error = exc.__class__.__name__
-        # The production formatter omits arbitrary structured extras. Put the
-        # stage and exception class in the log message, but never log exception
-        # text, account IDs, URLs, tokens, or provider response payloads.
         logger.error(
-            "deriv_oauth_connection_validation_failed stage=%s error_type=%s",
-            validation_stage,
+            "deriv_oauth_connection_validation_failed stage=account_verification error_type=%s",
             websocket_verification_error,
         )
-        BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
-            status="degraded",
-            last_ping=None,
-            heartbeat={
-                "oauth_verified": True,
-                "connection_validation": "failed",
-                "error_type": websocket_verification_error,
-            },
-        )
-        selected_broker_account.refresh_from_db()
+        if selected_broker_account is not None:
+            BrokerConnection.objects.filter(broker_account=selected_broker_account).update(
+                status="degraded",
+                last_ping=None,
+                heartbeat={
+                    "oauth_verified": True,
+                    "connection_validation": "failed",
+                    "error_type": websocket_verification_error,
+                },
+            )
 
-
-    if selected_broker_account is None:
-        return _fail(
-            request,
-            "AlgoBot could not securely persist the selected Deriv account. No dashboard access was granted.",
-            "deriv_oauth_selected_account_unavailable",
-        )
     DerivOAuthService.clear_oauth_session(request)
     logger.info("deriv_oauth_authorized_account_persisted", extra={"account_id":selected_account_id,"account_count":len(persisted_ids)})
+    if active_broker_account is None:
+        messages.warning(
+            request,
+            "Deriv authorization was received, but the broker connection could not be verified. "
+            "No trading account was activated; retry the connection from Broker Management.",
+        )
+        return redirect("broker_marketplace_page")
     if websocket_verification_error:
         messages.warning(
             request,
-            f"Deriv account {selected_account_id} was saved, but its broker connection could not be verified. "
-            "Demo/real account data and trading remain unavailable until Broker Management completes a successful connection check.",
+            "Deriv connected successfully, but one or more Deriv accounts could not be verified. "
+            "Reconnect the affected account or accounts from Broker Management.",
         )
     else:
-        messages.success(
-            request,
-            f"Deriv account {selected_account_id} was authorized, verified and synchronized. "
-            "Its authoritative account snapshot is ready in AlgoBot.",
-        )
-    if selected_broker_account.is_connection_eligible and selected_broker_account.last_synced_at:
+        messages.success(request, "Deriv connected successfully.")
+    if active_broker_account.is_connection_eligible and active_broker_account.last_synced_at:
         # Do not send a newly onboarded user straight into the workspace until
         # the minimum AlgoBot profile identity fields have been completed.
         request.user.refresh_from_db(fields=["first_name", "last_name"])

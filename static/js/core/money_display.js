@@ -7,8 +7,8 @@
   if (window.__algoBotMoneyDisplay) return;
   window.__algoBotMoneyDisplay = true;
   const symbols = Object.freeze({USD:'$', KES:'KSh ', EUR:'€', GBP:'£', JPY:'¥', CNY:'¥', AUD:'A$', CAD:'C$', CHF:'CHF ', UGX:'USh ', TZS:'TSh ', RWF:'FRw '});
-  const codeFor = currency => String(currency || 'USD').trim().toUpperCase() || 'USD';
-  const symbolFor = currency => symbols[codeFor(currency)] || `${codeFor(currency)} `;
+  const codeFor = currency => String(currency ?? '').trim().toUpperCase();
+  const symbolFor = currency => { const code = codeFor(currency); return code ? (symbols[code] || code + ' ') : ''; };
   const numberFor = value => {
     if (value == null || value === '' || typeof value === 'boolean') return 0;
     const number = Number(value);

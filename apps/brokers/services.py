@@ -204,6 +204,15 @@ class BrokerConnectionService:
              "broker_account_id": account.account_id, "account_type": account.account_type},
         )
         return connection
+
+    async def connect_and_sync(self, broker, account):
+        """Use the canonical account-scoped connection and snapshot pipeline."""
+        if account is None:
+            raise BrokerRoutingError('An account-scoped broker connection is required')
+        connection = await self.connect(broker, account)
+        synced_account, snapshot = await SynchronizationService().sync_account(account)
+        return connection, synced_account, snapshot
+
     async def disconnect(self, broker, account=None):
         if account is None: raise BrokerRoutingError('An account-scoped broker connection is required')
         adapter = await async_broker_adapter(account, broker)

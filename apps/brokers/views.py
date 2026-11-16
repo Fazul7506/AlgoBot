@@ -5,7 +5,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
 from rest_framework import viewsets, permissions, decorators, response, status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied
 from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 from core.api_authentication import BrowserSessionAuthentication
 from core.billing_entitlements import check, effective_plan
@@ -13,11 +13,10 @@ from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionRep
 from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, SynchronizationService
 from .exceptions import BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError, BrokerOrderError
-from core.account_context import select_account, get_active_account
+from core.account_context import select_account, get_active_account, browser_session_matches_user, browser_session_identity_conflicts
 from core.permissions import BrokerOnboardingRequired
 logger=logging.getLogger(__name__)
-BROKER_CONNECT_TIMEOUT_SECONDS=30.0
-BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS=5.0
+BROKER_ACCOUNT_SET_VERIFY_TIMEOUT_SECONDS=45.0
 BROKER_SYNC_TIMEOUT_SECONDS=15.0
 BROKER_SWITCH_CONNECT_TIMEOUT_SECONDS=12.0
 BROKER_SWITCH_SYNC_TIMEOUT_SECONDS=10.0
@@ -48,15 +47,35 @@ def _prepare_user_broker_accounts(user, broker, primary_account):
     return accounts
 
 async def _verify_user_broker_accounts(accounts, broker, primary_account_id):
-    connected=[];failed=[];service=BrokerConnectionService()
-    for account in accounts:
-        if account.pk == primary_account_id:connected.append(account.pk);continue
-        try:await service.connect(broker,account);connected.append(account.pk)
-        except (BrokerAuthenticationError,BrokerConnectionError,BrokerRoutingError) as exc:failed.append({'account_id':account.account_id,'error':str(exc)})
-        except Exception:
-            logger.exception('broker_account_autoconnect_failed',extra={'account_id':account.account_id,'broker_id':broker.pk})
-            failed.append({'account_id':account.account_id,'error':'Broker account verification failed'})
-    return connected,failed
+    service = BrokerConnectionService()
+
+    async def verify(account):
+        try:
+            connection, _, _ = await service.connect_and_sync(broker, account)
+            return account, connection, None
+        except Exception as exc:
+            return account, None, exc
+
+    outcomes = await asyncio.gather(*(verify(account) for account in accounts))
+    connected = []
+    failed = []
+    primary_connection = None
+    for account, connection, error in outcomes:
+        if error is None:
+            connected.append(account.pk)
+            if account.pk == primary_account_id:
+                primary_connection = connection
+            continue
+        if isinstance(error, (BrokerAuthenticationError, BrokerConnectionError, BrokerRoutingError)):
+            detail = str(error)
+        else:
+            logger.error(
+                'broker_account_autoconnect_failed',
+                extra={'broker_account_pk': account.pk, 'broker_id': broker.pk, 'error_type': type(error).__name__},
+            )
+            detail = 'Broker account verification failed'
+        failed.append({'account_id': account.account_id, 'error': detail})
+    return connected, failed, primary_connection
 
 class JWTAuthenticationRequired(APIException):
     status_code=status.HTTP_401_UNAUTHORIZED;default_detail='Authentication credentials were not provided.';default_code='not_authenticated'
@@ -73,7 +92,12 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
     # while the authenticated Django session is still used by select_account()
     # to persist the active account context.
     authentication_classes=[JWTAuthentication,BrowserSessionAuthentication]
+
     def get_queryset(self):
+        if browser_session_identity_conflicts(self.request, self.request.user):
+            raise PermissionDenied(
+                'Your browser session and broker API credentials identify different users. Refresh your AlgoBot session before accessing broker accounts.'
+            )
         connected = BrokerConnection.objects.filter(status='connected').only('id','broker_account_id','status')
         return (BrokerAccount.objects.filter(user=self.request.user)
                 .select_related('broker')
@@ -97,9 +121,8 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         if requested and requested!=actual:return response.Response({'detail':f'Selected account is {actual}, not {requested}.'},status=status.HTTP_409_CONFLICT)
         # A browser JWT can authenticate a different principal than the Django session cookie.
         # Never write one user's account selection into another user's session.
-        session_user_id = request.session.get('_auth_user_id')
-        if session_user_id and str(session_user_id) != str(request.user.pk):
-            return response.Response({'detail':'The browser session and API credentials belong to different users.'},status=status.HTTP_403_FORBIDDEN)
+        if not browser_session_matches_user(request, request.user):
+            return response.Response({'detail':'Sign in to AlgoBot in this browser session before selecting a broker account. The browser session and API credentials must identify the same user.'},status=status.HTTP_403_FORBIDDEN)
         # Account lists may include OAuth-authorized DEMO/REAL accounts before a
         # per-account BrokerConnection row exists. Establish and verify that
         # account-scoped connection here; never select an unverified account.
@@ -167,6 +190,11 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         return response.Response({'switch_enabled':True,'active_account':serialized,'account':serialized,'previous_account_id':previous_id,'active_account_id':account.id})
     @decorators.action(detail=False,methods=['get'])
     def active(self,request):
+        if not browser_session_matches_user(request, request.user):
+            return response.Response(
+                {'detail': 'A matching authenticated browser session is required to resolve the active broker account.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         account=get_active_account(request.user,request=request)
         if not account:return response.Response({'active_account':None,'active_account_id':None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH})
         data=BrokerAccountSerializer(account,context={'request':request}).data;return response.Response({'active_account':data,'active_account_id':account.id,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH})
@@ -237,10 +265,21 @@ def connect_broker(request):
     allowed,used,limit=check(request.user,'broker_accounts',amount=0 if already_counted else 1)
     if not allowed:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity would be exceeded by this connection. Upgrade your plan or disconnect another account first.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'requested':1,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
-        connection=_run_bounded(BrokerConnectionService().connect(broker,account),timeout=BROKER_CONNECT_TIMEOUT_SECONDS)
+        target_accounts = _prepare_user_broker_accounts(request.user, broker, account)
+        connected_ids, failed_accounts, connection = _run_bounded(
+            _verify_user_broker_accounts(target_accounts, broker, account.pk),
+            timeout=BROKER_ACCOUNT_SET_VERIFY_TIMEOUT_SECONDS,
+        )
+        if connection is None:
+            primary_error = next(
+                (item['error'] for item in failed_accounts if item['account_id'] == account.account_id),
+                'The selected broker account could not be verified.',
+            )
+            return response.Response(
+                {'detail': primary_error, 'code': 'BROKER_ACCOUNT_CONNECTION_FAILED', 'failed_accounts': failed_accounts},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         account.refresh_from_db()
-        target_accounts=_prepare_user_broker_accounts(request.user,broker,account)
-        connected_ids,failed_accounts=_run_bounded(_verify_user_broker_accounts(target_accounts,broker,account.pk),timeout=BROKER_SECONDARY_VERIFY_TIMEOUT_SECONDS)
     except BrokerAuthenticationError as exc:return response.Response({'detail':str(exc),'status':'credentials_expired'},status=status.HTTP_401_UNAUTHORIZED)
     except BrokerConnectionError as exc:return response.Response({'detail':str(exc),'status':'unavailable'},status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)

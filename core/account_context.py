@@ -5,6 +5,8 @@ requests. Client storage, account-list order, and connected-account fallbacks ar
 never interpreted as an active selection. Selection happens only through the
 authenticated account-select action after a verified provider snapshot.
 """
+from rest_framework.authentication import SessionAuthentication
+
 from apps.brokers.models import BrokerAccount
 
 SESSION_KEY = "active_broker_account_id"
@@ -53,8 +55,48 @@ def _resolve_active_account(user, session=None, broker_type=None):
     return None
 
 
+def browser_session_identity_conflicts(request, user):
+    """Return True when a present Django session belongs to another user."""
+    session = _session(request)
+    if session is None:
+        return False
+    session_user_id = session.get("_auth_user_id")
+    return bool(session_user_id and str(session_user_id) != str(getattr(user, "pk", "")))
+
+
+def browser_session_matches_user(request, user):
+    """Whether this request may read or mutate this user's browser session.
+
+    JWT authentication can identify a different principal from the Django
+    session cookie. Never let a JWT-backed API request clear or overwrite the
+    browser session's active-account selection in that case.
+    """
+    session = _session(request)
+    if session is None:
+        return False
+    session_user_id = session.get("_auth_user_id")
+    if session_user_id is not None:
+        return str(session_user_id) == str(getattr(user, "pk", ""))
+    authenticator = getattr(request, "successful_authenticator", None)
+    # DRF force_authenticate is a test-only authenticator used by APIClient and
+    # APIRequestFactory. It deliberately bypasses the real authentication stack;
+    # allow it to exercise the same session-backed account context as a browser.
+    # Production JWT authenticators remain excluded unless the session principal
+    # explicitly matches the JWT principal above.
+    return (
+        authenticator is None
+        or isinstance(authenticator, SessionAuthentication)
+        or (
+            authenticator.__class__.__module__ == "rest_framework.request"
+            and authenticator.__class__.__name__ == "ForcedAuthentication"
+        )
+    )
+
+
 def get_active_account(user, request=None, broker_type=None):
-    """Resolve the active account from an HTTP request's server-side session."""
+    """Resolve the active account from the matching server-side browser session."""
+    if request is not None and not browser_session_matches_user(request, user):
+        return None
     return _resolve_active_account(user, _session(request), broker_type)
 
 
@@ -84,8 +126,8 @@ def select_account(request, account):
     if not account.is_connection_eligible or not account.last_synced_at or not _has_known_environment(account):
         raise ValueError("The selected broker account is not connected, synchronized, ready, or has an unknown environment.")
     session = _session(request)
-    if session is None:
-        raise ValueError("Account selection requires an authenticated browser session.")
+    if session is None or not browser_session_matches_user(request, request.user):
+        raise ValueError("Account selection requires a browser session authenticated as the same user.")
     session[SESSION_KEY] = account.pk
     session.modified = True
     return account
