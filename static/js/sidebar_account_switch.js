@@ -5,7 +5,7 @@
   window.__algoBotSidebarAccountSwitch = true;
   const $=(s,r=document)=>r.querySelector(s);
   const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  const money=(v,c='')=>window.AlgoBotMoney?.format?window.AlgoBotMoney.format(v,c):'(Number.isFinite(Number(v))?Number(v):0).toFixed(2);
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const typeOf=a=>String(a?.account_type||a?.credentials?.account_type||'unknown').toLowerCase();
   let accounts=[],switching=false;
   const context=()=>window.AlgoBotAccountContext;
