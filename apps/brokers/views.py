@@ -285,7 +285,44 @@ def connect_broker(request):
     except BrokerRoutingError as exc:return response.Response({'detail':str(exc),'status':'blocked'},status=status.HTTP_409_CONFLICT)
     except asyncio.TimeoutError:return response.Response({'detail':'Broker connection timed out while waiting for the provider.','status':'timeout'},status=status.HTTP_504_GATEWAY_TIMEOUT)
     except Exception as exc:logger.exception('broker_connection_unexpected_failure',extra={'account_id':account.id});return response.Response({'detail':'Broker connection failed unexpectedly.','status':'error','error_code':exc.__class__.__name__},status=status.HTTP_502_BAD_GATEWAY)
-    account.refresh_from_db();all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'));target_ids={item.pk for item in target_accounts};payload={'connection':BrokerConnectionSerializer(connection).data,'account':BrokerAccountSerializer(account,context={'request':request}).data,'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,'connected_account_ids':connected_ids,'failed_accounts':failed_accounts,'all_accounts_ready':not failed_accounts and set(connected_ids)==target_ids,'partial_connection':bool(failed_accounts)}
+    account.refresh_from_db()
+    # Connecting a broker account and selecting the workspace routing account
+    # are distinct operations. When this is the first verified account for a
+    # matching authenticated browser session, activate the account just
+    # connected so every workspace service sees the same server-side context.
+    # Never replace an already selected account or write into a mismatched /
+    # token-only browser session.
+    active_account = get_active_account(request.user, request=request)
+    auto_selected = False
+    if active_account is None and browser_session_matches_user(request, request.user):
+        try:
+            select_account(request, account)
+            auto_selected = True
+        except ValueError as exc:
+            logger.warning(
+                'broker_account_connected_but_not_auto_selected',
+                extra={
+                    'broker_account_pk': account.pk,
+                    'broker_id': broker.pk,
+                    'reason': str(exc),
+                },
+            )
+    account.refresh_from_db()
+    all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'))
+    target_ids={item.pk for item in target_accounts}
+    serialized_account=BrokerAccountSerializer(account,context={'request':request}).data
+    payload={
+        'connection':BrokerConnectionSerializer(connection).data,
+        'account':serialized_account,
+        'active_account':serialized_account if serialized_account.get('is_active') else None,
+        'active_account_id':account.pk if serialized_account.get('is_active') else None,
+        'auto_selected':auto_selected,
+        'accounts':BrokerAccountSerializer(all_accounts,many=True,context={'request':request}).data,
+        'connected_account_ids':connected_ids,
+        'failed_accounts':failed_accounts,
+        'all_accounts_ready':not failed_accounts and set(connected_ids)==target_ids,
+        'partial_connection':bool(failed_accounts),
+    }
     return response.Response(payload)
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
