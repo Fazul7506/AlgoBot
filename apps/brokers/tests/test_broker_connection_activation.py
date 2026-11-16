@@ -100,6 +100,42 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertEqual(payload['failed_accounts'][0]['account_id'], secondary.account_id)
 
 
+
+    def test_first_successfully_connected_account_becomes_server_active_account(self):
+        from django.utils import timezone
+        from core.account_context import SESSION_KEY
+        from unittest.mock import AsyncMock, patch
+
+        self.account.credentials = {
+            "account_type": "demo",
+            "financial_snapshot_fields": ["balance", "currency", "equity", "margin", "free_margin"],
+        }
+        self.account.balance = "125.50"
+        self.account.currency = "USD"
+        self.account.last_synced_at = timezone.now()
+        self.account.save(update_fields=["credentials", "balance", "currency", "last_synced_at"])
+        connection = BrokerConnection.objects.create(
+            broker=self.broker, broker_account=self.account, status="connected"
+        )
+
+        with patch(
+            "apps.brokers.views._verify_user_broker_accounts",
+            new=AsyncMock(return_value=([self.account.pk], [], connection)),
+        ):
+            response = self.client.post(
+                reverse("broker-connect"),
+                data={"broker_id": self.broker.id, "account_id": self.account.id},
+                HTTP_ORIGIN="http://testserver",
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["auto_selected"])
+        self.assertEqual(payload["active_account_id"], self.account.pk)
+        self.assertTrue(payload["account"]["is_active"])
+        self.assertEqual(self.client.session.get(SESSION_KEY), self.account.pk)
+
+
     def _verify_selected_account(self, account_id, account_type, is_virtual):
         self.account.account_id = account_id
         self.account.credentials = {"account_type": account_type}
