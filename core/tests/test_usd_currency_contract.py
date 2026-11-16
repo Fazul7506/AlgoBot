@@ -47,6 +47,10 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
             "static/js/enterprise_templates.js",
             "static/js/topbar_security_controls.js",
             "static/js/core/broker_ui_consistency_guard.js",
+            "static/js/risk.js",
+            "static/js/portfolio_dashboard.js",
+            "static/js/signals_workspace_rebuild.js",
+            "static/js/trading_terminal.js",
         )
         for path in paths:
             with self.subTest(path=path):
@@ -84,6 +88,8 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertNotIn("${c} ", terminal)
         orders = self.read("static/js/orders.js")
         self.assertIn("esc(money(r.stake,r.currency||''))", orders)
+        terminal_ui = self.read("static/js/trading_terminal.js")
+        self.assertIn("'USD'", terminal_ui)
 
     def test_server_rendered_billing_and_monitoring_money_use_usd(self):
         billing = self.read("templates/core/billing_success.html")
@@ -91,3 +97,8 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         self.assertNotIn("invoice.currency|upper", billing)
         monitoring = self.read("templates/monitoring/dashboard.html")
         self.assertIn("metric.unit|upper == 'USD'", monitoring)
+        trading = self.read("templates/core/trading.html")
+        self.assertIn("Stake (USD)", trading)
+        risk = self.read("templates/core/risk.html")
+        self.assertIn("Current account balance (USD)", risk)
+        self.assertIn("Planned stake (USD)", risk)
