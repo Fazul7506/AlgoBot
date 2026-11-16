@@ -6,11 +6,12 @@
   const $ = (selector) => document.querySelector(selector);
   const list = (value) => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
   const esc = (value) => { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; };
-  const money = (value) => {
+  const money = value => {
     const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value);
     return window.AlgoBotMoney?.format
       ? window.AlgoBotMoney.format(safeValue)
-      : '
+      : '$' + safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
   const empty = (message) => `<div class="empty-state">${esc(message)}</div>`;
