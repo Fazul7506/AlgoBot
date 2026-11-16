@@ -27,6 +27,21 @@ def env_list(name: str, default: Iterable[str] = ()) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def deployment_cookie_domain(name: str, default: str, *, preview: bool | None = None) -> str | None:
+    """Return the cookie domain for the deployment's public browser origin.
+
+    Render assigns an ``*.onrender.com`` hostname to ordinary production
+    services as well as preview services. That hostname therefore cannot be
+    used to infer preview status. Only an explicit preview flag may disable
+    the shared production cookie domain needed by the UI/API subdomains.
+    """
+    if preview is None:
+        preview = env_bool("ALGOBOT_PREVIEW_DEPLOYMENT", False)
+    if preview:
+        return None
+    return os.getenv(name, default) or None
+
+
 def validate_required_settings(*, production: bool, values: dict[str, str]) -> None:
     """Raise a clear error when production-critical configuration is missing."""
     if not production:
