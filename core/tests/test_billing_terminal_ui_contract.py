@@ -182,11 +182,14 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         terminal = Path("static/js/trading_terminal.js").read_text(encoding="utf-8")
         self.assertIn("const api=(u,o={},t=10000)=>{const options={...o};", terminal)
         self.assertNotIn("const options={credentials:'include',...o}", terminal)
-        # The shared data contract scopes session cookies to account-context routes
-        # and uses bearer auth for preview/order/AI API mutations.
+        # The shared data contract sends the authenticated session only to
+        # server-account-scoped workspace routes, while bearer tokens remain
+        # the API authentication authority for preview/order/AI mutations.
         client = Path("static/js/core/frontend_data_contract.js").read_text(encoding="utf-8")
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)
         self.assertIn("headers.set('Authorization','Bearer '+accessToken)", client)
+        self.assertIn("protectedPublicPaths.test(path)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|user-modules)", client)
 
     def test_shared_service_runtime_never_sends_account_override_header(self):
         from pathlib import Path
@@ -240,7 +243,8 @@ class BillingTerminalUiContractTests(SimpleTestCase):
         self.assertNotIn("ensureCsrfCookie", client)
         self.assertIn("isSessionAccountSelectUrl", client)
         self.assertIn("isSessionAccountContextUrl", client)
-        self.assertIn("path==='/api/brokers/accounts/'||path==='/api/brokers/accounts/active/'", client)
+        self.assertIn("protectedPublicPaths.test(path)", client)
+        self.assertIn("(?:market|signals|strategies|analysis|risk|deriv|user-modules)", client)
         self.assertIn("ensureApiAccessToken", client)
         self.assertIn("headers.set('Authorization'", client)
         self.assertIn("credentials:sessionAccountContext?'include':'omit'", client)

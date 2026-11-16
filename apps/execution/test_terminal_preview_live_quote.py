@@ -74,7 +74,10 @@ class TerminalLivePreviewTests(TestCase):
             format="json",
         )
         force_authenticate(request, user=self.user)
-        return OrderViewSet.as_view({"post": "preview"})(request)
+        with patch("apps.execution.views.get_active_account", return_value=self.account), patch(
+            "apps.execution.serializers.get_active_account", return_value=self.account
+        ):
+            return OrderViewSet.as_view({"post": "preview"})(request)
 
     def adapter(self, quote=None, contracts=None):
         return SimpleNamespace(

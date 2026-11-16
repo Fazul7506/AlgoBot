@@ -11,6 +11,7 @@ from django.test import TestCase, SimpleTestCase
 from unittest.mock import patch
 from django.utils import timezone
 from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.brokers.exceptions import BrokerConnectionError, BrokerOrderError
 from apps.brokers.models import Broker, BrokerAccount, BrokerConnection, Position
@@ -60,13 +61,13 @@ class OrderSerializerRegressionTests(APITestCase):
         )
         self.assertEqual(OrderViewSet._environment(account), 'real')
 
-    def test_idempotent_replay_requires_matching_broker_account(self):
+    def test_idempotent_replay_uses_server_selected_account_without_client_account_id(self):
         user = get_user_model().objects.create_user(username='idempotency-account', password='test-password')
         broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
         account = BrokerAccount.objects.create(
             user=user, broker=broker, account_id='IDEMPOTENCY-ACCOUNT', status='active'
         )
-        Order.objects.create(
+        order = Order.objects.create(
             user=user, broker_account=account, symbol='R_100', direction='buy',
             order_type='market', stake='1', client_request_id='same-client-id',
         )
@@ -74,9 +75,44 @@ class OrderSerializerRegressionTests(APITestCase):
             '/api/orders/', {'client_request_id': 'same-client-id'}, format='json'
         )
         force_authenticate(request, user=user)
-        result = OrderViewSet.as_view({'post': 'create'})(request)
+        with patch('apps.execution.views.get_active_account', return_value=account):
+            result = OrderViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data['id'], order.id)
+
+    def test_order_create_rejects_client_account_without_server_selection(self):
+        user = get_user_model().objects.create_user(username='no-active-order-account', password='test-password')
+        broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        account = BrokerAccount.objects.create(user=user, broker=broker, account_id='CLIENT-ONLY', status='active')
+        request = APIRequestFactory().post('/api/orders/', {'broker_account': account.pk}, format='json')
+        force_authenticate(request, user=user)
+        with patch('apps.execution.views.get_active_account', return_value=None):
+            result = OrderViewSet.as_view({'post': 'create'})(request)
         self.assertEqual(result.status_code, 409)
-        self.assertEqual(result.data['code'], 'CLIENT_REQUEST_ACCOUNT_REQUIRED')
+        self.assertEqual(result.data['code'], 'ACTIVE_BROKER_ACCOUNT_REQUIRED')
+
+    def test_order_create_rejects_account_override_against_server_selection(self):
+        user = get_user_model().objects.create_user(username='mismatched-order-account', password='test-password')
+        broker = Broker.objects.create(name='Deriv', broker_type='deriv', status='active')
+        active = BrokerAccount.objects.create(user=user, broker=broker, account_id='ACTIVE', status='active')
+        other = BrokerAccount.objects.create(user=user, broker=broker, account_id='OTHER', status='active')
+        request = APIRequestFactory().post('/api/orders/', {'broker_account': other.pk}, format='json')
+        force_authenticate(request, user=user)
+        with patch('apps.execution.views.get_active_account', return_value=active):
+            result = OrderViewSet.as_view({'post': 'create'})(request)
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.data['code'], 'ORDER_ACCOUNT_CONTEXT_MISMATCH')
+
+    def test_serializer_rejects_non_active_account_even_when_user_owns_it(self):
+        user = SimpleNamespace(id=1, is_authenticated=True)
+        active = SimpleNamespace(pk=7)
+        account = SimpleNamespace(
+            pk=8, user_id=1, status='active', broker=SimpleNamespace(status='active')
+        )
+        serializer = OrderSerializer(context={'request': SimpleNamespace(user=user)})
+        with patch('apps.execution.serializers.get_active_account', return_value=active):
+            with self.assertRaises(DRFValidationError):
+                serializer.validate_broker_account(account)
 
     def test_terminal_order_values_are_normalized(self):
         serializer = OrderSerializer()
@@ -90,7 +126,10 @@ class OrderSerializerRegressionTests(APITestCase):
         request = APIRequestFactory().post('/api/orders/preview/', {'symbol': '1HZ100V', 'direction': 'buy', 'order_type': 'market', 'stake': '1'}, format='json')
         force_authenticate(request, user=user)
         view = OrderViewSet.as_view({'post': 'preview'})
-        with patch.object(OrderSerializer, 'is_valid', side_effect=RuntimeError('synthetic preview failure')):
+        active_account = SimpleNamespace(pk=7)
+        with patch('apps.execution.views.get_active_account', return_value=active_account), patch.object(
+            OrderSerializer, 'is_valid', side_effect=RuntimeError('synthetic preview failure')
+        ):
             result = view(request)
         self.assertEqual(result.status_code, 503)
         self.assertEqual(result.data['code'], 'PREVIEW_INTERNAL_ERROR')

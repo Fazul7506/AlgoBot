@@ -42,6 +42,25 @@ class OrderViewSet(viewsets.ModelViewSet):
         return queryset
     @staticmethod
     def _environment(account): return str(getattr(account, 'account_type', '') or '').lower().strip() if account else ''
+    def _server_selected_account(self, request):
+        account = get_active_account(request.user, request=request)
+        if account is None:
+            return None, response.Response({
+                'status': 'rejected',
+                'code': 'ACTIVE_BROKER_ACCOUNT_REQUIRED',
+                'detail': 'Select and synchronize a broker account before requesting an order action.',
+                'retryable': False,
+            }, status=status.HTTP_409_CONFLICT)
+        supplied = request.data.get('broker_account')
+        if supplied not in (None, '') and str(supplied) != str(account.pk):
+            return None, response.Response({
+                'status': 'rejected',
+                'code': 'ORDER_ACCOUNT_CONTEXT_MISMATCH',
+                'detail': 'The submitted account does not match the server-selected active broker account.',
+                'retryable': False,
+            }, status=status.HTTP_409_CONFLICT)
+        return account, None
+
     @staticmethod
     def _safe_client_context(data, account):
         context = data.get('routing_context') or data.get('validation_context') or {}
@@ -63,21 +82,23 @@ class OrderViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if not isinstance(request.data, dict):
             return response.Response({'status':'rejected','code':'ORDER_PAYLOAD_INVALID','detail':'A JSON object is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        active_account, account_error = self._server_selected_account(request)
+        if account_error:
+            return account_error
         client_request_id = str(request.data.get('client_request_id') or request.data.get('client_order_id') or '').strip()
         if client_request_id:
             existing = Order.objects.filter(user=request.user, client_request_id=client_request_id).first()
             if existing:
-                requested_account = str(request.data.get('broker_account') or '').strip()
-                if not requested_account:
-                    return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_REQUIRED','detail':'A broker account must be specified to safely replay this client request ID.','retryable':False}, status=status.HTTP_409_CONFLICT)
-                if str(existing.broker_account_id) != requested_account:
+                if str(existing.broker_account_id) != str(active_account.pk):
                     return response.Response({'status':'rejected','code':'CLIENT_REQUEST_ACCOUNT_MISMATCH','detail':'This client request ID belongs to a different broker account and cannot be replayed in the current account context.','retryable':False}, status=status.HTTP_409_CONFLICT)
                 return response.Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         allowed_orders, used_orders, order_limit = check(request.user, 'orders')
         if not allowed_orders:
             plan = effective_plan(request.user)
             return response.Response({'status':'rejected','code':'ORDER_LIMIT_REACHED','detail':f'Your {plan.name} order allowance has been reached for today.','plan':plan.key,'used':used_orders,'limit':order_limit}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-        serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True)
+        order_payload = dict(request.data)
+        order_payload['broker_account'] = active_account.pk
+        serializer = self.get_serializer(data=order_payload); serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data); account = data.get('broker_account'); environment = self._environment(account); data['validation_context'] = self._safe_client_context(request.data, account)
         if environment == 'real':
             allowed, used, limit = check_live_order(request.user)
@@ -102,7 +123,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=False, methods=['post'])
     def preview(self, request):
         try:
-            serializer = self.get_serializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
+            active_account, account_error = self._server_selected_account(request)
+            if account_error:
+                return account_error
+            order_payload = dict(request.data)
+            order_payload['broker_account'] = active_account.pk
+            serializer = self.get_serializer(data=order_payload); serializer.is_valid(raise_exception=True); data = serializer.validated_data; account = data.get('broker_account')
             if account is None or account.user_id != request.user.id: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_REQUIRED','detail':'Select a connected broker account.'}, status=status.HTTP_409_CONFLICT)
             if not account.is_connection_eligible: return response.Response({'status':'rejected','code':'BROKER_ACCOUNT_NOT_READY','detail':'The selected broker account is not connected or its credentials are not usable.'}, status=status.HTTP_409_CONFLICT)
             allowed_orders, used_orders, order_limit = check(request.user, 'orders')
