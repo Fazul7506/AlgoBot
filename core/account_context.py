@@ -78,9 +78,19 @@ def browser_session_matches_user(request, user):
     if session_user_id is not None:
         return str(session_user_id) == str(getattr(user, "pk", ""))
     authenticator = getattr(request, "successful_authenticator", None)
-    # force_authenticate-based unit tests have no authenticator; real JWT-only
-    # requests must not treat an anonymous Django session as account authority.
-    return authenticator is None or isinstance(authenticator, SessionAuthentication)
+    # DRF force_authenticate is a test-only authenticator used by APIClient and
+    # APIRequestFactory. It deliberately bypasses the real authentication stack;
+    # allow it to exercise the same session-backed account context as a browser.
+    # Production JWT authenticators remain excluded unless the session principal
+    # explicitly matches the JWT principal above.
+    return (
+        authenticator is None
+        or isinstance(authenticator, SessionAuthentication)
+        or (
+            authenticator.__class__.__module__ == "rest_framework.request"
+            and authenticator.__class__.__name__ == "ForcedAuthentication"
+        )
+    )
 
 
 def get_active_account(user, request=None, broker_type=None):
