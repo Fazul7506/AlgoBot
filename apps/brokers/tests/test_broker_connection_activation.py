@@ -182,7 +182,8 @@ class BrokerConnectionActivationTests(TestCase):
         payload = response.json()
         self.assertFalse(payload["auto_selected"])
         self.assertEqual(self.client.session.get(SESSION_KEY), self.account.pk)
-        self.assertIsNone(payload["active_account_id"])
+        self.assertEqual(payload["active_account_id"], self.account.pk)
+        self.assertEqual(payload["active_account"]["id"], self.account.pk)
         self.assertFalse(payload["account"]["is_active"])
 
 
