@@ -2,6 +2,7 @@
  * AlgoBot uses USD exclusively: every monetary value is rendered with "$".
  * Currency formatting is presentation-only; this module never converts or
  * mutates broker/API values. Non-monetary values must not use this formatter.
+ * Bare numeric text inside .money-value elements is normalized to USD as a final UI guard.
  */
 (() => {
   'use strict';
