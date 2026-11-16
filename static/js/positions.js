@@ -6,7 +6,152 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const state = { rows: [], status: 'loading', meta: null, socket: null, retry: 0, timer: null, reconnectTimer: null, accountId: null, loadSeq: 0 };
   const list = value => Array.isArray(value) ? value : (Array.isArray(value?.data) ? value.data : (Array.isArray(value?.results) ? value.results : []));
-  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : (currency ? String(currency) + ' ' : '') + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : ' (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const accountId = () => {
+    const account = window.AlgoBotAccountContext?.getSelected?.()||null;
+    return account?.id == null ? null : String(account.id);
+  };
+  const dateText = value => {
+    if (!value) return 'Unavailable';
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Unavailable';
+  };
+  const knownNumber = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+  function setState(status, message) {
+    state.status = status;
+    const a = $('[data-page-status]'), b = $('[data-position-state]');
+    if (a) a.textContent = message || status;
+    if (b) { b.textContent = message || status; b.className = 'positions-state-' + status; }
+  }
+  function summary() {
+    const count = $('[data-record-count]');
+    const pnl = $('[data-page-pnl]');
+    const updated = $('[data-page-updated]');
+    if (count) count.textContent = state.status === 'unavailable' ? 'Unavailable' : String(state.rows.length);
+    const known = state.rows.filter(r => knownNumber(r.profit)).map(r => Number(r.profit));
+    const currency = state.rows.find(r => r.currency)?.currency || '';
+    if (pnl) pnl.textContent = money(known.length ? known.reduce((a,b)=>a+b,0) : 0,currency || '');
+    if (updated) updated.textContent = state.meta?.synchronized_at ? new Date(state.meta.synchronized_at).toLocaleString() : '—';
+  }
+  function filtered() {
+    const q = String($('[data-page-search]')?.value || '').trim().toLowerCase();
+    const status = String($('[data-position-status]')?.value || '').toLowerCase();
+    const order = String($('[data-position-order]')?.value || 'newest');
+    let rows = state.rows.filter(r => (!status || String(r.status || '').toLowerCase() === status) && (!q || [r.display_name,r.symbol,r.contract_id,r.transaction_id,r.contract_type].some(v => String(v ?? '').toLowerCase().includes(q))));
+    const value = r => order === 'pnl' || order === '-pnl' ? (knownNumber(r.profit) ? Number(r.profit) : NaN) : order === 'stake' ? (knownNumber(r.stake) ? Number(r.stake) : NaN) : order === 'expiry' ? (Date.parse(r.expiry_time || '') || NaN) : Date.parse(r.broker_timestamp || r.opened_at || '') || 0;
+    const dir = order === 'oldest' || order === '-pnl' ? 1 : -1;
+    rows.sort((a,b) => { const av=value(a),bv=value(b); return (Number.isFinite(av)&&Number.isFinite(bv)) ? (av-bv)*dir : 0; });
+    return rows;
+  }
+  function render() {
+    const tbody = $('tbody', $('[data-page-table]'));
+    if (!tbody) return;
+    const rows = filtered();
+    if (!rows.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">' + (state.status === 'loading' ? 'Synchronizing with the broker…' : state.status === 'unavailable' ? 'Broker position data is unavailable.' : state.status === 'stale' ? 'No cached open positions are available.' : 'The broker reports no open positions.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const pnlKnown = knownNumber(r.profit), pnl = pnlKnown ? Number(r.profit) : NaN, cls = pnlKnown ? (pnl > 0 ? 'is-profit' : pnl < 0 ? 'is-loss' : '') : 'is-unknown';
+      return '<tr data-position-id="' + esc(r.contract_id) + '" tabindex="0"><td><div class="position-instrument"><span class="market-inline-label">' + (window.AlgoBotMarketPicker?.marketIcon(r)||'') + '<strong>' + esc(window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''}) || r.display_name || 'Market instrument') + '</strong></span><small>' + esc(r.contract_type || 'Broker contract') + '</small></div></td><td><div class="position-contract"><strong>' + esc(r.contract_type || 'Unavailable') + '</strong><code>' + esc(r.contract_id) + '</code></div></td><td>' + money(r.stake,r.currency) + '</td><td>' + money(r.entry_price,r.currency) + '</td><td>' + money(r.current_price,r.currency) + '</td><td><span class="position-pnl ' + cls + '">' + money(pnlKnown ? pnl : 0,r.currency || '') + '</span></td><td>' + esc(dateText(r.expiry_time)) + '</td><td><span class="position-status">' + esc(r.status || 'unknown') + '</span></td></tr>';
+    }).join('');
+    rows.forEach(r => {
+      const row = [...tbody.querySelectorAll('tr[data-position-id]')].find(el => el.getAttribute('data-position-id') === String(r.contract_id));
+      row?.addEventListener('click',() => detail(r));
+      row?.addEventListener('keydown',e => { if(e.key === 'Enter' || e.key === ' '){e.preventDefault();detail(r);} });
+    });
+  }
+  function detail(r) {
+    const panel=$('[data-position-detail]'), grid=$('[data-position-detail-grid]');
+    if(!panel || !grid) return;
+    const fields=[['Contract ID',r.contract_id],['Transaction ID',r.transaction_id],['Broker order ID',r.broker_order_id],['Market',window.AlgoBotMarketPicker?.marketName({value:r.symbol||'',textContent:r.display_name||r.symbol||''})||r.display_name||'Market instrument'],['Contract type',r.contract_type],['Direction',r.direction],['Stake',money(r.stake,r.currency)],['Entry price',money(r.entry_price,r.currency)],['Current price',money(r.current_price,r.currency)],['Exit price',money(r.exit_price,r.currency)],['Payout',money(r.payout,r.currency)],['P/L',money(r.profit,r.currency)],['P/L %',knownNumber(r.roi) ? Number(r.roi).toFixed(4) + '%' : 'Unavailable'],['Currency',r.currency],['Status',r.status],['Opened',dateText(r.opened_at)],['Expiry',r.expiry_time ? new Date(r.expiry_time).toLocaleString() : 'Unavailable'],['Closed',dateText(r.closed_at)],['Settlement',dateText(r.settlement_time)],['Broker timestamp',dateText(r.broker_timestamp)]];
+    grid.innerHTML=fields.map(x => '<div><dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd></div>').join('');
+    panel.hidden=false;
+  }
+  async function load() {
+    const requestSeq = ++state.loadSeq;
+    const requestedAccountId = accountId();
+    if (!requestedAccountId) {
+      state.rows=[]; state.meta=null; setState('unavailable','No confirmed broker account selected'); summary(); render(); return;
+    }
+    setState('loading','Synchronizing broker positions…');
+    try {
+      const response=await window.AlgoBotFrontendData.request('/api/positions/open/',{},10000);
+      if (requestSeq !== state.loadSeq || requestedAccountId !== accountId()) return;
+      state.rows=list(response); state.meta=response?.meta || null;
+      if(response?.status === 'ready') setState('ready','Live broker position data');
+      else if(response?.status === 'empty') setState('ready','Broker reports no open positions');
+      else if(response?.status === 'stale') setState('stale','Broker unavailable — cached broker data');
+      else setState('unavailable','Broker position data unavailable');
+      summary(); render();
+    } catch(error) {
+      if (requestSeq !== state.loadSeq || requestedAccountId !== accountId()) return;
+      state.rows=[]; state.meta=null; setState('unavailable','Broker position data unavailable'); summary(); render();
+    }
+  }
+  function schedule(){ clearTimeout(state.timer); state.timer=setTimeout(load,250); }
+  function reconnect() {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+    const previous = state.socket;
+    state.socket = null;
+    if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(4001, 'account context changed');
+    connect();
+  }
+  function connect() {
+    if (!accountId()) {
+      const previous=state.socket; state.socket=null;
+      if(previous&&previous.readyState!==WebSocket.CLOSED)previous.close(4001,'no confirmed broker account');
+      return;
+    }
+    if (state.socket && (state.socket.readyState === WebSocket.CONNECTING || state.socket.readyState === WebSocket.OPEN)) return;
+    const protocol=location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket=new WebSocket(protocol + '://' + location.host + '/ws/broker/');
+    state.socket=socket;
+    socket.onopen=() => { state.retry=0; };
+    socket.onmessage=event => {
+      try {
+        const message=JSON.parse(event.data), payload=message.payload || {}, eventAccount=payload.account_id == null ? null : String(payload.account_id), current=accountId();
+        if(eventAccount && current && eventAccount !== current) return;
+        if(['portfolio.update','portfolio.contract','broker.connection','broker.error'].includes(message.type)) schedule();
+      } catch(_) {}
+    };
+    socket.onclose=() => {
+      if(state.socket !== socket) return;
+      if(!accountId())return;
+      const delay=Math.min(30000,1000 * Math.pow(2,Math.min(state.retry++,5)));
+      state.reconnectTimer=setTimeout(() => { state.reconnectTimer=null; connect(); },delay);
+    };
+  }
+  function boot() {
+    $('[data-page-search]')?.addEventListener('input',render);
+    $('[data-position-status]')?.addEventListener('change',render);
+    $('[data-position-order]')?.addEventListener('change',render);
+    $('[data-position-refresh]')?.addEventListener('click',load);
+    $('[data-position-detail-close]')?.addEventListener('click',() => { $('[data-position-detail]').hidden=true; });
+    state.accountId=accountId();
+    window.AlgoBotBrokerState?.subscribe?.(() => {
+      const next=accountId();
+      if(next !== state.accountId) {
+        state.accountId=next;
+        state.loadSeq += 1;
+        state.rows=[]; state.meta=null;
+        setState(next?'loading':'unavailable',next?'Account changed — loading its broker positions…':'No confirmed broker account selected'); summary(); render();
+        schedule();
+        reconnect();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      clearTimeout(state.timer);
+      clearTimeout(state.reconnectTimer);
+      const socket = state.socket;
+      state.socket = null;
+      if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'page hidden');
+    });
+    load(); connect();
+  }
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded',boot,{once:true}) : boot();
+})(); + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const accountId = () => {
     const account = window.AlgoBotAccountContext?.getSelected?.()||null;
     return account?.id == null ? null : String(account.id);
