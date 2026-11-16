@@ -33,7 +33,7 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
-  const money = (value, currency = '') => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value, currency) : ' (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
+  const money = value => window.AlgoBotMoney?.format ? window.AlgoBotMoney.format(value) : '$' + (Number.isFinite(Number(value)) ? Number(value) : 0).toFixed(2);
   const pct = value => value === null || value === undefined || value === '' ? '—' : `${Number(value).toFixed(1)}%`;
   const normalise = value => Array.isArray(value) ? value : (
     Array.isArray(value?.results) ? value.results : (
