@@ -59,6 +59,21 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertTrue(response.json()['account']['is_connected'])
         self.assertEqual(response.json()['connection']['status'], 'connected')
 
+    def test_broker_connect_rejects_jwt_when_browser_session_belongs_to_another_user(self):
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        other_user = get_user_model().objects.create_user(username="different-browser-principal")
+        access = str(AccessToken.for_user(other_user))
+        response = self.client.post(
+            reverse("broker-connect"),
+            data={"broker_id": self.broker.id, "account_id": self.account.id},
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+            HTTP_ORIGIN="http://testserver",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "BROKER_BROWSER_SESSION_MISMATCH")
+        self.assertFalse(BrokerConnection.objects.filter(broker_account=self.account, status="connected").exists())
+
     def test_primary_connection_is_not_failed_by_secondary_account_error(self):
         secondary = BrokerAccount.objects.create(
             user=self.user,
