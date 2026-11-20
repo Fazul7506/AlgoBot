@@ -33,20 +33,31 @@ class BrokerConnectionActivationTests(TestCase):
         self.account.save(update_fields=['access_token'])
 
     async def _persist_authoritative_test_snapshot(self, account):
+        from asgiref.sync import sync_to_async
         from django.utils import timezone
 
-        account.refresh_from_db()
-        credentials = dict(account.credentials or {})
-        credentials.update({
-            "account_type": "real",
-            "financial_snapshot_fields": ["balance", "currency"],
-        })
-        account.credentials = credentials
-        account.balance = "125.50"
-        account.currency = "USD"
-        account.last_synced_at = timezone.now()
-        account.save(update_fields=["credentials", "balance", "currency", "last_synced_at"])
-        return account, {"account_id": account.account_id, "account_type": "real", "balance": 125.50, "currency": "USD"}
+        def persist_snapshot():
+            # SynchronizationService.sync_account runs in an async broker flow.
+            # Keep all ORM access on Django's thread-sensitive sync executor.
+            account.refresh_from_db()
+            credentials = dict(account.credentials or {})
+            credentials.update({
+                "account_type": "real",
+                "financial_snapshot_fields": ["balance", "currency"],
+            })
+            account.credentials = credentials
+            account.balance = "125.50"
+            account.currency = "USD"
+            account.last_synced_at = timezone.now()
+            account.save(update_fields=["credentials", "balance", "currency", "last_synced_at"])
+            return account, {
+                "account_id": account.account_id,
+                "account_type": "real",
+                "balance": 125.50,
+                "currency": "USD",
+            }
+
+        return await sync_to_async(persist_snapshot, thread_sensitive=True)()
 
     def test_connect_endpoint_creates_connected_account_state(self):
         connection = BrokerConnection.objects.create(
