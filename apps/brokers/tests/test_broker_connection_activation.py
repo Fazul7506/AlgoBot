@@ -66,15 +66,14 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with (
-            patch(
-                'apps.brokers.views.BrokerConnectionService.connect',
-                new=AsyncMock(return_value=connection),
-            ),
-            patch(
-                'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(side_effect=self._persist_authoritative_test_snapshot),
-            ),
+        # The endpoint now verifies the account set through
+        # _verify_user_broker_accounts(); persist the authoritative snapshot
+        # before returning the mocked verified result.
+        async_to_sync(self._persist_authoritative_test_snapshot)(self.account)
+
+        with patch(
+            'apps.brokers.views._verify_user_broker_accounts',
+            new=AsyncMock(return_value=([self.account.pk], [], connection)),
         ):
             response = self.client.post(
                 reverse('broker-connect'),
@@ -117,15 +116,18 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with (
-            patch(
-                'apps.brokers.views.BrokerConnectionService.connect',
-                new=AsyncMock(side_effect=[primary_connection, BrokerConnectionError('secondary account unavailable')]),
-            ),
-            patch(
-                'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(side_effect=self._persist_authoritative_test_snapshot),
-            ),
+        # Exercise the endpoint's current account-set verification boundary:
+        # the selected account verifies successfully while a secondary account
+        # fails independently.
+        async_to_sync(self._persist_authoritative_test_snapshot)(self.account)
+
+        with patch(
+            'apps.brokers.views._verify_user_broker_accounts',
+            new=AsyncMock(return_value=(
+                [self.account.pk],
+                [{'account_id': secondary.account_id, 'error': 'secondary account unavailable'}],
+                primary_connection,
+            )),
         ):
             response = self.client.post(
                 reverse('broker-connect'),
