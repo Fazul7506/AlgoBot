@@ -11,6 +11,7 @@ from apps.execution.models import Order
 from apps.notifications.models import Notification
 from apps.strategies.models import StrategySignal
 from apps.brokers.models import Position
+from apps.brokers.serializers import BrokerAccountSerializer
 from core.account_context import get_active_account
 from core.permissions import BrokerOnboardingRequired
 
@@ -125,6 +126,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
         positions = self._positions_for_account(request.user, account)
         stats = self._position_stats(positions)
+        account_snapshot = BrokerAccountSerializer(account, context={"request": request}).data
         snapshot_synced = account.last_synced_at is not None
         snapshot_age = (timezone.now() - account.last_synced_at).total_seconds() if snapshot_synced else None
         return Response({
@@ -134,16 +136,17 @@ class DashboardViewSet(viewsets.ViewSet):
                     "id": account.id,
                     "account_id": account.account_id,
                     "broker": account.broker.name,
-                    "currency": account.currency,
-                    # Zero is a valid broker value. Only an absent sync timestamp
-                    # means these model defaults are not yet an authoritative snapshot.
-                    "balance": account.balance if snapshot_synced else None,
-                    "equity": account.equity if snapshot_synced else None,
-                    "margin": account.margin if snapshot_synced else None,
-                    "free_margin": account.free_margin if snapshot_synced else None,
-                    "net_profit_loss": stats["total_pnl"],
+                    "currency": account_snapshot.get("currency"),
+                    # Use the canonical serializer's field-by-field broker
+                    # provenance checks. A balance sync does not prove that
+                    # equity, margin, or available margin were supplied.
+                    "balance": account_snapshot.get("balance"),
+                    "equity": account_snapshot.get("equity"),
+                    "margin": account_snapshot.get("margin"),
+                    "free_margin": account_snapshot.get("free_margin"),
+                    "net_profit_loss": account_snapshot.get("net_profit_loss"),
                     "realized_pnl": stats["realized_pnl"],
-                    "unrealized_pnl": stats["unrealized_pnl"],
+                    "unrealized_pnl": account_snapshot.get("net_profit_loss"),
                     "last_synced_at": account.last_synced_at,
                     "data_freshness": (
                         "unknown" if snapshot_age is None
