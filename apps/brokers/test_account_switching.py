@@ -210,6 +210,39 @@ class AccountSwitchingTests(TransactionTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(client.session.get('active_broker_account_id'), other_account.pk)
 
+    def test_second_account_for_existing_broker_integration_does_not_consume_another_slot(self):
+        from asgiref.sync import sync_to_async
+        existing = self.make_account("DEMO-INTEGRATION-EXISTING", "demo", connected=True)
+        existing.last_synced_at = timezone.now()
+        existing.save(update_fields=["last_synced_at"])
+        target = self.make_account("VRTC-INTEGRATION-SECOND", "real", connected=False)
+
+        async def verify_accounts(accounts, broker, primary_account_id):
+            target.last_synced_at = timezone.now()
+            await sync_to_async(target.save)(update_fields=["last_synced_at"])
+            connection = await sync_to_async(BrokerConnection.objects.create)(
+                broker=broker,
+                broker_account=target,
+                status="connected",
+                last_ping=timezone.now(),
+                connected_at=timezone.now(),
+            )
+            return [existing.pk, target.pk], [], connection
+
+        with patch("apps.brokers.views._verify_user_broker_accounts", side_effect=verify_accounts):
+            result = self.client.post(
+                "/api/brokers/connect/",
+                {"broker_id": self.broker.pk, "account_id": target.pk},
+                format="json",
+            )
+
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.data["active_account_id"], target.pk)
+        self.assertEqual(
+            self.client.get("/api/brokers/accounts/active/").data["active_account_id"],
+            target.pk,
+        )
+
     @patch("apps.brokers.views.check", return_value=(True, 0, 10))
     @patch("apps.brokers.views._verify_user_broker_accounts", new_callable=AsyncMock)
     def test_broker_connect_bearer_jwt_is_not_blocked_by_session_csrf(self, verify_accounts, entitlement_check):
