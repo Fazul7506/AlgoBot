@@ -1,6 +1,8 @@
 import asyncio
+from datetime import timedelta
 from types import SimpleNamespace
 
+from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TransactionTestCase
 from django.utils import timezone
 
@@ -67,8 +69,9 @@ class BrokerRealtimeSyncTests(SimpleTestCase):
 class BrokerRealtimeFinancialSnapshotTests(TransactionTestCase):
     def setUp(self):
         broker = Broker.objects.create(name="Realtime Snapshot Test", broker_type="deriv", status="active")
+        user = get_user_model().objects.create_user(username="realtime-snapshot-test")
         self.account = BrokerAccount.objects.create(
-            user_id=1,
+            user=user,
             broker=broker,
             account_id="CR-SNAPSHOT-1",
             status="active",
@@ -93,7 +96,7 @@ class BrokerRealtimeFinancialSnapshotTests(TransactionTestCase):
         self.assertNotIn("free_margin", self.account.credentials["financial_snapshot_fields"])
 
     def test_currency_only_event_does_not_refresh_the_balance_snapshot_timestamp(self):
-        previous_sync = timezone.now() - timezone.timedelta(minutes=5)
+        previous_sync = timezone.now() - timedelta(minutes=5)
         self.account.last_synced_at = previous_sync
         self.account.save(update_fields=["last_synced_at"])
         asyncio.run(self.service._sync_balance({
