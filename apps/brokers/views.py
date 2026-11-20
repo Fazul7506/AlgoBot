@@ -331,7 +331,7 @@ def connect_broker(request):
     return response.Response(payload)
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
-@decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication,BrowserSessionAuthentication])
 def disconnect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
