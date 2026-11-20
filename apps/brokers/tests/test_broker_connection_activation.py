@@ -32,6 +32,33 @@ class BrokerConnectionActivationTests(TestCase):
         self.account.set_access_token('test-token')
         self.account.save(update_fields=['access_token'])
 
+    async def _persist_authoritative_test_snapshot(self, account):
+        from asgiref.sync import sync_to_async
+        from django.utils import timezone
+
+        def persist_snapshot():
+            # SynchronizationService.sync_account runs in an async broker flow.
+            # Keep all ORM access on Django's thread-sensitive sync executor.
+            account.refresh_from_db()
+            credentials = dict(account.credentials or {})
+            credentials.update({
+                "account_type": "real",
+                "financial_snapshot_fields": ["balance", "currency"],
+            })
+            account.credentials = credentials
+            account.balance = "125.50"
+            account.currency = "USD"
+            account.last_synced_at = timezone.now()
+            account.save(update_fields=["credentials", "balance", "currency", "last_synced_at"])
+            return account, {
+                "account_id": account.account_id,
+                "account_type": "real",
+                "balance": 125.50,
+                "currency": "USD",
+            }
+
+        return await sync_to_async(persist_snapshot, thread_sensitive=True)()
+
     def test_connect_endpoint_creates_connected_account_state(self):
         connection = BrokerConnection.objects.create(
             broker=self.broker,
@@ -39,15 +66,14 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with (
-            patch(
-                'apps.brokers.views.BrokerConnectionService.connect',
-                new=AsyncMock(return_value=connection),
-            ),
-            patch(
-                'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(return_value=(self.account, {'balance': 0})),
-            ),
+        # The endpoint now verifies the account set through
+        # _verify_user_broker_accounts(); persist the authoritative snapshot
+        # before returning the mocked verified result.
+        async_to_sync(self._persist_authoritative_test_snapshot)(self.account)
+
+        with patch(
+            'apps.brokers.views._verify_user_broker_accounts',
+            new=AsyncMock(return_value=([self.account.pk], [], connection)),
         ):
             response = self.client.post(
                 reverse('broker-connect'),
@@ -58,6 +84,21 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()['account']['is_connected'])
         self.assertEqual(response.json()['connection']['status'], 'connected')
+
+    def test_broker_connect_rejects_jwt_when_browser_session_belongs_to_another_user(self):
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        other_user = get_user_model().objects.create_user(username="different-browser-principal")
+        access = str(AccessToken.for_user(other_user))
+        response = self.client.post(
+            reverse("broker-connect"),
+            data={"broker_id": self.broker.id, "account_id": self.account.id},
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+            HTTP_ORIGIN="http://testserver",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "BROKER_BROWSER_SESSION_MISMATCH")
+        self.assertFalse(BrokerConnection.objects.filter(broker_account=self.account, status="connected").exists())
 
     def test_primary_connection_is_not_failed_by_secondary_account_error(self):
         secondary = BrokerAccount.objects.create(
@@ -75,15 +116,18 @@ class BrokerConnectionActivationTests(TestCase):
             status='connected',
         )
 
-        with (
-            patch(
-                'apps.brokers.views.BrokerConnectionService.connect',
-                new=AsyncMock(side_effect=[primary_connection, BrokerConnectionError('secondary account unavailable')]),
-            ),
-            patch(
-                'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(return_value=(self.account, {'balance': 0})),
-            ),
+        # Exercise the endpoint's current account-set verification boundary:
+        # the selected account verifies successfully while a secondary account
+        # fails independently.
+        async_to_sync(self._persist_authoritative_test_snapshot)(self.account)
+
+        with patch(
+            'apps.brokers.views._verify_user_broker_accounts',
+            new=AsyncMock(return_value=(
+                [self.account.pk],
+                [{'account_id': secondary.account_id, 'error': 'secondary account unavailable'}],
+                primary_connection,
+            )),
         ):
             response = self.client.post(
                 reverse('broker-connect'),
@@ -118,9 +162,15 @@ class BrokerConnectionActivationTests(TestCase):
             broker=self.broker, broker_account=self.account, status="connected"
         )
 
-        with patch(
-            "apps.brokers.views._verify_user_broker_accounts",
-            new=AsyncMock(return_value=([self.account.pk], [], connection)),
+        with (
+            patch(
+                "apps.brokers.views._verify_user_broker_accounts",
+                new=AsyncMock(return_value=([self.account.pk], [], connection)),
+            ),
+            # Even a plan at its account limit must not block broker OAuth
+            # connection/recovery. Ownership and provider verification remain
+            # mandatory and are asserted by this test.
+            patch("apps.brokers.views.check", return_value=(False, 1, 1), create=True) as entitlement_check,
         ):
             response = self.client.post(
                 reverse("broker-connect"),
@@ -128,6 +178,7 @@ class BrokerConnectionActivationTests(TestCase):
                 HTTP_ORIGIN="http://testserver",
             )
 
+        entitlement_check.assert_not_called()
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertTrue(payload["auto_selected"])
@@ -186,6 +237,26 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertEqual(payload["active_account"]["id"], self.account.pk)
         self.assertFalse(payload["account"]["is_active"])
 
+
+
+    def test_connection_is_not_reported_successful_when_account_cannot_be_activated(self):
+        connection = BrokerConnection.objects.create(
+            broker=self.broker, broker_account=self.account, status="connected"
+        )
+        self.account.credentials = {"account_type": "demo"}
+        self.account.save(update_fields=["credentials"])
+        with patch(
+            "apps.brokers.views._verify_user_broker_accounts",
+            new=AsyncMock(return_value=([self.account.pk], [], connection)),
+        ):
+            response = self.client.post(
+                reverse("broker-connect"),
+                data={"broker_id": self.broker.id, "account_id": self.account.id},
+                HTTP_ORIGIN="http://testserver",
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "BROKER_ACCOUNT_ACTIVATION_FAILED")
+        self.assertEqual(response.json()["broker_status"], "connected_not_activated")
 
     def _verify_selected_account(self, account_id, account_type, is_virtual):
         self.account.account_id = account_id
