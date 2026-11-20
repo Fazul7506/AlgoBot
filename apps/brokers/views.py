@@ -8,7 +8,6 @@ from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException, PermissionDenied
 from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
 from core.api_authentication import BrowserSessionAuthentication
-from core.billing_entitlements import check, effective_plan
 from .models import Broker, BrokerAccount, BrokerConnection, Order, ExecutionReport, Position, TradeReconciliation
 from .serializers import *
 from .services import BrokerConnectionService, ExecutionEngine, SynchronizationService
@@ -111,7 +110,6 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
         return response_obj
     @decorators.action(detail=True,methods=['post'])
     def select(self,request,pk=None):
-        if not settings.ENABLE_BROKER_ACCOUNT_SWITCH:return response.Response({'detail':'Broker account switching is disabled by platform configuration.'},status=status.HTTP_403_FORBIDDEN)
         account=self.get_object()
         if str(account.status).lower()!='active':return response.Response({'detail':'The selected broker account is not active.'},status=status.HTTP_409_CONFLICT)
         actual = account.account_type
@@ -196,8 +194,8 @@ class BrokerAccountViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         account=get_active_account(request.user,request=request)
-        if not account:return response.Response({'active_account':None,'active_account_id':None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH})
-        data=BrokerAccountSerializer(account,context={'request':request}).data;return response.Response({'active_account':data,'active_account_id':account.id,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH})
+        if not account:return response.Response({'active_account':None,'active_account_id':None,'switch_enabled':True})
+        data=BrokerAccountSerializer(account,context={'request':request}).data;return response.Response({'active_account':data,'active_account_id':account.id,'switch_enabled':True})
     @decorators.action(detail=True,methods=['post'])
     def sync(self,request,pk=None):
         account=self.get_object()
@@ -253,17 +251,22 @@ class BrokerHealthViewSet(viewsets.ViewSet):
     def list(self,request):
         connected = BrokerConnection.objects.filter(status='connected').only('id','broker_account_id','status')
         accounts=list(BrokerAccount.objects.filter(user=request.user).select_related('broker').prefetch_related(Prefetch('connections', queryset=connected, to_attr='_connected_connections')).order_by('broker__name','account_id'));active=get_active_account(request.user,request=request)
-        return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH,'source':'broker_connections'})
+        return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'switch_enabled':True,'source':'broker_connections'})
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
-@decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication,BrowserSessionAuthentication])
 def connect_broker(request):
+    # The bearer token authenticates the API principal; the matching Django
+    # browser session is separately required because it owns active-account
+    # routing. Never report success without a session-bound active account.
+    if not browser_session_matches_user(request, request.user):
+        return response.Response({'detail':'A matching authenticated AlgoBot browser session is required to connect and activate a broker account. Refresh your session and retry.','code':'BROKER_BROWSER_SESSION_MISMATCH'},status=status.HTTP_403_FORBIDDEN)
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
     broker=get_object_or_404(Broker,pk=broker_id);account=get_object_or_404(BrokerAccount,pk=account_id,user=request.user,broker=broker)
-    already_counted = account.status == 'active' and BrokerConnection.objects.filter(broker_account=account, status='connected').exists()
-    allowed,used,limit=check(request.user,'broker_accounts',amount=0 if already_counted else 1)
-    if not allowed:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity would be exceeded by this connection. Upgrade your plan or disconnect another account first.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'requested':1,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
+    # Broker ownership and provider verification are the connection boundary.
+    # Subscription capacity must not prevent an owner from connecting or
+    # recovering their authorized broker account.
     try:
         target_accounts = _prepare_user_broker_accounts(request.user, broker, account)
         connected_ids, failed_accounts, connection = _run_bounded(
@@ -294,21 +297,26 @@ def connect_broker(request):
     # token-only browser session.
     active_account = get_active_account(request.user, request=request)
     auto_selected = False
-    if active_account is None and browser_session_matches_user(request, request.user):
+    if active_account is None:
         try:
             select_account(request, account)
             auto_selected = True
         except ValueError as exc:
             logger.warning(
-                'broker_account_connected_but_not_auto_selected',
-                extra={
-                    'broker_account_pk': account.pk,
-                    'broker_id': broker.pk,
-                    'reason': str(exc),
-                },
+                'broker_account_connected_but_activation_failed',
+                extra={'broker_account_pk': account.pk, 'broker_id': broker.pk, 'reason': str(exc)},
+            )
+            return response.Response(
+                {'detail':'The broker connected, but the account could not be activated in this browser session. Reconnect or synchronize the selected Deriv account.','code':'BROKER_ACCOUNT_ACTIVATION_FAILED','broker_status':'connected_not_activated'},
+                status=status.HTTP_409_CONFLICT,
             )
     account.refresh_from_db()
     active_account = get_active_account(request.user, request=request)
+    if active_account is None:
+        return response.Response(
+            {'detail':'The broker connected, but no authoritative active account could be confirmed.','code':'BROKER_ACTIVE_ACCOUNT_UNCONFIRMED','broker_status':'connected_not_activated'},
+            status=status.HTTP_409_CONFLICT,
+        )
     all_accounts=list(BrokerAccount.objects.filter(user=request.user,broker=broker).select_related('broker').order_by('id'))
     target_ids={item.pk for item in target_accounts}
     serialized_account=BrokerAccountSerializer(account,context={'request':request}).data
