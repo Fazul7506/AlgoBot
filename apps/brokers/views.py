@@ -3,7 +3,8 @@ import contextvars
 import logging
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
+from django.utils import timezone
 from rest_framework import viewsets, permissions, decorators, response, status
 from rest_framework.exceptions import APIException, PermissionDenied
 from core.api_authentication import BrokerGateJWTAuthentication as JWTAuthentication
@@ -261,7 +262,19 @@ def connect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
     broker=get_object_or_404(Broker,pk=broker_id);account=get_object_or_404(BrokerAccount,pk=account_id,user=request.user,broker=broker)
-    already_counted = account.status == 'active' and BrokerConnection.objects.filter(broker_account=account, status='connected').exists()
+    # Broker-account entitlements are metered per connected broker integration,
+    # not per DEMO/REAL account row. Reconnecting or adding another account under
+    # an already-counted Deriv integration must not consume a second slot.
+    already_counted = BrokerAccount.objects.filter(
+        user=request.user,
+        broker__broker_type=broker.broker_type,
+        status='active',
+        token_status='active',
+        broker__status='active',
+        connections__status='connected',
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+    ).exists()
     allowed,used,limit=check(request.user,'broker_accounts',amount=0 if already_counted else 1)
     if not allowed:return response.Response({'detail':f'Your {effective_plan(request.user).name} broker-account capacity would be exceeded by this connection. Upgrade your plan or disconnect another account first.','code':'BROKER_ACCOUNT_LIMIT_REACHED','used':used,'requested':1,'limit':limit},status=status.HTTP_429_TOO_MANY_REQUESTS)
     try:
