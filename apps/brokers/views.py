@@ -1,7 +1,6 @@
 import asyncio
 import contextvars
 import logging
-from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
 from rest_framework import viewsets, permissions, decorators, response, status
