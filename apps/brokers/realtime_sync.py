@@ -172,7 +172,7 @@ class BrokerRealtimeSync:
         from .position_sync import _persist_snapshot_sync, normalize_broker_position
         account = BrokerAccount.objects.select_related("broker").get(pk=self.account_id)
         contracts = portfolio.get("contracts")
-        if not isinstance(contracts, list):
+        if not isinstance(contracts, list) or any(not isinstance(contract, dict) or contract.get("contract_id") in (None, "") for contract in contracts):
             logger.warning("Ignoring incomplete broker portfolio snapshot", extra={"account_id": self.account_id})
             return {"status": "unavailable", "account_id": account.account_id, "reason": "portfolio_contracts_missing"}
         normalized_records = [
@@ -201,7 +201,7 @@ class BrokerRealtimeSync:
         credentials["realtime"] = realtime
         account.credentials = credentials
         account.save(update_fields=["credentials"])
-        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized) if unrealized is not None else None, "balance": str(account.balance), "currency": account.currency, "sync": sync_meta, "timestamp": time.time()}
+        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized) if unrealized is not None else None, "balance": str(account.balance) if "balance" in set(credentials.get("financial_snapshot_fields") or []) else None, "currency": account.currency if "currency" in set(credentials.get("financial_snapshot_fields") or []) else None, "sync": sync_meta, "timestamp": time.time()}
 
     @staticmethod
     def _decimal_or_none(value):
