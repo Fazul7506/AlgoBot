@@ -10,7 +10,7 @@
     const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
     if (safeValue == null) return '—';
     if (window.AlgoBotMoney?.format) return window.AlgoBotMoney.format(safeValue);
-    return '
+    return String.fromCharCode(36) + safeValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
   };
   const setText = (selector, value) => { const node = $(selector); if (node) node.textContent = value; };
   const setHtml = (selector, value) => { const node = $(selector); if (node) node.innerHTML = value; };
@@ -87,9 +87,9 @@
       // Numeric placeholders are display-only until a broker snapshot exists.
       ['balance','equity','available','pnl'].forEach(key => setText('[data-kpi="' + key + '"]', '—'));
       setText('[data-kpi-state="balance"]', message || 'No broker account selected');
-      setText('[data-kpi-state="equity"]', 'Select a broker account · placeholder value');
-      setText('[data-kpi-state="available"]', 'Select a broker account · placeholder value');
-      setText('[data-kpi-state="pnl"]', 'Select a broker account · placeholder value');
+      setText('[data-kpi-state="equity"]', 'No broker account selected');
+      setText('[data-kpi-state="available"]', 'No broker account selected');
+      setText('[data-kpi-state="pnl"]', 'No broker account selected');
       status('account', 'warn', message || 'No active broker account selected');
       setHtml('[data-dashboard-brokers]', '<span><b></b>' + esc(message || 'Connect and select a broker account to continue') + '</span>');
       return;
