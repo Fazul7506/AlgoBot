@@ -38,7 +38,8 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
                 self.assertNotRegex(source, r'class="[^"]*money-value[^"]*">0[.]00')
                 self.assertNotRegex(source, r'id="performance-(?:pnl|average-profit|average-loss)">0[.]00')
         dashboard = self.read("templates/core/dashboard.html")
-        self.assertEqual(dashboard.count('class="money-value">—</strong>'), 4)\n        self.assertEqual(dashboard.count('class="money-value">$0.00</strong>'), 0)
+        self.assertEqual(dashboard.count('class="money-value">—</strong>'), 4)
+        self.assertEqual(dashboard.count('class="money-value">$0.00</strong>'), 0)
         portfolio = self.read("templates/portfolio/dashboard.html")
         self.assertEqual(portfolio.count('class="money-value">$0.00</strong>'), 4)
 
