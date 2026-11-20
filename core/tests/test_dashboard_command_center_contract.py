@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class DashboardCommandCenterContractTests(SimpleTestCase):
+    def test_dashboard_command_center_has_one_canonical_script_and_no_duplicate_tail(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertEqual(source.count("window.__algoBotCommandCenter = true;"), 1)
+        self.assertEqual(source.count("function renderAccount("), 1)
+        self.assertNotIn("money(0)", source)
+        self.assertNotIn("displaying $0.00", source)
+
     def test_dashboard_refreshes_on_account_context_changes(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("let loadSeq = 0", source)
