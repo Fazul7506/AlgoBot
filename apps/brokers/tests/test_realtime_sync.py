@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from datetime import timedelta
 from types import SimpleNamespace
 
