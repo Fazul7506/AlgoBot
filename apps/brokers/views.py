@@ -256,7 +256,7 @@ class BrokerHealthViewSet(viewsets.ViewSet):
         return response.Response({'accounts':BrokerAccountSerializer(accounts,many=True,context={'request':request}).data,'connected':bool(active),'active_account_id':active.id if active else None,'switch_enabled':settings.ENABLE_BROKER_ACCOUNT_SWITCH,'source':'broker_connections'})
 @decorators.api_view(['POST'])
 @decorators.permission_classes([JWTAuthenticatedPermission])
-@decorators.authentication_classes([BrowserSessionAuthentication,JWTAuthentication])
+@decorators.authentication_classes([JWTAuthentication,BrowserSessionAuthentication])
 def connect_broker(request):
     broker_id=request.data.get('broker_id') or request.data.get('broker');account_id=request.data.get('account_id')
     if not broker_id or not account_id:return response.Response({'detail':'broker_id and account_id are required.'},status=status.HTTP_400_BAD_REQUEST)
