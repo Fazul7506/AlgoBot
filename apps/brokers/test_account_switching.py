@@ -210,6 +210,65 @@ class AccountSwitchingTests(TransactionTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(client.session.get('active_broker_account_id'), other_account.pk)
 
+    @patch("apps.brokers.views.check", return_value=(True, 0, 10))
+    @patch("apps.brokers.views._verify_user_broker_accounts", new_callable=AsyncMock)
+    def test_broker_connect_bearer_jwt_is_not_blocked_by_session_csrf(self, verify_accounts, entitlement_check):
+        account = self.make_account("DEMO-CONNECT-BEARER")
+        account.last_synced_at = timezone.now()
+        account.save(update_fields=["last_synced_at"])
+        connection = account.connections.get()
+        verify_accounts.return_value = ([account.pk], [], connection)
+
+        from django.test import Client
+        client = Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username=self.user.username, password="test-password"))
+        token_response = client.get("/api/auth/browser-token/")
+        self.assertEqual(token_response.status_code, 200)
+        token = token_response.json()["access"]
+
+        import json
+        result = client.post(
+            "/api/brokers/connect/",
+            data=json.dumps({"broker_id": self.broker.pk, "account_id": account.pk}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(result.status_code, 200, getattr(result, "content", b"").decode("utf-8"))
+        self.assertEqual(result.json()["active_account_id"], account.pk)
+        entitlement_check.assert_called_once()
+        verify_accounts.assert_awaited_once()
+
+    @patch("apps.brokers.views.check", return_value=(True, 0, 10))
+    @patch("apps.brokers.views._verify_user_broker_accounts", new_callable=AsyncMock)
+    def test_broker_connect_session_fallback_still_requires_csrf(self, verify_accounts, entitlement_check):
+        account = self.make_account("DEMO-CONNECT-SESSION")
+        account.last_synced_at = timezone.now()
+        account.save(update_fields=["last_synced_at"])
+        connection = account.connections.get()
+        verify_accounts.return_value = ([account.pk], [], connection)
+
+        from django.test import Client
+        client = Client(enforce_csrf_checks=True)
+        self.assertTrue(client.login(username=self.user.username, password="test-password"))
+        import json
+        payload = json.dumps({"broker_id": self.broker.pk, "account_id": account.pk})
+        blocked = client.post("/api/brokers/connect/", data=payload, content_type="application/json")
+        self.assertEqual(blocked.status_code, 403)
+        verify_accounts.assert_not_awaited()
+
+        page = client.get("/trading/")
+        self.assertEqual(page.status_code, 200)
+        csrf_token = client.cookies["csrftoken"].value
+        accepted = client.post(
+            "/api/brokers/connect/",
+            data=payload,
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(accepted.status_code, 200, getattr(accepted, "content", b"").decode("utf-8"))
+        self.assertEqual(accepted.json()["active_account_id"], account.pk)
+
     def test_session_authenticated_switch_requires_csrf_token(self):
         self.make_account('DEMO-CSRF-1', 'demo')
         second = self.make_account('REAL-CSRF-2', 'real')
