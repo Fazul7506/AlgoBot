@@ -129,7 +129,8 @@ class BrokerRealtimeSync:
         currency = balance.get("currency")
         credentials = dict(account.credentials or {})
         realtime = dict(credentials.get("realtime") or {})
-        supplied = set(credentials.get("financial_snapshot_fields") or [])
+        existing_fields = credentials.get("financial_snapshot_fields")
+        supplied = set(existing_fields) if isinstance(existing_fields, list) else set()
         update_fields = ["account_id", "credentials", "status"]
         snapshot_received = False
 
@@ -150,7 +151,6 @@ class BrokerRealtimeSync:
             supplied.add("currency")
             realtime["currency"] = account.currency
             update_fields.append("currency")
-            snapshot_received = True
 
         credentials["financial_snapshot_fields"] = sorted(supplied)
         realtime["updated_at"] = timezone.now().isoformat()
@@ -171,7 +171,10 @@ class BrokerRealtimeSync:
         from .models import BrokerAccount
         from .position_sync import _persist_snapshot_sync, normalize_broker_position
         account = BrokerAccount.objects.select_related("broker").get(pk=self.account_id)
-        contracts = portfolio.get("contracts") or []
+        contracts = portfolio.get("contracts")
+        if not isinstance(contracts, list):
+            logger.warning("Ignoring incomplete broker portfolio snapshot", extra={"account_id": self.account_id})
+            return {"status": "unavailable", "account_id": account.account_id, "reason": "portfolio_contracts_missing"}
         normalized_records = [
             item for item in (normalize_broker_position(contract) for contract in contracts)
             if item is not None
@@ -191,6 +194,9 @@ class BrokerRealtimeSync:
             realtime.pop("unrealized_pnl", None)
         else:
             realtime["unrealized_pnl"] = str(unrealized)
+        # Equity is not balance plus contract profit: only persist it when
+        # the broker explicitly supplies an equity field elsewhere.
+        realtime.pop("equity", None)
         realtime["updated_at"] = timezone.now().isoformat()
         credentials["realtime"] = realtime
         account.credentials = credentials
