@@ -86,7 +86,7 @@
     if (!account) {
       // Numeric placeholders are display-only until a broker snapshot exists.
       ['balance','equity','available','pnl'].forEach(key => setText('[data-kpi="' + key + '"]', '—'));
-      setText('[data-kpi-state="balance"]', message || 'Select a broker account · placeholder value');
+      setText('[data-kpi-state="balance"]', message || 'No broker account selected');
       setText('[data-kpi-state="equity"]', 'Select a broker account · placeholder value');
       setText('[data-kpi-state="available"]', 'Select a broker account · placeholder value');
       setText('[data-kpi-state="pnl"]', 'Select a broker account · placeholder value');
