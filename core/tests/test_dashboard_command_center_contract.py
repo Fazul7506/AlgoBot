@@ -171,7 +171,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
                 result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
-    def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
+    def test_dashboard_uses_unavailable_placeholders_until_authoritative_values_arrive(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
         self.assertIn('data-kpi="balance" class="money-value">—', template)
