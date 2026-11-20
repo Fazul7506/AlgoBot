@@ -60,7 +60,60 @@ class USDOnlyMoneyDisplayContractTests(SimpleTestCase):
         for path in paths:
             with self.subTest(path=path):
                 source = self.read(path)
-                self.assertIn("'$'", source)
+                if path == "static/js/dashboard_command_center.js":
+                    self.assertIn("String.fromCharCode(36)", source)
+                else:
+                    self.assertIn("'
+
+    def test_performance_template_uses_usd_for_monetary_totals(self):
+        source = self.read("templates/core/performance_center.html")
+        for expression in (
+            "${{ net_pnl|floatformat:2 }}",
+            "${{ gross_profit|floatformat:2 }}",
+            "${{ gross_loss|floatformat:2 }}",
+            "${{ average_win|floatformat:2 }}",
+            "${{ average_loss|floatformat:2 }}",
+            "${{ row.pnl|floatformat:2 }}",
+        ):
+            self.assertIn(expression, source)
+
+    def test_node_regression_suite_covers_missing_and_non_usd_currency_inputs(self):
+        source = self.read("static/js/core/money_display.test.js")
+        self.assertIn("assert.equal(money.format(null), '$0.00');", source)
+        self.assertIn("assert.equal(money.format(1234.5, 'KES'), '$1,234.50');", source)
+        self.assertIn("assert.equal(money.format(10, 'EUR'), '$10.00');", source)
+
+    def test_currency_labels_are_usd_even_when_broker_metadata_is_missing(self):
+        topbar = self.read("static/js/topbar_security_controls.js")
+        self.assertIn("currency: 'USD'", topbar)
+        trade_history = self.read("static/js/trade_history.js")
+        self.assertIn("Currency: USD", trade_history)
+        self.assertNotIn("${esc(row.currency)}", trade_history)
+        positions = self.read("static/js/positions.js")
+        self.assertIn("['Currency','USD']", positions)
+        self.assertNotIn("['Currency',r.currency]", positions)
+        terminal = self.read("static/js/live_broker_ui.js")
+        self.assertNotIn("${c} ", terminal)
+        orders = self.read("static/js/orders.js")
+        self.assertIn("esc(money(r.stake,r.currency||''))", orders)
+        terminal_ui = self.read("static/js/trading_terminal.js")
+        self.assertIn("'USD'", terminal_ui)
+
+    def test_server_rendered_billing_and_monitoring_money_use_usd(self):
+        billing = self.read("templates/core/billing_success.html")
+        self.assertIn('class="money-value">${{ invoice_amount|floatformat:2 }}', billing)
+        self.assertNotIn("invoice.currency|upper", billing)
+        billing_page = self.read("templates/core/billing.html")
+        self.assertIn("return '$'+value.toLocaleString", billing_page)
+        self.assertNotIn("cur+' '", billing_page)
+        monitoring = self.read("templates/monitoring/dashboard.html")
+        self.assertIn("metric.unit|upper == 'USD'", monitoring)
+        trading = self.read("templates/core/trading.html")
+        self.assertIn("Stake (USD)", trading)
+        risk = self.read("templates/core/risk.html")
+        self.assertIn("Current account balance (USD)", risk)
+        self.assertIn("Planned stake (USD)", risk)
+", source)
 
     def test_performance_template_uses_usd_for_monetary_totals(self):
         source = self.read("templates/core/performance_center.html")
