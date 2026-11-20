@@ -32,6 +32,22 @@ class BrokerConnectionActivationTests(TestCase):
         self.account.set_access_token('test-token')
         self.account.save(update_fields=['access_token'])
 
+    async def _persist_authoritative_test_snapshot(self, account):
+        from django.utils import timezone
+
+        account.refresh_from_db()
+        credentials = dict(account.credentials or {})
+        credentials.update({
+            "account_type": "real",
+            "financial_snapshot_fields": ["balance", "currency"],
+        })
+        account.credentials = credentials
+        account.balance = "125.50"
+        account.currency = "USD"
+        account.last_synced_at = timezone.now()
+        account.save(update_fields=["credentials", "balance", "currency", "last_synced_at"])
+        return account, {"account_id": account.account_id, "account_type": "real", "balance": 125.50, "currency": "USD"}
+
     def test_connect_endpoint_creates_connected_account_state(self):
         connection = BrokerConnection.objects.create(
             broker=self.broker,
@@ -46,7 +62,7 @@ class BrokerConnectionActivationTests(TestCase):
             ),
             patch(
                 'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(return_value=(self.account, {'balance': 0})),
+                new=AsyncMock(side_effect=self._persist_authoritative_test_snapshot),
             ),
         ):
             response = self.client.post(
@@ -97,7 +113,7 @@ class BrokerConnectionActivationTests(TestCase):
             ),
             patch(
                 'apps.brokers.views.SynchronizationService.sync_account',
-                new=AsyncMock(return_value=(self.account, {'balance': 0})),
+                new=AsyncMock(side_effect=self._persist_authoritative_test_snapshot),
             ),
         ):
             response = self.client.post(
