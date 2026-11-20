@@ -48,16 +48,29 @@ class DashboardAccountSnapshotTests(TestCase):
         self.account.balance = Decimal("0")
         self.account.equity = Decimal("0")
         self.account.free_margin = Decimal("0")
+        self.account.credentials = {"financial_snapshot_fields": ["balance", "equity", "free_margin"]}
         self.account.last_synced_at = timezone.now()
-        self.account.save(update_fields=["balance", "equity", "free_margin", "last_synced_at"])
+        self.account.save(update_fields=["balance", "equity", "free_margin", "credentials", "last_synced_at"])
         response = self._overview()
         account = response.data["data"]["account"]
-        self.assertEqual(account["balance"], Decimal("0"))
-        self.assertEqual(account["equity"], Decimal("0"))
-        self.assertEqual(account["free_margin"], Decimal("0"))
+        self.assertEqual(Decimal(account["balance"]), Decimal("0"))
+        self.assertEqual(Decimal(account["equity"]), Decimal("0"))
+        self.assertEqual(Decimal(account["free_margin"]), Decimal("0"))
         self.assertEqual(account["data_freshness"], "fresh")
         self.assertTrue(account["snapshot_ready"])
         self.assertFalse(account["connection_eligible"])
+
+    def test_balance_sync_timestamp_does_not_turn_unreported_financial_defaults_into_zero(self):
+        self.account.balance = Decimal("5902.30")
+        self.account.last_synced_at = timezone.now()
+        self.account.credentials = {"financial_snapshot_fields": ["balance", "currency"]}
+        self.account.save(update_fields=["balance", "last_synced_at", "credentials"])
+        response = self._overview()
+        account = response.data["data"]["account"]
+        self.assertEqual(Decimal(account["balance"]), Decimal("5902.30"))
+        self.assertIsNone(account["equity"])
+        self.assertIsNone(account["margin"])
+        self.assertIsNone(account["free_margin"])
 
     def test_future_sync_timestamp_is_not_marked_fresh(self):
         self.account.last_synced_at = timezone.now() + timedelta(seconds=120)

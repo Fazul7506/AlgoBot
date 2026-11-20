@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class DashboardCommandCenterContractTests(SimpleTestCase):
+    def test_dashboard_command_center_has_one_canonical_script_and_no_duplicate_tail(self):
+        source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
+        self.assertEqual(source.count("window.__algoBotCommandCenter = true;"), 1)
+        self.assertEqual(source.count("function renderAccount("), 1)
+        self.assertNotIn("money(0)", source)
+        self.assertNotIn("displaying $0.00", source)
+
     def test_dashboard_refreshes_on_account_context_changes(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         self.assertIn("let loadSeq = 0", source)
@@ -83,7 +90,7 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         self.assertNotIn(".mini-row span{display:none}", css)
         self.assertNotIn(".signal-row span{display:none}", css)
         self.assertIn("css/dashboard.css' %}?v=20261009-dashboard-audit4", template)
-        self.assertIn("dashboard_command_center.js' %}?v=20261116-usd-active-account-repair3", template)
+        self.assertIn("dashboard_command_center.js' %}?v=20261120-authoritative-values1", template)
 
     def test_cached_positions_and_orders_are_not_reported_as_live(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
@@ -164,11 +171,11 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
                 result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
-    def test_dashboard_preserves_initial_zero_placeholders_and_broker_value_updates(self):
+    def test_dashboard_uses_unavailable_placeholders_until_authoritative_values_arrive(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
         template = (ROOT / "templates" / "core" / "dashboard.html").read_text(encoding="utf-8")
-        self.assertIn("0.00", template)
-        self.assertIn("$0.00", template)
+        self.assertIn('data-kpi="balance" class="money-value">—', template)
+        self.assertNotIn('data-kpi="pnl" class="money-value">$0.00', template)
         self.assertNotIn("Number(account.balance) + Number(pnl)", source)
         self.assertIn("const equity = account.equity ?? null", source)
         self.assertIn("setText('[data-kpi=\"equity\"]', money(equity))", source)
@@ -185,7 +192,10 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
         ):
             with self.subTest(template=relative):
                 source = (ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn("$0.00", source)
+                if relative == "templates/core/dashboard.html":
+                    self.assertIn('data-kpi="balance" class="money-value">—', source)
+                else:
+                    self.assertIn("$0.00", source)
         money = (ROOT / "static" / "js" / "core" / "money_display.js").read_text(encoding="utf-8")
         self.assertIn("const CURRENCY = 'USD'", money)
         self.assertIn("const SYMBOL = '$'", money)
@@ -194,13 +204,13 @@ class DashboardCommandCenterContractTests(SimpleTestCase):
 
     def test_dashboard_money_fields_never_render_unavailable_placeholders(self):
         source = (ROOT / "static" / "js" / "dashboard_command_center.js").read_text(encoding="utf-8")
-        self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value)", source)
+        self.assertIn("const safeValue = value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value)", source)
         self.assertNotIn("return 'Unavailable'", source)
-        self.assertIn("money(0)", source)
+        self.assertIn("if (safeValue == null) return '—'", source)
         self.assertIn("const available = account.free_margin ?? account.available_margin ?? account.available", source)
         self.assertIn("return window.AlgoBotMoney.format(safeValue)", source)
         self.assertNotIn("const currency = account.currency || ''", source)
-        self.assertIn("Select a broker account · placeholder value", source)
+        self.assertIn("No broker account selected", source)
         self.assertIn("Select a broker account to view open positions.", source)
         self.assertIn("Select a broker account to view recent orders.", source)
 

@@ -127,24 +127,43 @@ class BrokerRealtimeSync:
         account_id = str(balance.get("loginid") or balance.get("account_id") or account.account_id)
         raw_balance = balance.get("balance")
         currency = balance.get("currency")
+        credentials = dict(account.credentials or {})
+        realtime = dict(credentials.get("realtime") or {})
+        existing_fields = credentials.get("financial_snapshot_fields")
+        supplied = set(existing_fields) if isinstance(existing_fields, list) else set()
+        update_fields = ["account_id", "credentials", "status"]
+        snapshot_received = False
+
         if raw_balance is not None:
             try:
-                account.balance = Decimal(str(raw_balance))
+                parsed_balance = Decimal(str(raw_balance))
+                if not parsed_balance.is_finite():
+                    raise InvalidOperation
+                account.balance = parsed_balance
+                supplied.add("balance")
+                realtime["balance"] = str(parsed_balance)
+                update_fields.append("balance")
+                snapshot_received = True
             except (InvalidOperation, TypeError, ValueError):
-                logger.warning("Ignoring invalid broker balance", extra={"account_id": self.account_id, "raw_balance": raw_balance})
-        account.account_id = account_id
+                logger.warning("Ignoring invalid broker balance", extra={"account_id": self.account_id})
         if currency:
             account.currency = str(currency)
-        realtime = dict((account.credentials or {}).get("realtime") or {})
-        realtime.update({"balance": raw_balance, "currency": currency, "updated_at": timezone.now().isoformat()})
-        credentials = dict(account.credentials or {})
+            supplied.add("currency")
+            realtime["currency"] = account.currency
+            update_fields.append("currency")
+
+        credentials["financial_snapshot_fields"] = sorted(supplied)
+        realtime["updated_at"] = timezone.now().isoformat()
         credentials["realtime"] = realtime
         account.credentials = credentials
-        account.last_synced_at = timezone.now()
+        account.account_id = account_id
         account.status = "active"
-        account.save(update_fields=["account_id", "balance", "currency", "credentials", "last_synced_at", "status"])
+        if snapshot_received:
+            account.last_synced_at = timezone.now()
+            update_fields.append("last_synced_at")
+        account.save(update_fields=update_fields)
         BrokerConnection.objects.filter(broker_account=account).update(status="connected", last_ping=timezone.now(), updated_at=timezone.now())
-        return {"account_id": account_id, "balance": raw_balance, "currency": currency or account.currency, "timestamp": time.time()}
+        return {"account_id": account_id, "balance": str(account.balance) if "balance" in supplied else None, "currency": account.currency if "currency" in supplied else None, "timestamp": time.time() if snapshot_received else None}
 
     @sync_to_async
     def _sync_portfolio(self, portfolio):
@@ -152,26 +171,47 @@ class BrokerRealtimeSync:
         from .models import BrokerAccount
         from .position_sync import _persist_snapshot_sync, normalize_broker_position
         account = BrokerAccount.objects.select_related("broker").get(pk=self.account_id)
-        contracts = portfolio.get("contracts") or []
+        contracts = portfolio.get("contracts")
+        if not isinstance(contracts, list) or any(not isinstance(contract, dict) or contract.get("contract_id") in (None, "") for contract in contracts):
+            logger.warning("Ignoring incomplete broker portfolio snapshot", extra={"account_id": self.account_id})
+            return {"status": "unavailable", "account_id": account.account_id, "reason": "portfolio_contracts_missing"}
         normalized_records = [
             item for item in (normalize_broker_position(contract) for contract in contracts)
             if item is not None
         ]
         sync_meta = _persist_snapshot_sync(account.pk, normalized_records)
         normalized = [self._normalize_contract(contract) for contract in contracts if contract.get("contract_id") not in (None, "")]
-        unrealized = sum(
-            (Decimal(str(item.get("profit"))) for item in normalized if item.get("profit") not in (None, "")),
-            Decimal("0"),
-        )
-        equity = account.balance + unrealized
-        realtime = dict((account.credentials or {}).get("realtime") or {})
-        realtime.update({"unrealized_pnl": str(unrealized), "equity": str(equity), "updated_at": timezone.now().isoformat()})
+        profit_values = [self._decimal_or_none(item.get("profit")) for item in normalized]
+        unrealized = None
+        if not contracts:
+            # An authoritative empty portfolio means no open-contract P/L.
+            unrealized = Decimal("0")
+        elif profit_values and all(value is not None for value in profit_values):
+            unrealized = sum(profit_values, Decimal("0"))
         credentials = dict(account.credentials or {})
+        realtime = dict(credentials.get("realtime") or {})
+        if unrealized is None:
+            realtime.pop("unrealized_pnl", None)
+        else:
+            realtime["unrealized_pnl"] = str(unrealized)
+        # Equity is not balance plus contract profit: only persist it when
+        # the broker explicitly supplies an equity field elsewhere.
+        realtime.pop("equity", None)
+        realtime["updated_at"] = timezone.now().isoformat()
         credentials["realtime"] = realtime
         account.credentials = credentials
-        account.last_synced_at = timezone.now()
-        account.save(update_fields=["equity", "credentials", "last_synced_at"])
-        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized), "equity": str(equity), "balance": str(account.balance), "currency": account.currency, "sync": sync_meta, "timestamp": time.time()}
+        account.save(update_fields=["credentials"])
+        return {"status": "ready", "account_id": account.account_id, "contracts": normalized, "unrealized_pnl": str(unrealized) if unrealized is not None else None, "balance": str(account.balance) if "balance" in set(credentials.get("financial_snapshot_fields") or []) else None, "currency": account.currency if "currency" in set(credentials.get("financial_snapshot_fields") or []) else None, "sync": sync_meta, "timestamp": time.time()}
+
+    @staticmethod
+    def _decimal_or_none(value):
+        if value in (None, ""):
+            return None
+        try:
+            result = Decimal(str(value))
+            return result if result.is_finite() else None
+        except (InvalidOperation, TypeError, ValueError):
+            return None
 
     @staticmethod
     def _normalize_contract(contract):
