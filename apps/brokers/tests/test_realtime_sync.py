@@ -107,3 +107,18 @@ class BrokerRealtimeFinancialSnapshotTests(TransactionTestCase):
         self.account.refresh_from_db()
         self.assertEqual(self.account.last_synced_at, previous_sync)
         self.assertNotIn("balance", self.account.credentials.get("financial_snapshot_fields", []))
+
+    def test_incomplete_portfolio_event_is_not_treated_as_an_empty_portfolio(self):
+        result = asyncio.run(self.service._sync_portfolio({}))
+        self.account.refresh_from_db()
+        self.assertEqual(result["status"], "unavailable")
+        self.assertIsNone(self.account.last_synced_at)
+        self.assertEqual(self.account.credentials, {"account_type": "demo"})
+
+    def test_empty_authoritative_portfolio_does_not_create_synthetic_equity(self):
+        result = asyncio.run(self.service._sync_portfolio({"contracts": []}))
+        self.account.refresh_from_db()
+        self.assertEqual(result["unrealized_pnl"], "0")
+        self.assertNotIn("equity", self.account.credentials.get("realtime", {}))
+        self.assertIsNone(self.account.last_synced_at)
+        self.assertNotIn("equity", self.account.credentials.get("financial_snapshot_fields", []))
