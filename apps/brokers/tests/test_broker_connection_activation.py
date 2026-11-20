@@ -118,9 +118,15 @@ class BrokerConnectionActivationTests(TestCase):
             broker=self.broker, broker_account=self.account, status="connected"
         )
 
-        with patch(
-            "apps.brokers.views._verify_user_broker_accounts",
-            new=AsyncMock(return_value=([self.account.pk], [], connection)),
+        with (
+            patch(
+                "apps.brokers.views._verify_user_broker_accounts",
+                new=AsyncMock(return_value=([self.account.pk], [], connection)),
+            ),
+            # Even a plan at its account limit must not block broker OAuth
+            # connection/recovery. Ownership and provider verification remain
+            # mandatory and are asserted by this test.
+            patch("apps.brokers.views.check", return_value=(False, 1, 1), create=True) as entitlement_check,
         ):
             response = self.client.post(
                 reverse("broker-connect"),
@@ -128,6 +134,7 @@ class BrokerConnectionActivationTests(TestCase):
                 HTTP_ORIGIN="http://testserver",
             )
 
+        entitlement_check.assert_not_called()
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertTrue(payload["auto_selected"])
@@ -186,6 +193,26 @@ class BrokerConnectionActivationTests(TestCase):
         self.assertEqual(payload["active_account"]["id"], self.account.pk)
         self.assertFalse(payload["account"]["is_active"])
 
+
+
+    def test_connection_is_not_reported_successful_when_account_cannot_be_activated(self):
+        connection = BrokerConnection.objects.create(
+            broker=self.broker, broker_account=self.account, status="connected"
+        )
+        self.account.credentials = {"account_type": "demo"}
+        self.account.save(update_fields=["credentials"])
+        with patch(
+            "apps.brokers.views._verify_user_broker_accounts",
+            new=AsyncMock(return_value=([self.account.pk], [], connection)),
+        ):
+            response = self.client.post(
+                reverse("broker-connect"),
+                data={"broker_id": self.broker.id, "account_id": self.account.id},
+                HTTP_ORIGIN="http://testserver",
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["code"], "BROKER_ACCOUNT_ACTIVATION_FAILED")
+        self.assertEqual(response.json()["broker_status"], "connected_not_activated")
 
     def _verify_selected_account(self, account_id, account_type, is_virtual):
         self.account.account_id = account_id
